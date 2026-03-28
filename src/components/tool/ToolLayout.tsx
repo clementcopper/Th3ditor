@@ -4,6 +4,7 @@ import { ParameterPanel } from './ParameterPanel'
 import { PresetGallery } from './PresetGallery'
 import { Toolbar } from './Toolbar'
 import { ExportDialog } from './ExportDialog'
+import { PlaybackBar } from './PlaybackBar'
 import { useShaderStore } from '../../store/shader-store'
 import { encodeShareURL, decodeShareURL } from '../../utils/url-sharing'
 import { getPresetById } from '../../presets'
@@ -53,6 +54,7 @@ export function ToolLayout() {
             }}
           />
           <ShaderCanvas ref={canvasRef} className="w-full h-full relative" />
+          <PlaybackBar />
         </div>
         <div className="w-72 shrink-0">
           <ParameterPanel />

@@ -14,6 +14,7 @@ export class ShaderRenderer {
   private vao: WebGLVertexArrayObject | null = null
   private animationId: number | null = null
   private startTime = 0
+  private pausedTime = 0
   private frameCount = 0
   private uniformLocations = new Map<string, WebGLUniformLocation | null>()
   private pendingUniforms = new Map<string, UniformValue>()
@@ -145,17 +146,24 @@ export class ShaderRenderer {
   play() {
     if (this._playing) return
     this._playing = true
-    this.startTime = performance.now() / 1000
-    this.frameCount = 0
+    // Resume from where we paused
+    this.startTime = performance.now() / 1000 - this.pausedTime
     this.renderLoop()
   }
 
   pause() {
     this._playing = false
+    this.pausedTime = performance.now() / 1000 - this.startTime
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId)
       this.animationId = null
     }
+  }
+
+  /** Render a single frame at the current paused time — used to preview parameter changes while paused */
+  renderCurrentFrame() {
+    this.handleResize()
+    this.renderFrame(this.pausedTime)
   }
 
   get playing() {

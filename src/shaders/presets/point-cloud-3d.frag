@@ -20,8 +20,13 @@ uniform float u_gridDensity;
 uniform float u_dotSize;
 uniform float u_amplitude;
 uniform float u_perspective;
-uniform float u_rotationSpeed;
-uniform float u_deformType; // 0=wave, 1=sphere, 2=terrain, 3=twist
+uniform float u_rotateX;
+uniform float u_rotateY;
+uniform float u_posX;
+uniform float u_posY;
+uniform float u_scale;
+uniform float u_shapeType;  // 0=surface, 1=sphere
+uniform float u_deformType; // 0=none, 1=wave, 2=terrain, 3=twist
 
 out vec4 fragColor;
 
@@ -38,26 +43,48 @@ vec3 rotateX(vec3 p, float angle) {
   return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);
 }
 
-// Deformation functions
+// ── Base shapes ──
+
+// Flat surface from normalized UV
+vec3 shapeSurface(float u, float v) {
+  return vec3((u - 0.5) * 2.0, 0.0, (v - 0.5) * 2.0);
+}
+
+// Closed sphere from normalized UV
+vec3 shapeSphere(float u, float v) {
+  float theta = u * PI;        // polar 0..PI
+  float phi = v * 2.0 * PI;   // azimuth 0..2PI
+  return vec3(
+    sin(theta) * cos(phi),
+    cos(theta),
+    sin(theta) * sin(phi)
+  );
+}
+
+// ── Deformations (applied as displacement along normal) ──
+
+// Wave: displaces Y (surface) or radial (sphere)
 float deformWave(vec3 p, float t) {
   return sin(p.x * 3.0 + t * 2.0) * cos(p.z * 3.0 + t * 1.5) * u_amplitude;
 }
 
-float deformSphere(vec3 p, float t) {
-  float r = length(p.xz);
-  float target = sqrt(max(0.0, 1.0 - r * r)) * u_amplitude;
-  float pulse = 1.0 + 0.1 * sin(t * 2.0);
-  return target * pulse;
-}
-
+// Terrain: FBM noise displacement
 float deformTerrain(vec3 p, float t) {
   return fbm(p.xz * 2.0 + t * 0.3, 4, 2.0, 0.5) * u_amplitude;
 }
 
+// Twist: angular twist displacement
 float deformTwist(vec3 p, float t) {
   float angle = p.y * 3.0 + t;
   float r = length(p.xz);
   return sin(angle + r * 4.0) * u_amplitude * 0.5;
+}
+
+float getDeformation(vec3 p, float t) {
+  if (u_deformType < 0.5) return 0.0;       // None
+  if (u_deformType < 1.5) return deformWave(p, t);
+  if (u_deformType < 2.5) return deformTerrain(p, t);
+  return deformTwist(p, t);
 }
 
 void main() {
@@ -69,39 +96,50 @@ void main() {
   float totalDot = 0.0;
 
   float gridSize = u_gridDensity;
-  float spacing = 2.0 / gridSize;
 
-  // Rotation from time and mouse
-  float rotY = t * u_rotationSpeed * 0.5 + u_mouse.x * PI;
-  float rotX = -0.3 + u_mouse.y * 0.5;
+  // Rotation from manual controls
+  float rotY = u_rotateY;
+  float rotX = u_rotateX;
 
-  for (float iy = 0.0; iy < 40.0; iy++) {
+  for (float iy = 0.0; iy < 30.0; iy++) {
     if (iy >= gridSize) break;
-    for (float ix = 0.0; ix < 40.0; ix++) {
+    for (float ix = 0.0; ix < 30.0; ix++) {
       if (ix >= gridSize) break;
 
-      // Grid point in 3D space
-      vec3 gridPoint = vec3(
-        (ix / (gridSize - 1.0) - 0.5) * 2.0,
-        0.0,
-        (iy / (gridSize - 1.0) - 0.5) * 2.0
-      );
+      float nu = ix / (gridSize - 1.0);
+      float nv = iy / (gridSize - 1.0);
+
+      // Base shape
+      vec3 basePoint;
+      if (u_shapeType < 0.5) {
+        basePoint = shapeSurface(nu, nv);
+      } else {
+        basePoint = shapeSphere(nu, nv);
+      }
 
       // Apply deformation
-      float deform;
-      if (u_deformType < 0.5) {
-        deform = deformWave(gridPoint, t);
-      } else if (u_deformType < 1.5) {
-        deform = deformSphere(gridPoint, t);
-      } else if (u_deformType < 2.5) {
-        deform = deformTerrain(gridPoint, t);
+      float deform = getDeformation(basePoint, t);
+
+      vec3 gridPoint;
+      if (u_shapeType < 0.5) {
+        // Surface: displace Y
+        gridPoint = basePoint;
+        gridPoint.y = deform;
       } else {
-        deform = deformTwist(gridPoint, t);
+        // Sphere: displace along radial direction (normal = normalize(basePoint))
+        float radius = 1.0 + deform;
+        gridPoint = basePoint * radius;
       }
-      gridPoint.y = deform;
+
+      // Scale
+      gridPoint *= u_scale;
 
       // Rotate
       vec3 rotated = rotateX(rotateY(gridPoint, rotY), rotX);
+
+      // Position offset
+      rotated.x += u_posX;
+      rotated.y += u_posY;
 
       // Perspective projection
       float depth = u_perspective + rotated.z;
@@ -115,8 +153,9 @@ void main() {
       float dotRadius = u_dotSize * 0.008 / depth;
       float dot = smoothstep(dotRadius, dotRadius * 0.3, dist);
 
-      // Color based on height
-      float heightNorm = (deform / max(u_amplitude, 0.01)) * 0.5 + 0.5;
+      // Color based on deformation amount (or Y for no-deform sphere)
+      float heightVal = (u_deformType < 0.5 && u_shapeType > 0.5) ? basePoint.y : deform;
+      float heightNorm = (heightVal / max(u_amplitude, 0.01)) * 0.5 + 0.5;
       vec3 dotCol = mixOklab(u_dotColor, u_highlightColor, heightNorm);
       float dotAlpha = mix(u_dotColor_alpha, u_highlightColor_alpha, heightNorm);
 

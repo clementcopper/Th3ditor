@@ -1,6 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { ShaderRenderer } from '../../engine/ShaderRenderer'
-import { useShaderStore } from '../../store/shader-store'
+import { useShaderStore, QUALITY_DPR } from '../../store/shader-store'
 
 export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }>(function ShaderCanvas({ className }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -9,22 +9,24 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
   useImperativeHandle(ref, () => canvasRef.current!, [])
   const activePreset = useShaderStore((s) => s.activePreset)
   const parameters = useShaderStore((s) => s.parameters)
+  const renderQuality = useShaderStore((s) => s.renderQuality)
+  const isPlaying = useShaderStore((s) => s.isPlaying)
 
-  // Initialize renderer
+  // Initialize renderer (recreate when quality changes)
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const renderer = new ShaderRenderer(canvas)
+    const renderer = new ShaderRenderer(canvas, { pixelRatio: QUALITY_DPR[renderQuality] })
     rendererRef.current = renderer
 
     return () => {
       renderer.dispose()
       rendererRef.current = null
     }
-  }, [])
+  }, [renderQuality])
 
-  // Load shader when preset changes
+  // Load shader when preset or quality changes (new renderer needs shader re-loaded)
   useEffect(() => {
     const renderer = rendererRef.current
     if (!renderer) return
@@ -33,8 +35,16 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     if (error) {
       console.error('Shader compile error:', error)
     }
-    renderer.play()
-  }, [activePreset])
+    if (isPlaying) renderer.play()
+  }, [activePreset, renderQuality, isPlaying])
+
+  // Play/pause control
+  useEffect(() => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    if (isPlaying) renderer.play()
+    else renderer.pause()
+  }, [isPlaying])
 
   // Update uniforms when parameters change
   useEffect(() => {
@@ -54,7 +64,12 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
         renderer.setUniform(param.uniform, value as number | [number, number] | [number, number, number])
       }
     }
-  }, [parameters, activePreset])
+
+    // Re-render current frame so changes are visible while paused
+    if (!isPlaying) {
+      renderer.renderCurrentFrame()
+    }
+  }, [parameters, activePreset, renderQuality, isPlaying])
 
   return (
     <canvas

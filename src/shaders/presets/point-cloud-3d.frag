@@ -19,6 +19,8 @@ uniform float u_speed;
 uniform float u_gridDensity;
 uniform float u_dotSize;
 uniform float u_amplitude;
+uniform float u_frequency;
+uniform float u_decay;
 uniform float u_perspective;
 uniform float u_rotateX;
 uniform float u_rotateY;
@@ -28,28 +30,50 @@ uniform float u_scale;
 uniform float u_shapeType;
 uniform float u_deformType;
 uniform int u_deformOutward;
+uniform float u_interactMode;
+uniform float u_interactStrength;
+uniform float u_interactRadius;
 
 out vec4 fragColor;
 
 float pc_deform(vec3 p, float t) {
+  float freq = u_frequency;
+  float dec = u_decay;
   if (u_deformType < 0.5) return 0.0;
-  if (u_deformType < 1.5) return sin(p.x*3.0+t*2.0)*cos(p.z*3.0+t*1.5)*u_amplitude;
-  if (u_deformType < 2.5) return fbm(p.xz*2.0+t*0.3, 4, 2.0, 0.5)*u_amplitude;
-  if (u_deformType < 3.5) return sin(p.y*3.0+t+length(p.xz)*4.0)*u_amplitude*0.5;
-  // Ripple — concentric rings from center
+  // Wave
+  if (u_deformType < 1.5) return sin(p.x*freq+t*2.0)*cos(p.z*freq+t*1.5)*u_amplitude;
+  // Terrain
+  if (u_deformType < 2.5) return fbm(p.xz*freq*0.7+t*0.3, 4, 2.0, 0.5)*u_amplitude;
+  // Twist
+  if (u_deformType < 3.5) return sin(p.y*freq+t+length(p.xz)*freq*1.3)*u_amplitude*0.5;
+  // Ripple — concentric rings with decay
   if (u_deformType < 4.5) {
     float r = length(p.xz);
-    return sin(r*8.0 - t*3.0) * u_amplitude * 0.5 * exp(-r*0.5);
+    return sin(r*freq*2.5 - t*3.0) * u_amplitude * 0.5 * exp(-r*dec);
   }
-  // Pinch — squeeze toward center axis
+  // Pinch
   if (u_deformType < 5.5) {
-    float squeeze = sin(p.y * PI + t) * u_amplitude;
+    float squeeze = sin(p.y * PI * freq * 0.3 + t) * u_amplitude;
     return -length(p.xz) * squeeze;
   }
-  // Explode — push outward from center, noise-modulated
-  float n = snoise(p.xz * 2.0 + t * 0.5);
-  float dist = length(p);
-  return (dist + n * 0.5) * u_amplitude * (0.5 + 0.5 * sin(t * 1.5));
+  // Explode
+  if (u_deformType < 6.5) {
+    float n = snoise(p.xz * freq * 0.7 + t * 0.5);
+    float d = length(p);
+    return (d + n * 0.5) * u_amplitude * (0.5 + 0.5 * sin(t * 1.5));
+  }
+  // Pulse — single expanding ring with decay
+  if (u_deformType < 7.5) {
+    float d = length(p);
+    float cycle = fract(t * 0.8);
+    float ring = cycle * 3.0;
+    float sharpness = freq * 1.3;
+    float wave = exp(-sharpness * (d - ring) * (d - ring));
+    float fade = exp(-cycle * dec * 3.0);
+    return wave * fade * u_amplitude;
+  }
+  // Breathe
+  return sin(t * freq * 0.7) * u_amplitude * 0.3;
 }
 
 void main() {
@@ -108,6 +132,21 @@ void main() {
       float depth = u_perspective + pos.z;
       if (depth < 0.1) continue;
       vec2 scr = pos.xy / depth;
+
+      // Interaction: Attractor / Repel
+      if (u_interactMode > 0.5) {
+        float aspect = u_resolution.x / u_resolution.y;
+        vec2 mc = (u_mouse - 0.5) * vec2(aspect, 1.0);
+        vec2 toMouse = mc - scr;
+        float md = length(toMouse);
+        float influence = smoothstep(u_interactRadius, 0.0, md) * u_interactStrength * 0.15;
+        vec2 dir = (md > 0.001) ? normalize(toMouse) : vec2(0.0);
+        if (u_interactMode < 1.5) {
+          scr += dir * influence; // Attractor
+        } else {
+          scr -= dir * influence; // Repel
+        }
+      }
 
       // Dot
       float dist = length(centered - scr);

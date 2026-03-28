@@ -87,8 +87,8 @@ void main() {
 
   float gs = u_gridDensity;
   float tp = gs * gs;
-  float cosRY = cos(u_rotateY), sinRY = sin(u_rotateY);
-  float cosRX = cos(u_rotateX), sinRX = sin(u_rotateX);
+  float cosRY = cos(radians(u_rotateY)), sinRY = sin(radians(u_rotateY));
+  float cosRX = cos(radians(u_rotateX)), sinRX = sin(radians(u_rotateX));
 
   for (float iy = 0.0; iy < 30.0; iy++) {
     if (iy >= gs) break;

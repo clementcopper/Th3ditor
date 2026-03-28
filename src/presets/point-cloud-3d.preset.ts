@@ -57,8 +57,8 @@ export const pointCloud3DPreset: ShaderPreset = {
     { type: 'float', uniform: 'u_perspective', label: 'Zoom', group: 'Camera', min: 1, max: 5, step: 0.1, default: 2.5 },
     { type: 'float', uniform: 'u_posX', label: 'Position X', group: 'Camera', min: -2, max: 2, step: 0.01, default: 0 },
     { type: 'float', uniform: 'u_posY', label: 'Position Y', group: 'Camera', min: -2, max: 2, step: 0.01, default: 0 },
-    { type: 'float', uniform: 'u_rotateX', label: 'Rotate X', group: 'Camera', min: -3.14, max: 3.14, step: 0.01, default: -0.3 },
-    { type: 'float', uniform: 'u_rotateY', label: 'Rotate Y', group: 'Camera', min: -3.14, max: 3.14, step: 0.01, default: 0 },
+    { type: 'float', uniform: 'u_rotateX', label: 'Rotate X', group: 'Camera', min: -180, max: 180, step: 1, default: -17, suffix: '°' },
+    { type: 'float', uniform: 'u_rotateY', label: 'Rotate Y', group: 'Camera', min: -180, max: 180, step: 1, default: 0, suffix: '°' },
     { type: 'float', uniform: 'u_speed', label: 'Speed', group: 'Animation', min: 0, max: 3, step: 0.01, default: 0.8 },
   ],
 }

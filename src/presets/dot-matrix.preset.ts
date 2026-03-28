@@ -39,7 +39,7 @@ export const dotMatrixPreset: ShaderPreset = {
     { type: 'float', uniform: 'u_dotMax', label: 'Dot Max Size', group: 'Shape', min: 0.1, max: 1, step: 0.01, default: 0.9 },
     { type: 'float', uniform: 'u_spacing', label: 'Spacing', group: 'Shape', min: 0.3, max: 3, step: 0.01, default: 1.0 },
     { type: 'float', uniform: 'u_frequency', label: 'Frequency', group: 'Shape', min: 0.5, max: 10, step: 0.1, default: 3 },
-    { type: 'float', uniform: 'u_rotation', label: 'Rotation', group: 'Shape', min: -3.14, max: 3.14, step: 0.01, default: 0 },
+    { type: 'float', uniform: 'u_rotation', label: 'Rotation', group: 'Shape', min: 0, max: 360, step: 1, default: 0, suffix: '°' },
     {
       type: 'select', uniform: 'u_interactMode', label: 'Mode', group: 'Interaction',
       default: 0,

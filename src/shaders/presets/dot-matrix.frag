@@ -50,8 +50,8 @@ void main() {
   vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
   float t = u_time * u_speed;
 
-  // Rotate grid
-  p = rot2d(p, u_rotation);
+  // Rotate grid (u_rotation is in degrees)
+  p = rot2d(p, radians(u_rotation));
   p += 0.5 * vec2(aspect, 1.0); // shift back for grid calc
 
   // Grid — spacing scales the cell size relative to grid count
@@ -115,7 +115,7 @@ void main() {
 
   if (u_interactMode > 0.5) {
     vec2 mp = (u_mouse - 0.5) * vec2(aspect, 1.0);
-    mp = rot2d(mp, u_rotation);
+    mp = rot2d(mp, radians(u_rotation));
     mp += 0.5 * vec2(aspect, 1.0);
     float md = length(cellCenter - mp);
     float raw = smoothstep(u_interactRadius, 0.0, md);

@@ -19,11 +19,15 @@ export function SliderControl({ param, value, onChange }: Props) {
   const dragStartValue = useRef(0)
   const hasMoved = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fieldRef = useRef<HTMLDivElement>(null)
 
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
   const snap = (v: number) => Math.round(v / step) * step
+  const fillPercent = ((value - min) / (max - min)) * 100
 
-  // Drag-to-scrub on the input field
+  // Determine display precision from step
+  const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : 2
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (isEditing) return
     isDragging.current = true
@@ -38,7 +42,6 @@ export function SliderControl({ param, value, onChange }: Props) {
     if (!isDragging.current) return
     const dx = e.clientX - dragStartX.current
     if (Math.abs(dx) > 2) hasMoved.current = true
-    // Scale drag: range of values across ~300px
     const range = max - min
     const sensitivity = range / 300
     const newVal = snap(clamp(dragStartValue.current + dx * sensitivity))
@@ -49,14 +52,12 @@ export function SliderControl({ param, value, onChange }: Props) {
     if (!isDragging.current) return
     isDragging.current = false
     ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-    // If no drag happened, enter text edit mode
     if (!hasMoved.current) {
       setIsEditing(true)
-      setEditText(value.toFixed(2))
+      setEditText(value.toFixed(decimals))
     }
-  }, [value])
+  }, [value, decimals])
 
-  // Commit text edit
   const commitEdit = useCallback(() => {
     setIsEditing(false)
     const parsed = parseFloat(editText)
@@ -65,7 +66,6 @@ export function SliderControl({ param, value, onChange }: Props) {
     }
   }, [editText, onChange, min, max, step])
 
-  // Focus input when entering edit mode
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus()
@@ -75,8 +75,26 @@ export function SliderControl({ param, value, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
+      <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
+      <div
+        ref={fieldRef}
+        className="relative h-7 rounded border border-border-default overflow-hidden select-none"
+        style={{ cursor: isEditing ? 'text' : 'ew-resize' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        {/* Fill bar */}
+        <div
+          className="absolute inset-y-0 left-0 bg-brand-500/15 pointer-events-none transition-[width] duration-75"
+          style={{ width: `${fillPercent}%` }}
+        />
+        {/* Fill edge accent */}
+        <div
+          className="absolute inset-y-0 bg-brand-500/40 pointer-events-none transition-[left] duration-75"
+          style={{ left: `${fillPercent}%`, width: '3px' }}
+        />
+
         {isEditing ? (
           <input
             ref={inputRef}
@@ -88,31 +106,16 @@ export function SliderControl({ param, value, onChange }: Props) {
               if (e.key === 'Enter') commitEdit()
               if (e.key === 'Escape') setIsEditing(false)
             }}
-            className="w-16 text-xs font-mono text-right bg-surface-secondary text-text-primary px-1.5 py-0.5 rounded border border-border-default outline-none focus:border-brand-500"
+            className="absolute inset-0 w-full h-full text-xs font-mono text-center bg-surface-secondary text-text-primary px-2 outline-none border-none"
           />
         ) : (
-          <span
-            className="text-xs font-mono text-text-tertiary px-1.5 py-0.5 rounded cursor-ew-resize hover:bg-surface-secondary hover:text-text-primary transition-colors select-none"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-          >
-            {value.toFixed(2)}
-          </span>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-xs font-mono text-text-primary">
+              {value.toFixed(decimals)}{param.suffix ?? ''}
+            </span>
+          </div>
         )}
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-border-default
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-500
-          [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-sm"
-      />
     </div>
   )
 }

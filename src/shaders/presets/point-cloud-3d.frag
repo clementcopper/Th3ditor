@@ -33,6 +33,7 @@ uniform int u_deformOutward;
 uniform float u_interactMode;
 uniform float u_interactStrength;
 uniform float u_interactRadius;
+uniform float u_interactFalloff;
 
 out vec4 fragColor;
 
@@ -139,7 +140,8 @@ void main() {
         vec2 mc = (u_mouse - 0.5) * vec2(aspect, 1.0);
         vec2 toMouse = mc - scr;
         float md = length(toMouse);
-        float influence = smoothstep(u_interactRadius, 0.0, md) * u_interactStrength * 0.15;
+        float raw = smoothstep(u_interactRadius, 0.0, md);
+        float influence = pow(raw, u_interactFalloff) * u_interactStrength * 0.15;
         vec2 dir = (md > 0.001) ? normalize(toMouse) : vec2(0.0);
         if (u_interactMode < 1.5) {
           scr += dir * influence; // Attractor

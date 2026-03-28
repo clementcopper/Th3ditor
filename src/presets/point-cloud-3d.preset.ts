@@ -53,6 +53,7 @@ export const pointCloud3DPreset: ShaderPreset = {
     },
     { type: 'float', uniform: 'u_interactStrength', label: 'Strength', group: 'Interaction', min: 0, max: 3, step: 0.01, default: 1.0, visibleWhen: { uniform: 'u_interactMode', notEqual: 0 } },
     { type: 'float', uniform: 'u_interactRadius', label: 'Radius', group: 'Interaction', min: 0.05, max: 2, step: 0.01, default: 0.5, visibleWhen: { uniform: 'u_interactMode', notEqual: 0 } },
+    { type: 'float', uniform: 'u_interactFalloff', label: 'Falloff', group: 'Interaction', min: 0.1, max: 5, step: 0.1, default: 1.0, visibleWhen: { uniform: 'u_interactMode', notEqual: 0 } },
     { type: 'float', uniform: 'u_perspective', label: 'Zoom', group: 'Camera', min: 1, max: 5, step: 0.1, default: 2.5 },
     { type: 'float', uniform: 'u_posX', label: 'Position X', group: 'Camera', min: -2, max: 2, step: 0.01, default: 0 },
     { type: 'float', uniform: 'u_posY', label: 'Position Y', group: 'Camera', min: -2, max: 2, step: 0.01, default: 0 },

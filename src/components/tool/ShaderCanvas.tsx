@@ -26,7 +26,7 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     }
   }, [renderQuality])
 
-  // Load shader when preset or quality changes (new renderer needs shader re-loaded)
+  // Load shader when preset changes
   useEffect(() => {
     const renderer = rendererRef.current
     if (!renderer) return
@@ -35,16 +35,26 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     if (error) {
       console.error('Shader compile error:', error)
     }
-    if (isPlaying) renderer.play()
-  }, [activePreset, renderQuality, isPlaying])
+
+    if (useShaderStore.getState().isPlaying) {
+      renderer.play()
+    } else {
+      renderer.renderCurrentFrame()
+    }
+  }, [activePreset, renderQuality])
 
   // Play/pause control
   useEffect(() => {
     const renderer = rendererRef.current
     if (!renderer) return
-    if (isPlaying) renderer.play()
-    else renderer.pause()
-  }, [isPlaying])
+
+    if (isPlaying) {
+      renderer.play()
+    } else {
+      renderer.pause()
+      renderer.renderCurrentFrame()
+    }
+  }, [isPlaying, renderQuality])
 
   // Update uniforms when parameters change
   useEffect(() => {
@@ -54,10 +64,8 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     for (const param of activePreset.parameters) {
       const value = parameters[param.uniform]
       if (param.type === 'color' && Array.isArray(value)) {
-        // Send RGB as vec3 to shader, alpha as separate float
         const rgb: [number, number, number] = [value[0] as number, value[1] as number, value[2] as number]
         renderer.setUniform(param.uniform, rgb)
-        // Always send alpha — default to 1.0 if vec3
         const alpha = value.length === 4 ? value[3] as number : 1.0
         renderer.setUniform(param.uniform + '_alpha', alpha)
       } else {
@@ -65,11 +73,11 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
       }
     }
 
-    // Re-render current frame so changes are visible while paused
-    if (!isPlaying) {
-      renderer.renderCurrentFrame()
+    // Re-render current frame if paused so parameter changes are visible
+    if (!useShaderStore.getState().isPlaying) {
+      rendererRef.current?.renderCurrentFrame()
     }
-  }, [parameters, activePreset, renderQuality, isPlaying])
+  }, [parameters, activePreset, renderQuality])
 
   return (
     <canvas

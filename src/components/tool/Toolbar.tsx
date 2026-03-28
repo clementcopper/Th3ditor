@@ -11,7 +11,6 @@ const QUALITY_OPTIONS: { id: RenderQuality; label: string }[] = [
   { id: 'low', label: '0.5x' },
   { id: 'medium', label: '1x' },
   { id: 'high', label: '1.5x' },
-  { id: 'full', label: `${window.devicePixelRatio}x` },
 ]
 
 export function Toolbar({ onExport, onShare }: Props) {

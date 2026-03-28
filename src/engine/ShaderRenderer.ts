@@ -58,23 +58,23 @@ export class ShaderRenderer {
   private handleResize() {
     const dpr = this.options.pixelRatio ?? window.devicePixelRatio
     const rect = this.canvas.getBoundingClientRect()
-    const w = Math.floor(rect.width * dpr)
-    const h = Math.floor(rect.height * dpr)
+    const w = Math.max(1, Math.floor(rect.width * dpr))
+    const h = Math.max(1, Math.floor(rect.height * dpr))
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w
       this.canvas.height = h
-      this.gl.viewport(0, 0, w, h)
     }
+    // Always update viewport
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
   }
 
   loadShader(fragmentSource: string): string | null {
     const gl = this.gl
 
     const vertShader = this.compileShader(gl.VERTEX_SHADER, FULLSCREEN_VERT)
+    if (!vertShader) return 'Vertex shader compilation failed'
     const fragShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource)
-    if (!vertShader || !fragShader) {
-      return gl.getShaderInfoLog(fragShader!) ?? 'Shader compilation failed'
-    }
+    if (!fragShader) return 'Fragment shader compilation failed'
 
     const program = gl.createProgram()!
     gl.attachShader(program, vertShader)
@@ -146,7 +146,6 @@ export class ShaderRenderer {
   play() {
     if (this._playing) return
     this._playing = true
-    // Resume from where we paused
     this.startTime = performance.now() / 1000 - this.pausedTime
     this.renderLoop()
   }

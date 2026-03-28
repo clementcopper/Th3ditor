@@ -40,6 +40,11 @@ export function ParameterPanel() {
             </h4>
             <div className="space-y-3">
               {params.map((param) => {
+                // Conditional visibility
+                if (param.visibleWhen) {
+                  const depVal = parameters[param.visibleWhen.uniform]
+                  if (depVal === param.visibleWhen.notEqual) return null
+                }
                 const value = parameters[param.uniform]
                 if (param.type === 'color') {
                   // Support both vec3 [r,g,b] and vec4 [r,g,b,a]

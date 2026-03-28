@@ -35,8 +35,8 @@ function getDefaults(preset: ShaderPreset): Record<string, number | boolean | nu
 export const useShaderStore = create<ShaderState>((set) => ({
   activePreset: presets[0],
   parameters: getDefaults(presets[0]),
-  renderQuality: 'high' as RenderQuality,
-  isPlaying: true,
+  renderQuality: 'ultra-low' as RenderQuality,
+  isPlaying: false,
   setActivePreset: (preset) =>
     set({ activePreset: preset, parameters: getDefaults(preset) }),
   setParameter: (uniform, value) =>

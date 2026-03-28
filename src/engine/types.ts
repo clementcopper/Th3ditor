@@ -10,6 +10,7 @@ export interface ParameterDef {
   step?: number
   default: number | boolean | [number, number] | [number, number, number] | [number, number, number, number] | string | string[]
   options?: { label: string; value: string }[]
+  visibleWhen?: { uniform: string; notEqual: number }
 }
 
 export interface GradientStop {

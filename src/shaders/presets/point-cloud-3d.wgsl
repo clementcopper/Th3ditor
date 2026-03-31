@@ -40,7 +40,7 @@ fn pc_deform(p: vec3<f32>, t: f32) -> f32 {
 
 // Project grid point to screen. Returns vec4(scr.xy, depth, hval)
 // cols = number of columns, rows = number of rows
-fn project_point(ix: f32, iy: f32, cols: f32, rows: f32, tp: f32, t: f32,
+fn project_point(ix: f32, iy: f32, cols: f32, rows: f32, tp: f32, t: f32, gs: f32,
                  cos_ry: f32, sin_ry: f32, cos_rx: f32, sin_rx: f32) -> vec4<f32> {
   let nu = ix / max(cols - 1.0, 1.0);
   let nv = iy / max(rows - 1.0, 1.0);
@@ -149,7 +149,7 @@ fn fs_main(@location(0) uv_in: vec2<f32>, @builtin(position) frag_coord: vec4<f3
     for (var ix = 0.0; ix < 30.0; ix += 1.0) {
       if (ix >= cols) { break; }
 
-      let pt = project_point(ix, iy, cols, rows, tp, t, cos_ry, sin_ry, cos_rx, sin_rx);
+      let pt = project_point(ix, iy, cols, rows, tp, t, gs, cos_ry, sin_ry, cos_rx, sin_rx);
       if (pt.z < 0.1) { continue; }
 
       let scr = apply_interaction(pt.xy, mouse, resolution);
@@ -158,7 +158,7 @@ fn fs_main(@location(0) uv_in: vec2<f32>, @builtin(position) frag_coord: vec4<f3
 
       if (line_mode && iy + 1.0 < rows) {
         // Lines: draw segment to next point in column
-        let pt_next = project_point(ix, iy + 1.0, cols, rows, tp, t, cos_ry, sin_ry, cos_rx, sin_rx);
+        let pt_next = project_point(ix, iy + 1.0, cols, rows, tp, t, gs, cos_ry, sin_ry, cos_rx, sin_rx);
         if (pt_next.z >= 0.1) {
           let scr_next = apply_interaction(pt_next.xy, mouse, resolution);
           let avg_depth = (depth + pt_next.z) * 0.5;

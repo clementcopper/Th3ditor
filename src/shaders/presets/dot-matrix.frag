@@ -128,9 +128,9 @@ void main() {
       // Repel — dots shrink near cursor
       interactOffset = -influence;
     } else if (u_interactMode < 3.5) {
-      // Magnet — dots shift position toward cursor
+      // Magnet — dots shift toward cursor in cell-space
       vec2 dir = (md > 0.001) ? normalize(mp - cellCenter) : vec2(0.0);
-      posOffset = dir * influence * 0.3;
+      posOffset = dir * influence * 0.4;
     } else {
       // Spotlight — only dots near cursor are visible
       modValue *= influence;
@@ -143,8 +143,13 @@ void main() {
   // Dot radius — scale with spacing so dots stay round
   float radius = mix(u_dotMin, u_dotMax, modValue) * 0.45 * min(u_spacing, 1.0);
 
-  // Apply position offset (Magnet)
-  vec2 dotPos = f - posOffset * u_gridSize;
+  // Limit magnet offset so dot stays fully inside its cell
+  float maxShift = max(0.48 - radius, 0.0);
+  float oLen = length(posOffset);
+  if (oLen > maxShift && oLen > 0.001) {
+    posOffset = posOffset / oLen * maxShift;
+  }
+  vec2 dotPos = f - posOffset;
 
   // Shape distance
   float d = dotDist(dotPos, u_dotShape);

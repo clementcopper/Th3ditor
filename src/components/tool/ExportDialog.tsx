@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { X, FileCode, FileText, Code2, Video } from 'lucide-react'
+import { X, FileCode, FileText, Code2, Video, Cpu } from 'lucide-react'
 import { useShaderStore } from '../../store/shader-store'
 import { exportAsHTML } from '../../export/export-html'
 import { exportAsReact } from '../../export/export-react'
 import { exportAsGLSL } from '../../export/export-glsl'
 import { downloadFile } from '../../utils/download'
 
-type Format = 'html' | 'react' | 'glsl' | 'video'
+type Format = 'html' | 'react' | 'glsl' | 'wgsl' | 'video'
 
 interface Props {
   open: boolean
@@ -34,22 +34,39 @@ export function ExportDialog({ open, onClose, canvasRef }: Props) {
       const tsx = exportAsReact(activePreset, parameters)
       downloadFile(tsx, `${name}.tsx`, 'text/typescript')
     } else if (format === 'glsl') {
-      const { glsl, manifest } = exportAsGLSL(activePreset, parameters)
-      downloadFile(glsl, `${name}.frag`, 'text/plain')
+      const { source, manifest } = exportAsGLSL(activePreset, parameters, 'glsl')
+      downloadFile(source, `${name}.frag`, 'text/plain')
+      downloadFile(manifest, `${name}.json`, 'application/json')
+    } else if (format === 'wgsl') {
+      const { source, manifest } = exportAsGLSL(activePreset, parameters, 'wgsl')
+      downloadFile(source, `${name}.wgsl`, 'text/plain')
       downloadFile(manifest, `${name}.json`, 'application/json')
     } else if (format === 'video' && canvasRef) {
       setRecording(true)
       const { exportAsVideo } = await import('../../export/export-video')
-      await exportAsVideo(canvasRef, duration, `${name}.webm`, setProgress)
+
+      // Build uniform map for worker-based export
+      const uniforms: Record<string, number | boolean | number[]> = {}
+      for (const p of activePreset.parameters) {
+        uniforms[p.uniform] = (parameters[p.uniform] ?? p.default) as number | boolean | number[]
+      }
+
+      await exportAsVideo(canvasRef, duration, `${name}.webm`, setProgress, {
+        shaderSource: activePreset.fragmentShader,
+        uniforms,
+      })
       setRecording(false)
       setProgress(0)
     }
   }
 
-  const formats: { id: Format; label: string; desc: string; icon: typeof FileCode }[] = [
-    { id: 'html', label: 'Standalone HTML', desc: 'Single file, zero dependencies', icon: FileCode },
-    { id: 'react', label: 'React Component', desc: 'Self-contained .tsx with props', icon: Code2 },
+  const hasWGSL = !!activePreset.fragmentShaderWGSL
+
+  const formats: { id: Format; label: string; desc: string; icon: typeof FileCode; hidden?: boolean }[] = [
+    { id: 'html', label: 'Standalone HTML', desc: hasWGSL ? 'WebGPU + WebGL2 fallback' : 'Single file, zero dependencies', icon: FileCode },
+    { id: 'react', label: 'React Component', desc: hasWGSL ? 'Dual-path .tsx with props' : 'Self-contained .tsx with props', icon: Code2 },
     { id: 'glsl', label: 'Raw GLSL', desc: 'Fragment shader + uniform manifest', icon: FileText },
+    { id: 'wgsl', label: 'Raw WGSL', desc: 'WebGPU shader + uniform manifest', icon: Cpu, hidden: !hasWGSL },
     { id: 'video', label: 'Video (WebM)', desc: 'Record animation as video', icon: Video },
   ]
 
@@ -67,7 +84,7 @@ export function ExportDialog({ open, onClose, canvasRef }: Props) {
         </div>
 
         <div className="px-5 py-4 space-y-3">
-          {formats.map(({ id, label, desc, icon: Icon }) => (
+          {formats.filter(f => !f.hidden).map(({ id, label, desc, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setFormat(id)}

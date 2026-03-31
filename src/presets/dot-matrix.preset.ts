@@ -1,5 +1,6 @@
 import type { ShaderPreset } from '../engine/types'
 import fragmentShader from '../shaders/presets/dot-matrix.frag'
+import fragmentShaderWGSL from '../shaders/presets/dot-matrix.wgsl'
 
 export const dotMatrixPreset: ShaderPreset = {
   id: 'dot-matrix',
@@ -7,6 +8,7 @@ export const dotMatrixPreset: ShaderPreset = {
   description: 'Halftone-style dot grid with size modulation',
   category: 'pointcloud',
   fragmentShader,
+  fragmentShaderWGSL,
   parameters: [
     { type: 'color', uniform: 'u_dotColor', label: 'Dot Color', group: 'Colors', default: [0.34, 0.34, 1.0] },
     { type: 'color', uniform: 'u_highlightColor', label: 'Highlight', group: 'Colors', default: [0.5, 0.9, 1.0] },

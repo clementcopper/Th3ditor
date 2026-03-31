@@ -1,10 +1,14 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
-import { ShaderRenderer } from '../../engine/ShaderRenderer'
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react'
+import type { IShaderRenderer } from '../../engine/IShaderRenderer'
+import { createRenderer, type RendererBackend } from '../../engine/createRenderer'
 import { useShaderStore, QUALITY_DPR } from '../../store/shader-store'
+import { validateWgsl } from '../../wasm/shadertool-wasm'
 
 export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }>(function ShaderCanvas({ className }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rendererRef = useRef<ShaderRenderer | null>(null)
+  const rendererRef = useRef<IShaderRenderer | null>(null)
+  const backendRef = useRef<RendererBackend>('webgl2')
+  const [ready, setReady] = useState(false)
 
   useImperativeHandle(ref, () => canvasRef.current!, [])
   const activePreset = useShaderStore((s) => s.activePreset)
@@ -17,21 +21,46 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const renderer = new ShaderRenderer(canvas, { pixelRatio: QUALITY_DPR[renderQuality] })
-    rendererRef.current = renderer
+    let disposed = false
+
+    setReady(false)
+    createRenderer(canvas, { pixelRatio: QUALITY_DPR[renderQuality] }).then(({ renderer, backend }) => {
+      if (disposed) {
+        renderer.dispose()
+        return
+      }
+      rendererRef.current = renderer
+      backendRef.current = backend
+      setReady(true)
+    })
 
     return () => {
-      renderer.dispose()
+      disposed = true
+      rendererRef.current?.dispose()
       rendererRef.current = null
     }
   }, [renderQuality])
 
-  // Load shader when preset changes
+  // Load shader when preset changes or renderer becomes ready
   useEffect(() => {
     const renderer = rendererRef.current
-    if (!renderer) return
+    if (!renderer || !ready) return
 
-    const error = renderer.loadShader(activePreset.fragmentShader)
+    // Use WGSL for WebGPU backend, GLSL for WebGL2
+    const source = backendRef.current === 'webgpu' && activePreset.fragmentShaderWGSL
+      ? activePreset.fragmentShaderWGSL
+      : activePreset.fragmentShader
+
+    // Run naga WGSL validation in parallel (better error messages if WASM is available)
+    if (backendRef.current === 'webgpu' && activePreset.fragmentShaderWGSL) {
+      validateWgsl(source).then(result => {
+        if (result && !result.valid) {
+          console.warn('naga WGSL validation errors:', result.errors)
+        }
+      })
+    }
+
+    const error = renderer.loadShader(source)
     if (error) {
       console.error('Shader compile error:', error)
     }
@@ -41,12 +70,12 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     } else {
       renderer.renderCurrentFrame()
     }
-  }, [activePreset, renderQuality])
+  }, [activePreset, ready])
 
   // Play/pause control
   useEffect(() => {
     const renderer = rendererRef.current
-    if (!renderer) return
+    if (!renderer || !ready) return
 
     if (isPlaying) {
       renderer.play()
@@ -54,12 +83,12 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
       renderer.pause()
       renderer.renderCurrentFrame()
     }
-  }, [isPlaying, renderQuality])
+  }, [isPlaying, ready])
 
   // Update uniforms when parameters change
   useEffect(() => {
     const renderer = rendererRef.current
-    if (!renderer) return
+    if (!renderer || !ready) return
 
     for (const param of activePreset.parameters) {
       const value = parameters[param.uniform]
@@ -77,7 +106,7 @@ export const ShaderCanvas = forwardRef<HTMLCanvasElement, { className?: string }
     if (!useShaderStore.getState().isPlaying) {
       rendererRef.current?.renderCurrentFrame()
     }
-  }, [parameters, activePreset, renderQuality])
+  }, [parameters, activePreset, ready])
 
   return (
     <canvas

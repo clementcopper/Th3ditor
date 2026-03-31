@@ -1,5 +1,6 @@
 import type { ShaderPreset } from '../engine/types'
 import fragmentShader from '../shaders/presets/point-cloud-3d.frag'
+import fragmentShaderWGSL from '../shaders/presets/point-cloud-3d.wgsl'
 
 export const pointCloud3DPreset: ShaderPreset = {
   id: 'point-cloud-3d',
@@ -7,6 +8,7 @@ export const pointCloud3DPreset: ShaderPreset = {
   description: 'Dot raster that deforms into 3D surfaces — waves, spheres, terrain',
   category: 'pointcloud',
   fragmentShader,
+  fragmentShaderWGSL,
   parameters: [
     { type: 'color', uniform: 'u_dotColor', label: 'Dot Color', group: 'Colors', default: [0.34, 0.34, 1.0] },
     { type: 'color', uniform: 'u_highlightColor', label: 'Highlight', group: 'Colors', default: [0.5, 0.9, 1.0] },
@@ -20,9 +22,18 @@ export const pointCloud3DPreset: ShaderPreset = {
         { label: 'Icosphere', value: '2' },
       ],
     },
+    {
+      type: 'select', uniform: 'u_renderMode', label: 'Render', group: 'Geometry',
+      default: 0,
+      options: [
+        { label: 'Points', value: '0' },
+        { label: 'Lines', value: '1' },
+      ],
+    },
     { type: 'float', uniform: 'u_scale', label: 'Size', group: 'Geometry', min: 0.2, max: 3, step: 0.01, default: 1.0 },
     { type: 'float', uniform: 'u_gridDensity', label: 'Grid Density', group: 'Geometry', min: 5, max: 30, step: 1, default: 15 },
     { type: 'float', uniform: 'u_dotSize', label: 'Dot Size', group: 'Geometry', min: 0.1, max: 3, step: 0.01, default: 1.0 },
+    { type: 'float', uniform: 'u_lineSegments', label: 'Segments', group: 'Geometry', min: 5, max: 60, step: 1, default: 30, visibleWhen: { uniform: 'u_renderMode', notEqual: 0 } },
     {
       type: 'select', uniform: 'u_deformType', label: 'Deformation', group: 'Geometry',
       default: 1,

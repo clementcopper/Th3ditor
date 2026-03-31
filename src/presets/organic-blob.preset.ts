@@ -1,5 +1,6 @@
 import type { ShaderPreset } from '../engine/types'
 import fragmentShader from '../shaders/presets/organic-blob.frag'
+import fragmentShaderWGSL from '../shaders/presets/organic-blob.wgsl'
 
 export const organicBlobPreset: ShaderPreset = {
   id: 'organic-blob',
@@ -7,6 +8,7 @@ export const organicBlobPreset: ShaderPreset = {
   description: 'Morphing metaball shapes with smooth organic edges',
   category: 'organic',
   fragmentShader,
+  fragmentShaderWGSL,
   parameters: [
     { type: 'color', uniform: 'u_color1', label: 'Color 1', group: 'Colors', default: [0.34, 0.34, 1.0] },
     { type: 'color', uniform: 'u_color2', label: 'Color 2', group: 'Colors', default: [1.0, 0.3, 0.6] },

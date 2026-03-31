@@ -1,4 +1,5 @@
 import type { UniformValue } from './types'
+import type { IShaderRenderer } from './IShaderRenderer'
 
 const FULLSCREEN_VERT = `#version 300 es
 out vec2 vUv;
@@ -8,7 +9,7 @@ void main() {
 }
 `
 
-export class ShaderRenderer {
+export class ShaderRenderer implements IShaderRenderer {
   private gl: WebGL2RenderingContext
   private program: WebGLProgram | null = null
   private vao: WebGLVertexArrayObject | null = null

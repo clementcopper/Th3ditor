@@ -1,5 +1,6 @@
 import type { ShaderPreset } from '../engine/types'
 import fragmentShader from '../shaders/presets/mesh-gradient.frag'
+import fragmentShaderWGSL from '../shaders/presets/mesh-gradient.wgsl'
 
 export const meshGradientPreset: ShaderPreset = {
   id: 'mesh-gradient',
@@ -7,6 +8,7 @@ export const meshGradientPreset: ShaderPreset = {
   description: 'iOS/Figma-style mesh gradient with smooth color blending in Oklab space',
   category: 'gradient',
   fragmentShader,
+  fragmentShaderWGSL,
   parameters: [
     {
       type: 'color',

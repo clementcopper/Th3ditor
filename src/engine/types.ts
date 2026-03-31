@@ -25,6 +25,7 @@ export interface ShaderPreset {
   description: string
   category: 'gradient' | 'noise' | 'geometric' | 'organic' | 'atmospheric' | 'abstract' | 'pointcloud'
   fragmentShader: string
+  fragmentShaderWGSL?: string
   parameters: ParameterDef[]
 }
 

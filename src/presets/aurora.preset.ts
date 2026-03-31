@@ -1,5 +1,6 @@
 import type { ShaderPreset } from '../engine/types'
 import fragmentShader from '../shaders/presets/aurora.frag'
+import fragmentShaderWGSL from '../shaders/presets/aurora.wgsl'
 
 export const auroraPreset: ShaderPreset = {
   id: 'aurora',
@@ -7,6 +8,7 @@ export const auroraPreset: ShaderPreset = {
   description: 'Northern lights ribbons with flowing motion',
   category: 'atmospheric',
   fragmentShader,
+  fragmentShaderWGSL,
   parameters: [
     { type: 'color', uniform: 'u_color1', label: 'Color 1', group: 'Colors', default: [0.1, 0.9, 0.5] },
     { type: 'color', uniform: 'u_color2', label: 'Color 2', group: 'Colors', default: [0.2, 0.5, 1.0] },

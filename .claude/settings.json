@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill 46594 49788)",
+      "Bash(node -e \":*)",
+      "Bash(curl -s \"http://localhost:4321/src/shaders/presets/mesh-gradient.frag?import\")",
+      "Bash(xargs kill:*)",
+      "Bash(rm /tmp/shader-test.html)",
+      "WebSearch",
+      "Bash(npx vite:*)",
+      "Bash(find /Users/danielmartin/Documents/DMA/Designdone/Shadertool -type f -name *.toml)",
+      "Bash(rustc --version)",
+      "Bash(wasm-pack --version)",
+      "Bash(kill %2)",
+      "Bash(kill 19453)",
+      "Bash(lsof -ti:5174 -ti:5173)"
+    ]
+  }
+}

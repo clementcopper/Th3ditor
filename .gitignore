@@ -23,8 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Claude
-.claude
+
 
 
 

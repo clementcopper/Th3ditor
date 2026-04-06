@@ -4,7 +4,7 @@
 ## Workflow Notes
 - Use `pnpm`, not `npm`
 - Keep responses concise — fix first, explain briefly
-- Dev server: `npm run dev` / Build: `npm run build`
+- Dev server: `pnpm dev` / Build: `pnpm build`
 - Daniel communicates in German, tests live in browser, reports visual bugs
 - Daniel works on two computers — keep `CLAUDE.md` and `WVS-PLAN.md` updated as the cross-machine context sync
 - Keep CLAUDE.md <200 lines

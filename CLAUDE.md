@@ -1,28 +1,27 @@
+## Zentrales Planungsdokument
+`Project Details/WVS-PLAN.md` — Architektur, Layout, UI Style, Node-Roadmap, Phasen-Plan. Immer aktuell halten.
+
 ## Workflow Notes
 - Use `pnpm`, not `npm`
 - Keep responses concise — fix first, explain briefly
 - Dev server: `npm run dev` / Build: `npm run build`
 - Daniel communicates in German, tests live in browser, reports visual bugs
-- Daniel works on two computers — keep `CLAUDE.md` and Web Visual Studio.md updated as the cross-machine context sync
+- Daniel works on two computers — keep `CLAUDE.md` and `WVS-PLAN.md` updated as the cross-machine context sync
 - Keep CLAUDE.md <200 lines
-- Don't make any changes until you have 95% confidence in what you need to build. Ask Daniel follow-up questions until you reach reach that comnfidence.
-
-## Project Details
-`Project Details/Web Visual Studio.md`
+- Don't make changes until 95% confident. Ask follow-up questions until that confidence is reached.
 
 ## Applied Learning
 When something fails repeatedly, when Daniel has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
 
-
 ## Overview
-Node-based 3D/2D visual editor for creating animated web visuals. Built by Daniel Martin (DMA) for Designdone.
-Formerly "Shadertool" — renamed and rearchitected from a fullscreen shader previewer to a full scene editor.
+Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
+Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-based scene editor.
 
 ## Tech Stack
 - React 19 + TypeScript + Vite + Zustand (state) + Tailwind CSS 4
 - Three.js + React Three Fiber (R3F) + @react-three/drei — 3D rendering
 - @xyflow/react (ReactFlow) — node-based visual programming graph
-- Theatre.js — `@theatre/core` (animation engine/runtime) + `@theatre/studio` (timeline UI, Phase 5A) + `@theatre/r3f` (R3F integration)
+- react-resizable-panels — resizable panel layout (Phase 4)
 - GLSL for custom shader materials
 
 ## Architecture
@@ -45,9 +44,8 @@ Formerly "Shadertool" — renamed and rearchitected from a fullscreen shader pre
 
 ### State Management (Zustand Multi-Store)
 - `graph-store.ts` — nodes, edges, CRUD operations
-- `editor-store.ts` — UI state: selected node, view mode, sidebar
+- `editor-store.ts` — UI state: selected node, view mode, panel sizes
 - `scene-store.ts` — compiled scene (output of graph compiler)
-- Animation via Theatre.js (`@theatre/core` engine + `state.json` serialization)
 
 ### Project Structure
 ```
@@ -55,11 +53,12 @@ src/
   types/properties.ts              # PropertyDef (evolved from ParameterDef)
   types/node-graph.ts              # Node, Edge, Port, NodeDefinition
   store/                           # Zustand stores
-  graph-engine/                    # Compiler, node registry, type system
+  graph-engine/                    # Compiler, node registry, type system, live-evaluator
     node-definitions/              # Per-category node definitions
   components/
-    editor/                        # EditorLayout, Toolbar, ViewportTabs
-    viewport/                      # R3F Canvas, SceneRenderer
+    editor/                        # EditorLayout, EditorHeader, EditorFooter
+    viewport/                      # ViewportPanel, EditorView, CameraView, SceneRenderer,
+                                   # SceneExplorer (overlay), Gizmos
     graph/                         # ReactFlow wrapper, NodeRenderer, NodePalette
     properties/                    # PropertiesPanel
       controls/                    # SliderControl, ColorControl, ToggleControl, SelectControl
@@ -68,27 +67,11 @@ src/
   shaders/chunks/                  # Archived GLSL snippets (noise, color, math)
 ```
 
-### Reused from Shadertool
-- UI Controls: SliderControl (Blender-style drag-to-scrub), ColorControl (RGBA + HEX/RGB/HSL/OKLCH), ToggleControl, SelectControl
-- Controls import `PropertyDef` (aliased as `ParameterDef`) from `types/properties.ts`
-- `utils/color.ts` — comprehensive color space library (RGB, HSL, Oklab, OKLCH)
-- `utils/download.ts` — blob download helpers
-- `index.css` — Tailwind theme with OKLCH design tokens, Fira Sans + Fira Code fonts
-- GLSL utility shaders archived in `shaders/chunks/` (simplex noise, voronoi, OKLCH, math)
+### UI Style
+- Dark warm theme: `oklch(45% 0.008 48)` base, orange accent `oklch(70% 0.18 48)`
+- `border-radius: 0` everywhere
+- OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-### UI Patterns (carried over)
-- Blender-style drag-to-scrub input fields, 3px accent line
-- Toggle buttons for dropdowns with ≤3 options
-- Rotation parameters in degrees with ° suffix
-- `visibleWhen` for conditional parameter visibility
-- `suffix` field on PropertyDef for unit display
-
-## Current Status (2026-04-01)
-
-- Phase 1 + Phase 2 + Phase 3 complete
-- Layout: Toolbar (with Play/Pause/Reset), 3D Viewport (top-left), Node Graph (bottom-left), Properties Panel (right 280px), Status Bar
-- Node types: Box, Sphere, Plane, Torus, Cylinder | Standard Material | Mesh | Ambient/Directional/Point Light | Translate/Rotate/Scale | Scene Output | Time, Sin(Time) | Add, Multiply, Sin, Cos, Lerp, Clamp, Remap | Mouse, Screen Size
-- Live-Evaluator in useFrame: dynamic float subgraph (time/math/input) evaluated per frame, feeds into material/transform/geometry props
-- Animation store: play/pause/reset with elapsed time counter
-- TypeScript compiles clean, build succeeds
-- Next: Phase 4 — Custom Shaders + Textures
+## Current Status (2026-04-05)
+- Phase 1 + 2 + 3 complete — see WVS-PLAN.md for details
+- Next: Phase 4 — Viewport Polish (Dual Viewport, Gizmos, Scene Explorer, Dark UI)

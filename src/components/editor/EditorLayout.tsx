@@ -13,8 +13,8 @@ function initDefaultGraph() {
   if (nodes.length > 0) return
 
   setNodes([
-    { id: 'n1', type: 'geometry/box', position: { x: 0, y: 0 }, data: {} },
-    { id: 'n2', type: 'material/standard', position: { x: 0, y: 200 }, data: {} },
+    { id: 'n1', type: 'geometry', position: { x: 0, y: 0 }, data: { mode: 0 } },
+    { id: 'n2', type: 'material', position: { x: 0, y: 200 }, data: {} },
     { id: 'n3', type: 'object/mesh', position: { x: 300, y: 80 }, data: {} },
     { id: 'n4', type: 'scene/output', position: { x: 550, y: 80 }, data: {} },
   ])

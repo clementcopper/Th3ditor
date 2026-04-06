@@ -1,6 +1,8 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore } from '../../store/editor-store'
 import { useGraphStore } from '../../store/graph-store'
 import { getNodeDef } from '../../graph-engine/node-registry'
+import { isVisible } from '../../graph-engine/type-system'
 import { SliderControl } from './controls/SliderControl'
 import { ColorControl } from './controls/ColorControl'
 import { ToggleControl } from './controls/ToggleControl'
@@ -10,6 +12,10 @@ import type { PropertyDef } from '../../types/properties'
 export function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedNodeId)
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedId))
+  const connectedInputPortsList = useGraphStore(
+    useShallow((s) => s.edges.filter((e) => e.target === selectedId).map((e) => e.targetHandle))
+  )
+  const connectedInputPorts = new Set(connectedInputPortsList)
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
 
   if (!node) {
@@ -65,10 +71,13 @@ export function PropertiesPanel() {
             <div className="flex flex-col gap-2">
               {props.map((prop) => {
                 // visibleWhen check
-                if (prop.visibleWhen) {
-                  const depVal = getValue(def.properties.find((p) => p.uniform === prop.visibleWhen!.uniform)!)
-                  if (depVal === prop.visibleWhen.notEqual) return null
-                }
+                if (!isVisible(prop.visibleWhen, (u) => {
+                  const p = def.properties.find((p) => p.uniform === u)
+                  return p ? getValue(p) : undefined
+                })) return null
+
+                // Hide property if its linked port has a connection
+                if (prop.linkedPort && connectedInputPorts.has(prop.linkedPort)) return null
 
                 switch (prop.type) {
                   case 'float':

@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css'
 import { useGraphStore } from '../../store/graph-store'
 import { useEditorStore } from '../../store/editor-store'
 import { NodeRenderer } from './NodeRenderer'
+import { DataEdge } from './DataEdge'
 import { NodePalette } from './NodePalette'
 import { getAllNodeDefs, getNodeDef } from '../../graph-engine/node-registry'
 import { canConnect } from '../../graph-engine/type-system'
@@ -32,6 +33,10 @@ export function NodeEditor() {
     }
     return types
   }, [])
+
+  const edgeTypes = useMemo(() => ({
+    data: DataEdge,
+  }), [])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -100,6 +105,7 @@ export function NodeEditor() {
         nodes={nodes as any}
         edges={edges as any}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -108,7 +114,7 @@ export function NodeEditor() {
         onPaneClick={onPaneClick}
         fitView
         proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
+        defaultEdgeOptions={{ type: 'data', animated: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--color-border-default)" />
       </ReactFlow>

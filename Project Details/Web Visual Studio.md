@@ -236,3 +236,35 @@ src/
 5. Node-Property ändern (z.B. Material-Farbe) → Viewport aktualisiert sich live
 6. Nodes können verbunden/getrennt werden
 7. `npm run build` kompiliert ohne Fehler
+
+## Implementation Phases
+
+### Phase 1: Foundation (DONE)
+- [x] Cleanup, dependencies, types, stores, graph engine, first nodes, components
+- [x] 4 connected nodes → blue box in viewport
+
+### Phase 2: Properties Panel + More Nodes + Node Palette (DONE)
+- [x] EditorLayout restructured: Toolbar top, Viewport top-left, Graph bottom-left, Properties right, StatusBar
+- [x] PropertiesPanel with SliderControl, ColorControl, ToggleControl, SelectControl
+- [x] NodePalette: categorized, searchable, click-to-add
+- [x] Lights: Ambient, Directional, Point
+- [x] Transforms: Translate, Rotate, Scale (with degree suffix)
+- [x] Geometry: Cylinder added (Box, Sphere, Plane, Torus, Cylinder)
+- [x] Port-type validation on connect (canConnect check)
+- [x] Compiler supports transforms (position/rotation/scale chain) and lights
+
+### Phase 3: Time, Math & Live Evaluation (DONE)
+
+- [x] Time nodes: Time (elapsed + delta + speed), Sin(Time) (speed, amplitude, offset)
+- [x] Math nodes: Add, Multiply, Sin, Cos, Lerp, Clamp, Remap
+- [x] Input nodes: Mouse (x, y, normalized), Screen Size
+- [x] Live-Evaluator: useFrame loop evaluates dynamic float subgraph per frame
+- [x] Float ports: time/math/input outputs connect to material/transform/geometry float inputs
+- [x] Animation store: play/pause/reset + elapsed time
+- [x] Play/Pause + Reset + time display in EditorToolbar
+
+### Phase 4: Custom Shaders + Textures ← CURRENT
+
+### Phase 5A: Animation mit Theatre.js Studio (schnell funktional, UI-Konsistenz zweitrangig)
+### Phase 5B: Eigenes Timeline-UI (Theatre.js Studio ersetzen, eigener Stil)
+### Phase 6: Export + Post-Processing + Polish

@@ -8,8 +8,14 @@ export interface PropertyDef {
   min?: number
   max?: number
   step?: number
+  hardMin?: number
+  hardMax?: number
   default: number | boolean | [number, number] | [number, number, number] | [number, number, number, number] | string | string[]
   options?: { label: string; value: string }[]
   suffix?: string
-  visibleWhen?: { uniform: string; notEqual: number }
+  linkedPort?: string
+  visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]
 }
+
+export type VisibleWhenCondition = { uniform: string; equal?: number | number[]; notEqual?: number }
+

@@ -1,4 +1,4 @@
-import type { PropertyDef } from './properties'
+import type { PropertyDef, VisibleWhenCondition } from './properties'
 
 // --- Port Types ---
 
@@ -8,6 +8,7 @@ export interface PortDef {
   name: string
   type: PortType
   label?: string
+  visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]
 }
 
 // --- Node Definition (static blueprint) ---
@@ -63,7 +64,7 @@ export interface CompiledMesh {
 
 export interface CompiledLight {
   id: string
-  lightType: string  // 'light/ambient' | 'light/directional' | 'light/point'
+  lightType: string  // 'ambient' | 'directional' | 'point'
   props: Record<string, unknown>
 }
 

@@ -4,7 +4,10 @@ import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
 import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluator'
+import { getNodeDef } from '../../graph-engine/node-registry'
+import { useEvaluatorStore } from '../../store/evaluator-store'
 import type { CompiledMesh, CompiledLight } from '../../types/node-graph'
+
 function toThreeColor(color?: unknown): string {
   const c = color as [number, number, number, number] | undefined
   if (!c) return '#ffffff'
@@ -18,19 +21,19 @@ function MeshObject({ mesh }: { mesh: CompiledMesh }) {
 
   return (
     <mesh position={t.position} rotation={t.rotation} scale={t.scale}>
-      {mesh.geometryType === 'geometry/box' && (
+      {mesh.geometryType === 'box' && (
         <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number]} />
       )}
-      {mesh.geometryType === 'geometry/sphere' && (
+      {mesh.geometryType === 'sphere' && (
         <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
       )}
-      {mesh.geometryType === 'geometry/plane' && (
+      {mesh.geometryType === 'plane' && (
         <planeGeometry args={[gp.width as number, gp.height as number]} />
       )}
-      {mesh.geometryType === 'geometry/torus' && (
+      {mesh.geometryType === 'torus' && (
         <torusGeometry args={[gp.radius as number, gp.tube as number, 16, 48]} />
       )}
-      {mesh.geometryType === 'geometry/cylinder' && (
+      {mesh.geometryType === 'cylinder' && (
         <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
       )}
 
@@ -55,11 +58,11 @@ function LightObject({ light }: { light: CompiledLight }) {
   ]
 
   switch (light.lightType) {
-    case 'light/ambient':
+    case 'ambient':
       return <ambientLight color={color} intensity={intensity} />
-    case 'light/directional':
+    case 'directional':
       return <directionalLight color={color} intensity={intensity} position={pos} />
-    case 'light/point':
+    case 'point':
       return <pointLight color={color} intensity={intensity} position={pos} distance={(p.distance as number) ?? 0} />
     default:
       return null
@@ -68,14 +71,13 @@ function LightObject({ light }: { light: CompiledLight }) {
 
 /**
  * LiveEvaluator runs inside the R3F render loop.
- * It evaluates all dynamic float connections (time/math/input nodes)
- * and re-compiles the scene with the evaluated values.
+ * Evaluates dynamic float connections and updates the compiled scene.
  */
 function LiveEvaluator() {
   const mouseRef = useRef({ x: 0, y: 0 })
+  const lastStoreUpdate = useRef(0)
   const { size } = useThree()
 
-  // Track mouse position
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       mouseRef.current = { x: e.clientX, y: e.clientY }
@@ -86,24 +88,21 @@ function LiveEvaluator() {
 
   useFrame((_, delta) => {
     const animStore = useAnimationStore.getState()
-    if (!animStore.playing) return
+    const playing = animStore.playing
 
-    const newElapsed = animStore.elapsed + delta
-    animStore.setElapsed(newElapsed)
+    let newElapsed = animStore.elapsed
+    if (playing) {
+      newElapsed += delta
+      animStore.setElapsed(newElapsed)
+    }
 
     const nodes = useGraphStore.getState().nodes
     const edges = useGraphStore.getState().edges
     const scene = useSceneStore.getState().scene
 
-    // Check if any dynamic nodes exist
-    const hasDynamic = nodes.some(
-      (n) => n.type.startsWith('time/') || n.type.startsWith('input/') || n.type.startsWith('math/'),
-    )
-    if (!hasDynamic) return
-
     const ctx: EvalContext = {
       elapsed: newElapsed,
-      delta,
+      delta: playing ? delta : 0,
       mouseX: mouseRef.current.x,
       mouseY: mouseRef.current.y,
       screenW: size.width,
@@ -112,7 +111,30 @@ function LiveEvaluator() {
 
     const cache = new Map<string, number>()
 
-    // Evaluate float inputs only on nodes that belong to each mesh's chain
+    // Evaluate ALL float source ports so edge labels work
+    for (const edge of edges) {
+      const sourceNode = nodes.find((n) => n.id === edge.source)
+      if (!sourceNode) continue
+      if (sourceNode.type === 'time' || sourceNode.type === 'math' || sourceNode.type === 'input') {
+        evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+      }
+    }
+
+    // Throttled update of evaluator store for edge labels (~10fps)
+    const now = performance.now()
+    if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
+      lastStoreUpdate.current = now
+      useEvaluatorStore.getState().setValues(cache)
+    }
+
+    // Scene updates only when playing
+    if (!playing) return
+
+    const hasDynamic = nodes.some(
+      (n) => n.type === 'time' || n.type === 'input' || n.type === 'math',
+    )
+    if (!hasDynamic) return
+
     let changed = false
     const newMeshes = scene.meshes.map((mesh) => {
       let meshChanged = false
@@ -120,18 +142,14 @@ function LiveEvaluator() {
       const geoProps = { ...mesh.geometryProps }
       const transform = { ...mesh.transform }
 
-      // IDs of nodes that belong to this mesh
       const ownedNodeIds = new Set([mesh.id, mesh.geometryNodeId, mesh.materialNodeId, ...mesh.transformNodeIds])
 
       for (const edge of edges) {
-        // Only consider edges targeting nodes owned by this mesh
         if (!ownedNodeIds.has(edge.target)) continue
 
         const sourceNode = nodes.find((n) => n.id === edge.source)
         if (!sourceNode) continue
-
-        // Only evaluate if source is a dynamic float producer
-        if (!sourceNode.type.startsWith('time/') && !sourceNode.type.startsWith('math/') && !sourceNode.type.startsWith('input/')) continue
+        if (sourceNode.type !== 'time' && sourceNode.type !== 'math' && sourceNode.type !== 'input') continue
 
         const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
         if (val === undefined) continue
@@ -139,24 +157,31 @@ function LiveEvaluator() {
         const targetNode = nodes.find((n) => n.id === edge.target)
         if (!targetNode) continue
 
-        if (targetNode.type.startsWith('material/')) {
+        if (targetNode.type === 'material') {
           matProps[edge.targetHandle] = val
           meshChanged = true
-        } else if (targetNode.type.startsWith('geometry/')) {
+        } else if (targetNode.type === 'geometry') {
           geoProps[edge.targetHandle] = val
           meshChanged = true
-        } else if (targetNode.type.startsWith('transform/')) {
+        } else if (targetNode.type === 'transform') {
+          const targetDef = getNodeDef(targetNode.type)
+          const targetProps = { ...(targetDef?.defaults ?? {}), ...targetNode.data }
+          const mode = (targetProps.mode as number) ?? 0
           const prop = edge.targetHandle
-          if (targetNode.type === 'transform/translate') {
+
+          if (mode === 0) {
+            // Translate
             if (prop === 'x') { transform.position = [...transform.position]; transform.position[0] = val; meshChanged = true }
             if (prop === 'y') { transform.position = [...transform.position]; transform.position[1] = val; meshChanged = true }
             if (prop === 'z') { transform.position = [...transform.position]; transform.position[2] = val; meshChanged = true }
-          } else if (targetNode.type === 'transform/rotate') {
+          } else if (mode === 1) {
+            // Rotate
             const DEG2RAD = Math.PI / 180
             if (prop === 'x') { transform.rotation = [...transform.rotation]; transform.rotation[0] = val * DEG2RAD; meshChanged = true }
             if (prop === 'y') { transform.rotation = [...transform.rotation]; transform.rotation[1] = val * DEG2RAD; meshChanged = true }
             if (prop === 'z') { transform.rotation = [...transform.rotation]; transform.rotation[2] = val * DEG2RAD; meshChanged = true }
-          } else if (targetNode.type === 'transform/scale') {
+          } else if (mode === 2) {
+            // Scale
             if (prop === 'x') { transform.scale = [...transform.scale]; transform.scale[0] = val; meshChanged = true }
             if (prop === 'y') { transform.scale = [...transform.scale]; transform.scale[1] = val; meshChanged = true }
             if (prop === 'z') { transform.scale = [...transform.scale]; transform.scale[2] = val; meshChanged = true }
@@ -181,7 +206,7 @@ function LiveEvaluator() {
 
         const sourceNode = nodes.find((n) => n.id === edge.source)
         if (!sourceNode) continue
-        if (!sourceNode.type.startsWith('time/') && !sourceNode.type.startsWith('math/') && !sourceNode.type.startsWith('input/')) continue
+        if (sourceNode.type !== 'time' && sourceNode.type !== 'math' && sourceNode.type !== 'input') continue
 
         const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
         if (val === undefined) continue

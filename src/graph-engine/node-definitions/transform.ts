@@ -1,9 +1,9 @@
 import type { NodeDefinition } from '../../types/node-graph'
 import { registerNode } from '../node-registry'
 
-const translate: NodeDefinition = {
-  type: 'transform/translate',
-  label: 'Translate',
+const transform: NodeDefinition = {
+  type: 'transform',
+  label: 'Transform',
   category: 'transform',
   inputs: [
     { name: 'mesh', type: 'mesh', label: 'Mesh' },
@@ -13,53 +13,35 @@ const translate: NodeDefinition = {
   ],
   outputs: [{ name: 'mesh', type: 'mesh', label: 'Mesh' }],
   properties: [
-    { type: 'float', uniform: 'x', label: 'X', min: -50, max: 50, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'y', label: 'Y', min: -50, max: 50, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'z', label: 'Z', min: -50, max: 50, step: 0.1, default: 0 },
+    {
+      type: 'select', uniform: 'mode', label: 'Type', default: 0,
+      options: [
+        { label: 'Translate', value: '0' },
+        { label: 'Rotate', value: '1' },
+        { label: 'Scale', value: '2' },
+      ],
+    },
+    // Translate (0)
+    { type: 'float', uniform: 'tx', label: 'X', min: -10, max: 10, step: 0.1, hardMin: -10000, hardMax: 10000, default: 0, visibleWhen: { uniform: 'mode', equal: 0 } },
+    { type: 'float', uniform: 'ty', label: 'Y', min: -10, max: 10, step: 0.1, hardMin: -10000, hardMax: 10000, default: 0, visibleWhen: { uniform: 'mode', equal: 0 } },
+    { type: 'float', uniform: 'tz', label: 'Z', min: -10, max: 10, step: 0.1, hardMin: -10000, hardMax: 10000, default: 0, visibleWhen: { uniform: 'mode', equal: 0 } },
+    // Rotate (1)
+    { type: 'float', uniform: 'rx', label: 'X', min: -360, max: 360, step: 1, default: 0, suffix: '°', visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'float', uniform: 'ry', label: 'Y', min: -360, max: 360, step: 1, default: 0, suffix: '°', visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'float', uniform: 'rz', label: 'Z', min: -360, max: 360, step: 1, default: 0, suffix: '°', visibleWhen: { uniform: 'mode', equal: 1 } },
+    // Scale (2)
+    { type: 'float', uniform: 'sx', label: 'X', min: 0.01, max: 10, step: 0.1, hardMin: 0.001, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
+    { type: 'float', uniform: 'sy', label: 'Y', min: 0.01, max: 10, step: 0.1, hardMin: 0.001, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
+    { type: 'float', uniform: 'sz', label: 'Z', min: 0.01, max: 10, step: 0.1, hardMin: 0.001, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
   ],
-  defaults: { x: 0, y: 0, z: 0 },
-}
-
-const rotate: NodeDefinition = {
-  type: 'transform/rotate',
-  label: 'Rotate',
-  category: 'transform',
-  inputs: [
-    { name: 'mesh', type: 'mesh', label: 'Mesh' },
-    { name: 'x', type: 'float', label: 'X' },
-    { name: 'y', type: 'float', label: 'Y' },
-    { name: 'z', type: 'float', label: 'Z' },
-  ],
-  outputs: [{ name: 'mesh', type: 'mesh', label: 'Mesh' }],
-  properties: [
-    { type: 'float', uniform: 'x', label: 'X', min: -360, max: 360, step: 1, default: 0, suffix: '°' },
-    { type: 'float', uniform: 'y', label: 'Y', min: -360, max: 360, step: 1, default: 0, suffix: '°' },
-    { type: 'float', uniform: 'z', label: 'Z', min: -360, max: 360, step: 1, default: 0, suffix: '°' },
-  ],
-  defaults: { x: 0, y: 0, z: 0 },
-}
-
-const scale: NodeDefinition = {
-  type: 'transform/scale',
-  label: 'Scale',
-  category: 'transform',
-  inputs: [
-    { name: 'mesh', type: 'mesh', label: 'Mesh' },
-    { name: 'x', type: 'float', label: 'X' },
-    { name: 'y', type: 'float', label: 'Y' },
-    { name: 'z', type: 'float', label: 'Z' },
-  ],
-  outputs: [{ name: 'mesh', type: 'mesh', label: 'Mesh' }],
-  properties: [
-    { type: 'float', uniform: 'x', label: 'X', min: 0.01, max: 20, step: 0.1, default: 1 },
-    { type: 'float', uniform: 'y', label: 'Y', min: 0.01, max: 20, step: 0.1, default: 1 },
-    { type: 'float', uniform: 'z', label: 'Z', min: 0.01, max: 20, step: 0.1, default: 1 },
-  ],
-  defaults: { x: 1, y: 1, z: 1 },
+  defaults: {
+    mode: 0,
+    tx: 0, ty: 0, tz: 0,
+    rx: 0, ry: 0, rz: 0,
+    sx: 1, sy: 1, sz: 1,
+  },
 }
 
 export function registerTransformNodes() {
-  registerNode(translate)
-  registerNode(rotate)
-  registerNode(scale)
+  registerNode(transform)
 }

@@ -1,35 +1,31 @@
 import type { NodeDefinition } from '../../types/node-graph'
 import { registerNode } from '../node-registry'
 
-const mouse: NodeDefinition = {
-  type: 'input/mouse',
-  label: 'Mouse',
+const input: NodeDefinition = {
+  type: 'input',
+  label: 'Input',
   category: 'input',
   inputs: [],
   outputs: [
-    { name: 'x', type: 'float', label: 'X' },
-    { name: 'y', type: 'float', label: 'Y' },
-    { name: 'normalizedX', type: 'float', label: 'Norm X' },
-    { name: 'normalizedY', type: 'float', label: 'Norm Y' },
+    { name: 'x', type: 'float', label: 'X', visibleWhen: { uniform: 'mode', equal: 0 } },
+    { name: 'y', type: 'float', label: 'Y', visibleWhen: { uniform: 'mode', equal: 0 } },
+    { name: 'normalizedX', type: 'float', label: 'Norm X', visibleWhen: { uniform: 'mode', equal: 0 } },
+    { name: 'normalizedY', type: 'float', label: 'Norm Y', visibleWhen: { uniform: 'mode', equal: 0 } },
+    { name: 'width', type: 'float', label: 'Width', visibleWhen: { uniform: 'mode', equal: 1 } },
+    { name: 'height', type: 'float', label: 'Height', visibleWhen: { uniform: 'mode', equal: 1 } },
   ],
-  properties: [],
-  defaults: {},
-}
-
-const screenSize: NodeDefinition = {
-  type: 'input/screen',
-  label: 'Screen Size',
-  category: 'input',
-  inputs: [],
-  outputs: [
-    { name: 'width', type: 'float', label: 'Width' },
-    { name: 'height', type: 'float', label: 'Height' },
+  properties: [
+    {
+      type: 'select', uniform: 'mode', label: 'Type', default: 0,
+      options: [
+        { label: 'Mouse', value: '0' },
+        { label: 'Screen Size', value: '1' },
+      ],
+    },
   ],
-  properties: [],
-  defaults: {},
+  defaults: { mode: 0 },
 }
 
 export function registerInputNodes() {
-  registerNode(mouse)
-  registerNode(screenSize)
+  registerNode(input)
 }

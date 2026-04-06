@@ -1,136 +1,83 @@
 import type { NodeDefinition } from '../../types/node-graph'
 import { registerNode } from '../node-registry'
 
-const add: NodeDefinition = {
-  type: 'math/add',
-  label: 'Add',
+const math: NodeDefinition = {
+  type: 'math',
+  label: 'Math',
   category: 'math',
   inputs: [
-    { name: 'a', type: 'float', label: 'A' },
-    { name: 'b', type: 'float', label: 'B' },
+    { name: 'a', type: 'float', label: 'A', visibleWhen: { uniform: 'mode', equal: [1, 2, 5] } },
+    { name: 'b', type: 'float', label: 'B', visibleWhen: { uniform: 'mode', equal: [1, 2, 5] } },
+    { name: 't', type: 'float', label: 'T', visibleWhen: { uniform: 'mode', equal: 5 } },
+    { name: 'value', type: 'float', label: 'Value', visibleWhen: { uniform: 'mode', equal: [3, 4, 6, 7] } },
   ],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
+  outputs: [
+    { name: 'value', type: 'float', label: 'Value', visibleWhen: { uniform: 'mode', equal: 0 } },
+    { name: 'result', type: 'float', label: 'Result', visibleWhen: { uniform: 'mode', notEqual: 0 } },
+  ],
   properties: [
-    { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'b', label: 'B', min: -100, max: 100, step: 0.1, default: 0 },
-  ],
-  defaults: { a: 0, b: 0 },
-}
-
-const multiply: NodeDefinition = {
-  type: 'math/multiply',
-  label: 'Multiply',
-  category: 'math',
-  inputs: [
-    { name: 'a', type: 'float', label: 'A' },
-    { name: 'b', type: 'float', label: 'B' },
-  ],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.1, default: 1 },
-    { type: 'float', uniform: 'b', label: 'B', min: -100, max: 100, step: 0.1, default: 1 },
-  ],
-  defaults: { a: 1, b: 1 },
-}
-
-const sin: NodeDefinition = {
-  type: 'math/sin',
-  label: 'Sin',
-  category: 'math',
-  inputs: [{ name: 'value', type: 'float', label: 'Value' }],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'value', label: 'Value', min: -100, max: 100, step: 0.1, default: 0 },
-  ],
-  defaults: { value: 0 },
-}
-
-const cos: NodeDefinition = {
-  type: 'math/cos',
-  label: 'Cos',
-  category: 'math',
-  inputs: [{ name: 'value', type: 'float', label: 'Value' }],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'value', label: 'Value', min: -100, max: 100, step: 0.1, default: 0 },
-  ],
-  defaults: { value: 0 },
-}
-
-const lerp: NodeDefinition = {
-  type: 'math/lerp',
-  label: 'Lerp',
-  category: 'math',
-  inputs: [
-    { name: 'a', type: 'float', label: 'A' },
-    { name: 'b', type: 'float', label: 'B' },
-    { name: 't', type: 'float', label: 'T' },
-  ],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'b', label: 'B', min: -100, max: 100, step: 0.1, default: 1 },
-    { type: 'float', uniform: 't', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5 },
-  ],
-  defaults: { a: 0, b: 1, t: 0.5 },
-}
-
-const clamp: NodeDefinition = {
-  type: 'math/clamp',
-  label: 'Clamp',
-  category: 'math',
-  inputs: [{ name: 'value', type: 'float', label: 'Value' }],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'value', label: 'Value', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'min', label: 'Min', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'max', label: 'Max', min: -100, max: 100, step: 0.1, default: 1 },
-  ],
-  defaults: { value: 0, min: 0, max: 1 },
-}
-
-const remap: NodeDefinition = {
-  type: 'math/remap',
-  label: 'Remap',
-  category: 'math',
-  inputs: [{ name: 'value', type: 'float', label: 'Value' }],
-  outputs: [{ name: 'result', type: 'float', label: 'Result' }],
-  properties: [
-    { type: 'float', uniform: 'value', label: 'Value', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'inMin', label: 'In Min', min: -100, max: 100, step: 0.1, default: -1 },
-    { type: 'float', uniform: 'inMax', label: 'In Max', min: -100, max: 100, step: 0.1, default: 1 },
-    { type: 'float', uniform: 'outMin', label: 'Out Min', min: -100, max: 100, step: 0.1, default: 0 },
-    { type: 'float', uniform: 'outMax', label: 'Out Max', min: -100, max: 100, step: 0.1, default: 1 },
-  ],
-  defaults: { value: 0, inMin: -1, inMax: 1, outMin: 0, outMax: 1 },
-}
-
-const number: NodeDefinition = {
-  type: 'math/number',
-  label: 'Number',
-  category: 'math',
-  inputs: [],
-  outputs: [{ name: 'value', type: 'float', label: 'Value' }],
-  properties: [
-    { type: 'float', uniform: 'value', label: 'Value', min: -10000, max: 10000, step: 0.1, default: 0 },
     {
-      type: 'select', uniform: 'mode', label: 'Type', default: 0,
+      type: 'select', uniform: 'mode', label: 'Operation', default: 0,
+      options: [
+        { label: 'Number', value: '0' },
+        { label: 'Add', value: '1' },
+        { label: 'Multiply', value: '2' },
+        { label: 'Sin', value: '3' },
+        { label: 'Cos', value: '4' },
+        { label: 'Lerp', value: '5' },
+        { label: 'Clamp', value: '6' },
+        { label: 'Remap', value: '7' },
+      ],
+    },
+    // Number (0)
+    {
+      type: 'select', uniform: 'numType', label: 'Type', default: 0,
       options: [
         { label: 'Float', value: '0' },
         { label: 'Int', value: '1' },
       ],
+      visibleWhen: { uniform: 'mode', equal: 0 },
     },
+    { type: 'float', uniform: 'numFloat', label: 'Value', min: -10, max: 10, step: 0.01, hardMin: -Infinity, hardMax: Infinity, default: 0, visibleWhen: [{ uniform: 'mode', equal: 0 }, { uniform: 'numType', equal: 0 }] },
+    { type: 'float', uniform: 'numInt', label: 'Value', min: -100, max: 100, step: 1, hardMin: -65536, hardMax: 65536, default: 1, visibleWhen: [{ uniform: 'mode', equal: 0 }, { uniform: 'numType', equal: 1 }] },
+    // Add (1)
+    { type: 'float', uniform: 'a', label: 'A', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'a', visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'float', uniform: 'addB', label: 'B', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'b', visibleWhen: { uniform: 'mode', equal: 1 } },
+    // Multiply (2)
+    { type: 'float', uniform: 'mulA', label: 'A', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, linkedPort: 'a', visibleWhen: { uniform: 'mode', equal: 2 } },
+    { type: 'float', uniform: 'mulB', label: 'B', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, linkedPort: 'b', visibleWhen: { uniform: 'mode', equal: 2 } },
+    // Sin (3)
+    { type: 'float', uniform: 'sinValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 3 } },
+    // Cos (4)
+    { type: 'float', uniform: 'cosValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 4 } },
+    // Lerp (5)
+    { type: 'float', uniform: 'lerpA', label: 'A', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'a', visibleWhen: { uniform: 'mode', equal: 5 } },
+    { type: 'float', uniform: 'lerpB', label: 'B', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, linkedPort: 'b', visibleWhen: { uniform: 'mode', equal: 5 } },
+    { type: 'float', uniform: 'lerpT', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5, linkedPort: 't', visibleWhen: { uniform: 'mode', equal: 5 } },
+    // Clamp (6)
+    { type: 'float', uniform: 'clampValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 6 } },
+    { type: 'float', uniform: 'clampMin', label: 'Min', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, visibleWhen: { uniform: 'mode', equal: 6 } },
+    { type: 'float', uniform: 'clampMax', label: 'Max', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, visibleWhen: { uniform: 'mode', equal: 6 } },
+    // Remap (7)
+    { type: 'float', uniform: 'remapValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 7 } },
+    { type: 'float', uniform: 'inMin', label: 'In Min', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: -1, visibleWhen: { uniform: 'mode', equal: 7 } },
+    { type: 'float', uniform: 'inMax', label: 'In Max', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, visibleWhen: { uniform: 'mode', equal: 7 } },
+    { type: 'float', uniform: 'outMin', label: 'Out Min', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, visibleWhen: { uniform: 'mode', equal: 7 } },
+    { type: 'float', uniform: 'outMax', label: 'Out Max', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, visibleWhen: { uniform: 'mode', equal: 7 } },
   ],
-  defaults: { value: 0, mode: 0 },
+  defaults: {
+    mode: 0,
+    numType: 0, numFloat: 0, numInt: 1,
+    a: 0, addB: 0,
+    mulA: 1, mulB: 1,
+    sinValue: 0,
+    cosValue: 0,
+    lerpA: 0, lerpB: 1, lerpT: 0.5,
+    clampValue: 0, clampMin: 0, clampMax: 1,
+    remapValue: 0, inMin: -1, inMax: 1, outMin: 0, outMax: 1,
+  },
 }
 
 export function registerMathNodes() {
-  registerNode(number)
-  registerNode(add)
-  registerNode(multiply)
-  registerNode(sin)
-  registerNode(cos)
-  registerNode(lerp)
-  registerNode(clamp)
-  registerNode(remap)
+  registerNode(math)
 }

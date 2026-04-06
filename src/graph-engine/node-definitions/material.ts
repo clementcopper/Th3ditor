@@ -1,9 +1,9 @@
 import type { NodeDefinition } from '../../types/node-graph'
 import { registerNode } from '../node-registry'
 
-const standard: NodeDefinition = {
-  type: 'material/standard',
-  label: 'Standard Material',
+const material: NodeDefinition = {
+  type: 'material',
+  label: 'Material',
   category: 'material',
   inputs: [
     { name: 'metalness', type: 'float', label: 'Metalness' },
@@ -20,5 +20,5 @@ const standard: NodeDefinition = {
 }
 
 export function registerMaterialNodes() {
-  registerNode(standard)
+  registerNode(material)
 }

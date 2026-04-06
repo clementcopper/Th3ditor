@@ -1,11 +1,29 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { getNodeDef } from '../../graph-engine/node-registry'
-import { PORT_COLORS } from '../../graph-engine/type-system'
+import { PORT_COLORS, CATEGORY_COLORS, isVisible } from '../../graph-engine/type-system'
+import { useGraphStore } from '../../store/graph-store'
 
-function NodeRendererInner({ type, selected }: NodeProps) {
+function NodeRendererInner({ id, type, selected }: NodeProps) {
   const def = getNodeDef(type ?? '')
+  const nodeData = useGraphStore((s) => s.nodes.find((n) => n.id === id)?.data ?? {})
   if (!def) return null
+
+  const getData = (uniform: string) => {
+    const val = nodeData[uniform]
+    return val !== undefined ? val : def.defaults[uniform]
+  }
+
+  const visibleInputs = def.inputs.filter((p) => isVisible(p.visibleWhen, getData))
+  const visibleOutputs = def.outputs.filter((p) => isVisible(p.visibleWhen, getData))
+  const categoryColor = CATEGORY_COLORS[def.category] ?? '#9ca3af'
+
+  // Header shows subtype name (e.g. "Add") instead of category (e.g. "Math")
+  const modeValue = getData('mode') as number | undefined
+  const modeProp = def.properties.find((p) => p.uniform === 'mode' && p.type === 'select')
+  const headerLabel = (modeProp?.options && modeValue !== undefined)
+    ? (modeProp.options[modeValue]?.label ?? def.label)
+    : def.label
 
   return (
     <div
@@ -13,16 +31,19 @@ function NodeRendererInner({ type, selected }: NodeProps) {
         selected ? 'border-brand-500 ring-1 ring-brand-500/30' : 'border-border-default'
       }`}
     >
-      {/* Header */}
-      <div className="px-3 py-1.5 rounded-t-lg bg-surface-secondary border-b border-border-default">
-        <span className="text-[11px] font-semibold text-text-primary">{def.label}</span>
+      {/* Header with category color */}
+      <div
+        className="px-3 py-1.5 rounded-t-lg border-b border-border-default"
+        style={{ backgroundColor: categoryColor + '15'}}
+      >
+        <span className="text-[11px] font-semibold text-text-primary">{headerLabel}</span>
       </div>
 
       {/* Ports */}
       <div className="flex justify-between px-1 py-2 gap-4">
         {/* Inputs */}
         <div className="flex flex-col gap-1.5">
-          {def.inputs.map((port) => (
+          {visibleInputs.map((port) => (
             <div key={port.name} className="relative flex items-center">
               <Handle
                 type="target"
@@ -38,7 +59,7 @@ function NodeRendererInner({ type, selected }: NodeProps) {
 
         {/* Outputs */}
         <div className="flex flex-col gap-1.5 items-end">
-          {def.outputs.map((port) => (
+          {visibleOutputs.map((port) => (
             <div key={port.name} className="relative flex items-center">
               <span className="text-[10px] text-text-secondary mr-2">{port.label ?? port.name}</span>
               <Handle

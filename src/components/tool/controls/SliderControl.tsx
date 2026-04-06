@@ -21,9 +21,12 @@ export function SliderControl({ param, value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const fieldRef = useRef<HTMLDivElement>(null)
 
-  const clamp = (v: number) => Math.min(max, Math.max(min, v))
+  const hardMinVal = param.hardMin ?? min
+  const hardMaxVal = param.hardMax ?? max
+  const clampDrag = (v: number) => Math.min(max, Math.max(min, v))
+  const clampTyped = (v: number) => Math.min(hardMaxVal, Math.max(hardMinVal, v))
   const snap = (v: number) => Math.round(v / step) * step
-  const fillPercent = ((value - min) / (max - min)) * 100
+  const fillPercent = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
 
   // Determine display precision from step
   const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : 2
@@ -44,7 +47,7 @@ export function SliderControl({ param, value, onChange }: Props) {
     if (Math.abs(dx) > 2) hasMoved.current = true
     const range = max - min
     const sensitivity = range / 300
-    const newVal = snap(clamp(dragStartValue.current + dx * sensitivity))
+    const newVal = snap(clampDrag(dragStartValue.current + dx * sensitivity))
     onChange(newVal)
   }, [min, max, step, onChange])
 
@@ -62,7 +65,7 @@ export function SliderControl({ param, value, onChange }: Props) {
     setIsEditing(false)
     const parsed = parseFloat(editText)
     if (!isNaN(parsed)) {
-      onChange(snap(clamp(parsed)))
+      onChange(snap(clampTyped(parsed)))
     }
   }, [editText, onChange, min, max, step])
 

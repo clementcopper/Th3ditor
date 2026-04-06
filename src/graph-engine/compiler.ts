@@ -1,12 +1,14 @@
 import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 
+/** Maps geometry mode number to a subtype string for the renderer */
+const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder'] as const
+
+/** Maps light mode number to a subtype string */
+const LIGHT_SUBTYPES = ['ambient', 'directional', 'point'] as const
+
 /**
  * Compiles the node graph into a CompiledScene.
- *
- * - Finds mesh nodes, resolves geometry + material inputs
- * - Collects transform chain between mesh and scene output
- * - Finds light nodes
  */
 export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledScene {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]))
@@ -23,7 +25,6 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
   }
 
   // --- Meshes ---
-  // Only include meshes that reach a Scene Output node via their mesh-port chain
   const meshNodes = nodes.filter((n) => n.type === 'object/mesh')
   const meshes: CompiledMesh[] = []
 
@@ -36,18 +37,24 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const matDef = getNodeDef(matNode.type)
     if (!geoDef || !matDef) continue
 
-    // Walk the mesh-port chain and check if it reaches scene/output
     const { transform, nodeIds: transformNodeIds, reachesOutput } = resolveTransformChain(meshNode.id, nodes, edges)
     if (!reachesOutput) continue
 
     const geoProps = getProps(geoNode)
     const matProps = getProps(matNode)
 
+    // Resolve geometry subtype from mode
+    const geoMode = (geoProps.mode as number) ?? 0
+    const geometryType = GEO_SUBTYPES[geoMode] ?? 'box'
+
+    // Normalize geometry props for the renderer
+    const normalizedGeoProps = normalizeGeoProps(geometryType, geoProps)
+
     meshes.push({
       id: meshNode.id,
       geometryNodeId: geoNode.id,
-      geometryType: geoNode.type,
-      geometryProps: geoProps,
+      geometryType,
+      geometryProps: normalizedGeoProps,
       materialNodeId: matNode.id,
       materialType: matNode.type,
       materialProps: matProps,
@@ -67,14 +74,52 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     }
   }
 
-  const lightNodes = nodes.filter((n) => n.type.startsWith('light/') && connectedLightIds.has(n.id))
-  const lights: CompiledLight[] = lightNodes.map((n) => ({
-    id: n.id,
-    lightType: n.type,
-    props: getProps(n),
-  }))
+  const lightNodes = nodes.filter((n) => n.type === 'light' && connectedLightIds.has(n.id))
+  const lights: CompiledLight[] = lightNodes.map((n) => {
+    const props = getProps(n)
+    const mode = (props.mode as number) ?? 0
+    const lightType = LIGHT_SUBTYPES[mode] ?? 'directional'
+
+    return {
+      id: n.id,
+      lightType,
+      props: normalizeLightProps(lightType, props),
+    }
+  })
 
   return { meshes, lights }
+}
+
+/** Normalize geometry props to a renderer-friendly format */
+function normalizeGeoProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
+  switch (type) {
+    case 'box':
+      return { width: props.width, height: props.height, depth: props.depth }
+    case 'sphere':
+      return { radius: props.radius, widthSegments: props.widthSegments, heightSegments: props.heightSegments }
+    case 'plane':
+      return { width: props.planeWidth, height: props.planeHeight }
+    case 'torus':
+      return { radius: props.torusRadius, tube: props.tube }
+    case 'cylinder':
+      return { radiusTop: props.radiusTop, radiusBottom: props.radiusBottom, height: props.cylHeight, radialSegments: props.radialSegments }
+    default:
+      return props
+  }
+}
+
+/** Normalize light props to a renderer-friendly format */
+function normalizeLightProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
+  switch (type) {
+    case 'ambient':
+      return { color: props.color, intensity: props.intensity }
+    case 'directional':
+      return { color: props.color, intensity: props.dirIntensity, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
+    case 'point':
+      return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.ptPositionX, positionY: props.ptPositionY, positionZ: props.ptPositionZ }
+    default:
+      return props
+  }
 }
 
 /**
@@ -107,34 +152,37 @@ function resolveTransformChain(
     const targetNode = nodeMap.get(outEdge.target)
     if (!targetNode) break
 
-    // Reached Scene Output — chain is complete
     if (targetNode.type === 'scene/output') {
       reachesOutput = true
       break
     }
 
-    const props = { ...(getNodeDef(targetNode.type)?.defaults ?? {}), ...targetNode.data }
+    if (targetNode.type === 'transform') {
+      const props = { ...(getNodeDef(targetNode.type)?.defaults ?? {}), ...targetNode.data }
+      const mode = (props.mode as number) ?? 0
 
-    if (targetNode.type === 'transform/translate') {
-      pos[0] += (props.x as number) ?? 0
-      pos[1] += (props.y as number) ?? 0
-      pos[2] += (props.z as number) ?? 0
+      if (mode === 0) {
+        // Translate
+        pos[0] += (props.tx as number) ?? 0
+        pos[1] += (props.ty as number) ?? 0
+        pos[2] += (props.tz as number) ?? 0
+      } else if (mode === 1) {
+        // Rotate
+        rot[0] += ((props.rx as number) ?? 0) * DEG2RAD
+        rot[1] += ((props.ry as number) ?? 0) * DEG2RAD
+        rot[2] += ((props.rz as number) ?? 0) * DEG2RAD
+      } else if (mode === 2) {
+        // Scale
+        scl[0] *= (props.sx as number) ?? 1
+        scl[1] *= (props.sy as number) ?? 1
+        scl[2] *= (props.sz as number) ?? 1
+      }
+
       nodeIds.push(targetNode.id)
-    } else if (targetNode.type === 'transform/rotate') {
-      rot[0] += ((props.x as number) ?? 0) * DEG2RAD
-      rot[1] += ((props.y as number) ?? 0) * DEG2RAD
-      rot[2] += ((props.z as number) ?? 0) * DEG2RAD
-      nodeIds.push(targetNode.id)
-    } else if (targetNode.type === 'transform/scale') {
-      scl[0] *= (props.x as number) ?? 1
-      scl[1] *= (props.y as number) ?? 1
-      scl[2] *= (props.z as number) ?? 1
-      nodeIds.push(targetNode.id)
+      currentId = targetNode.id
     } else {
       break
     }
-
-    currentId = targetNode.id
   }
 
   return { transform: { position: pos, rotation: rot, scale: scl }, nodeIds, reachesOutput }

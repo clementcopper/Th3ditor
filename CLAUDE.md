@@ -13,6 +13,9 @@
 ## Applied Learning
 When something fails repeatedly, when Daniel has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
 
+- `react-resizable-panels` exports: `Group`, `Panel`, `Separator` — not PanelGroup/PanelResizeHandle/direction.
+- Phase 4: Daniel reviews each step individually before starting the next.
+
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
 Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-based scene editor.

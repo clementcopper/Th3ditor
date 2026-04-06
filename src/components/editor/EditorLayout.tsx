@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { NodeEditor } from '../graph/NodeEditor'
 import { Viewport3D } from '../viewport/Viewport3D'
 import { PropertiesPanel } from '../properties/PropertiesPanel'
@@ -26,6 +27,16 @@ function initDefaultGraph() {
   ])
 }
 
+const resizeHandle = (orientation: 'horizontal' | 'vertical') => (
+  <PanelResizeHandle
+    className={
+      orientation === 'horizontal'
+        ? 'w-[3px] bg-border-default hover:bg-accent transition-colors cursor-col-resize shrink-0'
+        : 'h-[3px] bg-border-default hover:bg-accent transition-colors cursor-row-resize shrink-0'
+    }
+  />
+)
+
 export function EditorLayout() {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
@@ -41,32 +52,40 @@ export function EditorLayout() {
   }, [nodes, edges, setScene])
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-primary">
-      {/* Top Toolbar */}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base">
       <EditorToolbar />
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left Column: Viewport (top) + Graph (bottom) */}
-        <div className="flex flex-col flex-1 min-w-0">
-          {/* 3D Viewport — ~62% height */}
-          <div className="flex-[62] min-h-0 border-b border-border-default">
-            <Viewport3D />
-          </div>
+      {/* Main: left column (viewport + graph) | properties */}
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
 
-          {/* Node Graph — ~38% height */}
-          <div className="flex-[38] min-h-0">
-            <NodeEditor />
-          </div>
-        </div>
+        {/* Left column: viewport + graph */}
+        <Panel defaultSize={80} minSize={40}>
+          <PanelGroup orientation="vertical" className="h-full">
 
-        {/* Right: Properties Panel — fixed 280px */}
-        <div className="w-[280px] shrink-0 border-l border-border-default overflow-hidden">
+            {/* 3D Viewport */}
+            <Panel defaultSize={62} minSize={20}>
+              <Viewport3D />
+            </Panel>
+
+            {resizeHandle('vertical')}
+
+            {/* Node Graph */}
+            <Panel defaultSize={38} minSize={15}>
+              <NodeEditor />
+            </Panel>
+
+          </PanelGroup>
+        </Panel>
+
+        {resizeHandle('horizontal')}
+
+        {/* Properties Panel */}
+        <Panel defaultSize={20} minSize={10}>
           <PropertiesPanel />
-        </div>
-      </div>
+        </Panel>
 
-      {/* Status Bar */}
+      </PanelGroup>
+
       <StatusBar />
     </div>
   )

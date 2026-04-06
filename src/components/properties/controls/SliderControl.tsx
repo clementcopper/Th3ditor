@@ -89,12 +89,12 @@ export function SliderControl({ param, value, onChange }: Props) {
       >
         {/* Fill bar */}
         <div
-          className="absolute inset-y-0 left-0 bg-brand-500/15 pointer-events-none transition-[width] duration-75"
+          className="absolute inset-y-0 left-0 bg-accent/15 pointer-events-none transition-[width] duration-75"
           style={{ width: `${fillPercent}%` }}
         />
         {/* Fill edge accent */}
         <div
-          className="absolute inset-y-0 bg-brand-500/40 pointer-events-none transition-[left] duration-75"
+          className="absolute inset-y-0 bg-accent/40 pointer-events-none transition-[left] duration-75"
           style={{ left: `${fillPercent}%`, width: '3px' }}
         />
 
@@ -109,7 +109,7 @@ export function SliderControl({ param, value, onChange }: Props) {
               if (e.key === 'Enter') commitEdit()
               if (e.key === 'Escape') setIsEditing(false)
             }}
-            className="absolute inset-0 w-full h-full text-xs font-mono text-center bg-surface-secondary text-text-primary px-2 outline-none border-none"
+            className="absolute inset-0 w-full h-full text-xs font-mono text-center bg-surface-panel text-text-primary px-2 outline-none border-none"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

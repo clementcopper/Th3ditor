@@ -64,12 +64,12 @@ export function NodePalette() {
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="px-3 py-1.5 rounded-md bg-surface-primary border border-border-default shadow-md text-xs font-semibold text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
+          className="px-3 py-1.5 rounded-md bg-surface-base border border-border-default shadow-md text-xs font-semibold text-text-primary hover:bg-surface-panel transition-colors cursor-pointer"
         >
           + Add Node
         </button>
       ) : (
-        <div className="w-56 bg-surface-primary border border-border-default rounded-lg shadow-xl overflow-hidden">
+        <div className="w-56 bg-surface-base border border-border-default rounded-lg shadow-xl overflow-hidden">
           {/* Search */}
           <div className="p-2 border-b border-border-default">
             <input
@@ -81,25 +81,25 @@ export function NodePalette() {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') { setOpen(false); setSearch('') }
               }}
-              className="w-full px-2 py-1.5 rounded border border-border-default bg-surface-secondary text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-brand-400"
+              className="w-full px-2 py-1.5 rounded border border-border-default bg-surface-panel text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
             />
           </div>
 
           {/* List */}
           <div className="max-h-64 overflow-y-auto p-1">
             {grouped.size === 0 && (
-              <div className="px-2 py-3 text-xs text-text-tertiary text-center">No nodes found</div>
+              <div className="px-2 py-3 text-xs text-text-muted text-center">No nodes found</div>
             )}
             {Array.from(grouped.entries()).map(([cat, defs]) => (
               <div key={cat}>
-                <div className="px-2 py-1 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">
+                <div className="px-2 py-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   {CATEGORY_LABELS[cat] ?? cat}
                 </div>
                 {defs.map((def) => (
                   <button
                     key={def.type}
                     onClick={() => handleAdd(def)}
-                    className="w-full text-left px-2 py-1.5 rounded text-xs text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
+                    className="w-full text-left px-2 py-1.5 rounded text-xs text-text-primary hover:bg-surface-panel transition-colors cursor-pointer"
                   >
                     {def.label}
                   </button>
@@ -112,7 +112,7 @@ export function NodePalette() {
           <div className="p-1 border-t border-border-default">
             <button
               onClick={() => { setOpen(false); setSearch('') }}
-              className="w-full px-2 py-1 text-[10px] text-text-tertiary hover:text-text-secondary cursor-pointer"
+              className="w-full px-2 py-1 text-[10px] text-text-muted hover:text-text-secondary cursor-pointer"
             >
               Close
             </button>

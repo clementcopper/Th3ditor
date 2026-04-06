@@ -30,11 +30,11 @@ export function DataEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               fontSize: '10px',
               fontFamily: 'var(--font-mono, monospace)',
-              background: 'var(--color-surface-secondary, #1a1a2e)',
-              color: 'var(--color-text-primary, #e2e8f0)',
+              background: 'var(--color-surface-panel)',
+              color: 'var(--color-text-primary)',
               padding: '1px 5px',
-              borderRadius: '4px',
-              border: '1px solid var(--color-border-default, #334155)',
+              borderRadius: 0,
+              border: '1px solid var(--color-border-default)',
             }}
           >
             {value.toFixed(2)}

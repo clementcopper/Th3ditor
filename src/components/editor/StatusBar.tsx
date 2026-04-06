@@ -7,7 +7,7 @@ export function StatusBar() {
   const selectedId = useEditorStore((s) => s.selectedNodeId)
 
   return (
-    <div className="h-6 flex items-center px-3 gap-4 border-t border-border-default bg-surface-primary shrink-0 text-[10px] text-text-tertiary">
+    <div className="h-6 flex items-center px-3 gap-4 border-t border-border-default bg-surface-base shrink-0 text-[10px] text-text-muted">
       <span>{nodeCount} nodes</span>
       <span>{edgeCount} edges</span>
       {selectedId && <span>Selected: {selectedId}</span>}

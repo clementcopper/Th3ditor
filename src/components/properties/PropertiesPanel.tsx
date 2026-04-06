@@ -21,7 +21,7 @@ export function PropertiesPanel() {
   if (!node) {
     return (
       <div className="h-full flex items-center justify-center p-4">
-        <span className="text-xs text-text-tertiary">Select a node to edit properties</span>
+        <span className="text-xs text-text-muted">Select a node to edit properties</span>
       </div>
     )
   }
@@ -31,7 +31,7 @@ export function PropertiesPanel() {
     return (
       <div className="h-full p-4">
         <div className="text-xs font-semibold text-text-primary mb-2">{def?.label ?? node.type}</div>
-        <span className="text-xs text-text-tertiary">No editable properties</span>
+        <span className="text-xs text-text-muted">No editable properties</span>
       </div>
     )
   }
@@ -58,7 +58,7 @@ export function PropertiesPanel() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-border-default">
         <span className="text-xs font-semibold text-text-primary">{def.label}</span>
-        <span className="text-[10px] text-text-tertiary ml-2">{node.id}</span>
+        <span className="text-[10px] text-text-muted ml-2">{node.id}</span>
       </div>
 
       {/* Properties */}
@@ -66,7 +66,7 @@ export function PropertiesPanel() {
         {Array.from(groups.entries()).map(([group, props]) => (
           <div key={group}>
             {group && (
-              <div className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-2">{group}</div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">{group}</div>
             )}
             <div className="flex flex-col gap-2">
               {props.map((prop) => {

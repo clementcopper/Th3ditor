@@ -27,8 +27,8 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
 
   return (
     <div
-      className={`min-w-[140px] rounded-lg border bg-surface-primary shadow-lg ${
-        selected ? 'border-brand-500 ring-1 ring-brand-500/30' : 'border-border-default'
+      className={`min-w-[140px] rounded-lg border bg-surface-base shadow-lg ${
+        selected ? 'border-accent ring-1 ring-accent/30' : 'border-border-default'
       }`}
     >
       {/* Header with category color */}
@@ -49,7 +49,7 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
                 type="target"
                 position={Position.Left}
                 id={port.name}
-                className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-surface-primary"
+                className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-surface-base"
                 style={{ background: PORT_COLORS[port.type], left: -5 }}
               />
               <span className="text-[10px] text-text-secondary ml-2">{port.label ?? port.name}</span>
@@ -66,7 +66,7 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
                 type="source"
                 position={Position.Right}
                 id={port.name}
-                className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-surface-primary"
+                className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-surface-base"
                 style={{ background: PORT_COLORS[port.type], right: -5 }}
               />
             </div>

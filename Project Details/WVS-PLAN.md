@@ -284,8 +284,8 @@ src/
 - [x] Play/Pause/Stop im EditorHeader (wird Phase 4 in Viewport verschoben)
 
 ### Phase 4: Viewport Polish + Gizmos + Scene Explorer
-- [ ] UI Style: Dark Theme + Orange Akzent + border-radius 0
-- [ ] react-resizable-panels — alle Panel-Grenzen verschiebbar
+- [x] UI Style: Dark Theme + Orange Akzent + border-radius 0
+- [x] react-resizable-panels — alle Panel-Grenzen verschiebbar
 - [ ] Dual Viewport via @react-three/drei `<View>` (Editor + Kamera)
 - [ ] Scene Explorer Overlay (oben links im 3D Viewport)
 - [ ] Play/Pause/Stop als Bottom-Overlay im 3D Viewport

@@ -102,6 +102,9 @@ function evalPort(
         case 2: // Multiply
           result = getInput('a', 'mulA') * getInput('b', 'mulB')
           break
+        case 8: // Subtract
+          result = getInput('a', 'subA') - getInput('b', 'subB')
+          break
         case 3: // Sin
           result = Math.sin(getInput('value', 'sinValue'))
           break

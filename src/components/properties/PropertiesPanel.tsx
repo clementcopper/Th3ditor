@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore } from '../../store/editor-store'
 import { useGraphStore } from '../../store/graph-store'
+import { useEvaluatorStore } from '../../store/evaluator-store'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { isVisible } from '../../graph-engine/type-system'
 import { SliderControl } from './controls/SliderControl'
@@ -12,11 +13,12 @@ import type { PropertyDef } from '../../types/properties'
 export function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedNodeId)
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedId))
-  const connectedInputPortsList = useGraphStore(
-    useShallow((s) => s.edges.filter((e) => e.target === selectedId).map((e) => e.targetHandle))
+  const connectedEdges = useGraphStore(
+    useShallow((s) => s.edges.filter((e) => e.target === selectedId))
   )
-  const connectedInputPorts = new Set(connectedInputPortsList)
+  const connectedInputPorts = new Set(connectedEdges.map((e) => e.targetHandle))
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const evalValues = useEvaluatorStore((s) => s.values)
 
   if (!node) {
     return (
@@ -76,8 +78,22 @@ export function PropertiesPanel() {
                   return p ? getValue(p) : undefined
                 })) return null
 
-                // Hide property if its linked port has a connection
-                if (prop.linkedPort && connectedInputPorts.has(prop.linkedPort)) return null
+                // If linked port is connected, show read-only value instead of control
+                if (prop.linkedPort && connectedInputPorts.has(prop.linkedPort)) {
+                  const edge = connectedEdges.find((e) => e.targetHandle === prop.linkedPort)
+                  const connectedValue = edge ? evalValues.get(`${edge.source}:${edge.sourceHandle}`) : undefined
+                  return (
+                    <div key={prop.uniform} className="flex items-center gap-2">
+                      <span className="text-[10px] text-text-muted shrink-0">{prop.label}</span>
+                      <span
+                        className="text-[10px] font-mono px-1.5 py-0.5"
+                        style={{ color: 'var(--color-accent)', background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)' }}
+                      >
+                        → {connectedValue !== undefined ? connectedValue.toFixed(2) : '—'}
+                      </span>
+                    </div>
+                  )
+                }
 
                 switch (prop.type) {
                   case 'float':

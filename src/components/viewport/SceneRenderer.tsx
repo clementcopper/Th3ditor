@@ -217,7 +217,11 @@ function LightObject({
     if (controls) (controls as unknown as { enabled: boolean }).enabled = true
     if (!groupRef.current) return
     const p = groupRef.current.position
-    updateNodeData(light.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
+    // Point-light node uses ptPositionX/Y/Z; directional uses positionX/Y/Z
+    const posKeys = light.lightType === 'point'
+      ? { ptPositionX: p.x, ptPositionY: p.y, ptPositionZ: p.z }
+      : { positionX: p.x, positionY: p.y, positionZ: p.z }
+    updateNodeData(light.id, posKeys)
     requestAnimationFrame(() => requestAnimationFrame(() => {
       isDragging.current = false
     }))

@@ -23,7 +23,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - TransformControls + OrbitControls: `makeDefault` on OrbitControls → disable via `useThree().controls.enabled`.
 - After `updateNodeData`, wait 2 RAF frames before clearing `isDragging` (compiler runs in useEffect).
 - Mesh gizmo without Transform-Node: auto-create and wire into graph chain on first drag.
-- Point-light node uses `ptPositionX/Y/Z`; directional uses `positionX/Y/Z` — write-back must match.
+- Light nodes: unified `positionX/Y/Z` for both Directional and Point — `ptPositionX/Y/Z` removed.
+- Camera/Light gizmo snap-back: also write to scene store directly on drag end, not just graph store.
+- `noderef` PropertyType: filter by `getNodeDef(n.type)?.category`, NOT `n.data.category`.
+- Node custom names: stored in `node.data.label`; `getNodeDisplayName()` in SceneExplorer.tsx.
+- `renderOrder={999}` + `depthTest={false}` required for viewport icons to appear in front of meshes.
 - Three.js `<color>` doesn't parse `oklch()` — use hex values for R3F Canvas backgrounds.
 - `useNodesInitialized` (xyflow) fires after node measurement — use for reliable fitView on init.
 

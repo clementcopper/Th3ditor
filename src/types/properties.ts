@@ -1,4 +1,4 @@
-export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'curve'
+export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'curve' | 'noderef'
 
 export interface PropertyDef {
   type: PropertyType
@@ -12,6 +12,8 @@ export interface PropertyDef {
   hardMax?: number
   default: number | boolean | [number, number] | [number, number, number] | [number, number, number, number] | string | string[]
   options?: { label: string; value: string }[]
+  /** For type='noderef': which node categories to list in the dropdown */
+  categories?: string[]
   suffix?: string
   linkedPort?: string
   visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]

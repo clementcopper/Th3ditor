@@ -149,10 +149,32 @@ function MeshObject({
             wireframe={wireframeOverride || ((mp.wireframe as boolean) ?? false)}
           />
         </mesh>
+        {/* Selection highlight overlay */}
+        {isEditorView && isSelected && (
+          <mesh renderOrder={10}>
+            {mesh.geometryType === 'box' && (
+              <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number]} />
+            )}
+            {mesh.geometryType === 'sphere' && (
+              <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
+            )}
+            {mesh.geometryType === 'plane' && (
+              <planeGeometry args={[gp.width as number, gp.height as number]} />
+            )}
+            {mesh.geometryType === 'torus' && (
+              <torusGeometry args={[gp.radius as number, gp.tube as number, 16, 48]} />
+            )}
+            {mesh.geometryType === 'cylinder' && (
+              <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
+            )}
+            <meshBasicMaterial color="#ff8800" wireframe depthTest={false} />
+          </mesh>
+        )}
       </group>
       {canGizmo && (
         <TransformControls
-          object={groupRef}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          object={groupRef as any}
           mode={gizmoMode}
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
@@ -165,9 +187,11 @@ function MeshObject({
 function LightObject({
   light,
   isEditorView,
+  meshes,
 }: {
   light: CompiledLight
   isEditorView: boolean
+  meshes: import('../../types/node-graph').CompiledMesh[]
 }) {
   const lp = light.props
   const color = toThreeColor(lp.color)
@@ -178,10 +202,17 @@ function LightObject({
     (lp.positionZ as number) ?? 0,
   ]
 
+  // Resolve directional light target position
+  const targetMesh = light.targetNodeId
+    ? meshes.find((m) => m.id === light.targetNodeId)
+    : undefined
+  const targetPos: [number, number, number] = targetMesh?.transform.position ?? [0, 0, 0]
+
   const hasPosition = light.lightType !== 'ambient'
 
   const groupRef = useRef<THREE.Group>(null)
   const iconRef = useRef<THREE.Mesh>(null)
+  const dirLightRef = useRef<THREE.DirectionalLight>(null)
   const isDragging = useRef(false)
 
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -194,10 +225,19 @@ function LightObject({
     if (hasPosition && !isDragging.current && groupRef.current) {
       groupRef.current.position.set(pos[0], pos[1], pos[2])
     }
-    // Rotate directional cone to face toward origin (where the light shines)
+    // Update directional light target position imperatively
+    if (dirLightRef.current) {
+      dirLightRef.current.target.position.set(targetPos[0], targetPos[1], targetPos[2])
+      dirLightRef.current.target.updateMatrixWorld()
+    }
+    // Rotate directional cone to face toward target
     if (isEditorView && light.lightType === 'directional' && iconRef.current && groupRef.current) {
       const p = groupRef.current.position
-      const dir = new THREE.Vector3(-p.x, -p.y, -p.z)
+      const dir = new THREE.Vector3(
+        targetPos[0] - p.x,
+        targetPos[1] - p.y,
+        targetPos[2] - p.z,
+      )
       if (dir.length() > 0.001) {
         const quat = new THREE.Quaternion().setFromUnitVectors(
           new THREE.Vector3(0, -1, 0),
@@ -217,11 +257,16 @@ function LightObject({
     if (controls) (controls as unknown as { enabled: boolean }).enabled = true
     if (!groupRef.current) return
     const p = groupRef.current.position
-    // Point-light node uses ptPositionX/Y/Z; directional uses positionX/Y/Z
-    const posKeys = light.lightType === 'point'
-      ? { ptPositionX: p.x, ptPositionY: p.y, ptPositionZ: p.z }
-      : { positionX: p.x, positionY: p.y, positionZ: p.z }
-    updateNodeData(light.id, posKeys)
+    // Update graph store (triggers recompile for persistence)
+    updateNodeData(light.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
+    // Also update scene store directly to avoid snap-back before compiler runs
+    const scene = useSceneStore.getState().scene
+    const newLights = scene.lights.map((l) =>
+      l.id === light.id
+        ? { ...l, props: { ...l.props, positionX: p.x, positionY: p.y, positionZ: p.z } }
+        : l
+    )
+    useSceneStore.getState().setScene({ ...scene, lights: newLights })
     requestAnimationFrame(() => requestAnimationFrame(() => {
       isDragging.current = false
     }))
@@ -237,7 +282,7 @@ function LightObject({
     <>
       <group ref={groupRef} position={pos}>
         {light.lightType === 'directional' && (
-          <directionalLight color={color} intensity={intensity} />
+          <directionalLight ref={dirLightRef} color={color} intensity={intensity} />
         )}
         {light.lightType === 'point' && (
           <pointLight color={color} intensity={intensity} distance={(lp.distance as number) ?? 0} />
@@ -245,6 +290,7 @@ function LightObject({
         {isEditorView && (
           <mesh
             ref={iconRef}
+            renderOrder={999}
             onClick={(e) => {
               e.stopPropagation()
               setSelectedNode(isSelected ? null : light.id)
@@ -262,7 +308,8 @@ function LightObject({
       </group>
       {isEditorView && isSelected && (
         <TransformControls
-          object={groupRef}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          object={groupRef as any}
           mode="translate"
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
@@ -306,14 +353,29 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
     if (!groupRef.current) return
     const p = groupRef.current.position
     const r = groupRef.current.rotation
+    const gs = useGraphStore.getState()
+    const scene = useSceneStore.getState().scene
+
     if (gizmoMode === 'translate') {
-      useGraphStore.getState().updateNodeData(camera.nodeId, { positionX: p.x, positionY: p.y, positionZ: p.z })
+      gs.updateNodeData(camera.nodeId, { positionX: p.x, positionY: p.y, positionZ: p.z })
+      if (scene.camera) {
+        useSceneStore.getState().setScene({
+          ...scene,
+          camera: { ...scene.camera, position: [p.x, p.y, p.z] },
+        })
+      }
     } else if (gizmoMode === 'rotate') {
-      useGraphStore.getState().updateNodeData(camera.nodeId, {
+      gs.updateNodeData(camera.nodeId, {
         rotationX: r.x * RAD2DEG,
         rotationY: r.y * RAD2DEG,
         rotationZ: r.z * RAD2DEG,
       })
+      if (scene.camera) {
+        useSceneStore.getState().setScene({
+          ...scene,
+          camera: { ...scene.camera, rotation: [r.x * RAD2DEG, r.y * RAD2DEG, r.z * RAD2DEG] },
+        })
+      }
     }
     requestAnimationFrame(() => requestAnimationFrame(() => {
       isDragging.current = false
@@ -324,6 +386,7 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
     <>
       <group ref={groupRef} position={camera.position}>
         <mesh
+          renderOrder={999}
           rotation={[Math.PI / 2, Math.PI / 4, 0]}
           position={[0, 0, -0.08]}
           onClick={(e) => {
@@ -331,8 +394,8 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
             setSelectedNode(isSelected ? null : camera.nodeId)
           }}
         >
-          {/* Square pyramid — base faces -Z (camera look direction), apex at origin */}
-          <coneGeometry args={[0.22, 0.35, 4]} />
+          {/* Square pyramid — radius scales with FOV, base faces -Z (camera look direction) */}
+          <coneGeometry args={[Math.max(0.05, Math.tan((camera.fov * Math.PI / 180) / 2) * 0.5), 0.35, 4]} />
           <meshBasicMaterial
             color={isSelected ? '#ff8800' : '#38BDF8'}
             depthTest={false}
@@ -342,7 +405,8 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
       </group>
       {isSelected && (
         <TransformControls
-          object={groupRef}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          object={groupRef as any}
           mode={gizmoMode === 'scale' ? 'translate' : gizmoMode}
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
@@ -505,8 +569,44 @@ function LiveEvaluator() {
       return light
     })
 
+    // Evaluate float inputs on camera node
+    let newCamera = scene.camera
+    if (scene.camera) {
+      const camNodeId = scene.camera.nodeId
+      let camChanged = false
+      const camPos: [number, number, number] = [...scene.camera.position]
+      const camRot: [number, number, number] = [...scene.camera.rotation]
+      let camFov = scene.camera.fov
+
+      for (const edge of edges) {
+        if (edge.target !== camNodeId) continue
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        if (sourceNode.type !== 'time' && sourceNode.type !== 'math' && sourceNode.type !== 'input') continue
+
+        const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+        if (val === undefined) continue
+
+        camChanged = true
+        switch (edge.targetHandle) {
+          case 'positionX': camPos[0] = val; break
+          case 'positionY': camPos[1] = val; break
+          case 'positionZ': camPos[2] = val; break
+          case 'rotationX': camRot[0] = val; break
+          case 'rotationY': camRot[1] = val; break
+          case 'rotationZ': camRot[2] = val; break
+          case 'fov': camFov = val; break
+        }
+      }
+
+      if (camChanged) {
+        changed = true
+        newCamera = { ...scene.camera, position: camPos, rotation: camRot, fov: camFov }
+      }
+    }
+
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, lights: newLights, camera: scene.camera })
+      useSceneStore.getState().setScene({ meshes: newMeshes, lights: newLights, camera: newCamera })
     }
   })
 
@@ -527,7 +627,7 @@ export function SceneRenderer({
   return (
     <>
       {scene.lights.map((light) => (
-        <LightObject key={light.id} light={light} isEditorView={isEditorView} />
+        <LightObject key={light.id} light={light} isEditorView={isEditorView} meshes={scene.meshes} />
       ))}
       {scene.meshes.map((mesh) => (
         <MeshObject key={mesh.id} mesh={mesh} editorShading={editorShading} isEditorView={isEditorView} />

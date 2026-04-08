@@ -24,9 +24,16 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
   // Header shows subtype name (e.g. "Add") instead of category (e.g. "Math")
   const modeValue = getData('mode') as number | undefined
   const modeProp = def.properties.find((p) => p.uniform === 'mode' && p.type === 'select')
-  const headerLabel = (modeProp?.options && modeValue !== undefined)
+  const baseLabel = (modeProp?.options && modeValue !== undefined)
     ? (modeProp.options[modeValue]?.label ?? def.label)
     : def.label
+
+  // For mesh and light nodes, prepend type prefix and append custom label
+  const customLabel = nodeData.label as string | undefined
+  const hasTypePrefix = type === 'object/mesh' || type === 'light'
+  const headerLabel = hasTypePrefix && customLabel
+    ? `${baseLabel}: ${customLabel}`
+    : baseLabel
 
   return (
     <div

@@ -66,6 +66,7 @@ export interface CompiledLight {
   id: string
   lightType: string  // 'ambient' | 'directional' | 'point'
   props: Record<string, unknown>
+  targetNodeId?: string  // directional light target mesh node id
 }
 
 export interface CompiledCamera {

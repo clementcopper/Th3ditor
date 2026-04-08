@@ -79,11 +79,15 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const props = getProps(n)
     const mode = (props.mode as number) ?? 0
     const lightType = LIGHT_SUBTYPES[mode] ?? 'directional'
+    const targetNodeId = lightType === 'directional' && props.targetNodeId
+      ? (props.targetNodeId as string)
+      : undefined
 
     return {
       id: n.id,
       lightType,
       props: normalizeLightProps(lightType, props),
+      targetNodeId,
     }
   })
 
@@ -141,7 +145,7 @@ function normalizeLightProps(type: string, props: Record<string, unknown>): Reco
     case 'directional':
       return { color: props.color, intensity: props.dirIntensity, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
     case 'point':
-      return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.ptPositionX, positionY: props.ptPositionY, positionZ: props.ptPositionZ }
+      return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
     default:
       return props
   }

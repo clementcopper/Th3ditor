@@ -7,6 +7,10 @@ const light: NodeDefinition = {
   category: 'light',
   inputs: [
     { name: 'intensity', type: 'float', label: 'Intensity' },
+    { name: 'positionX', type: 'float', label: 'Position X' },
+    { name: 'positionY', type: 'float', label: 'Position Y' },
+    { name: 'positionZ', type: 'float', label: 'Position Z' },
+    { name: 'distance', type: 'float', label: 'Distance' },
   ],
   outputs: [{ name: 'light', type: 'light', label: 'Light' }],
   properties: [
@@ -23,22 +27,21 @@ const light: NodeDefinition = {
     { type: 'float', uniform: 'intensity', label: 'Intensity', min: 0, max: 5, step: 0.05, hardMax: 100, default: 0.5, linkedPort: 'intensity', visibleWhen: { uniform: 'mode', equal: 0 } },
     // Directional (1)
     { type: 'float', uniform: 'dirIntensity', label: 'Intensity', min: 0, max: 10, step: 0.1, hardMax: 100, default: 1, linkedPort: 'intensity', visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'float', uniform: 'positionX', label: 'Position X', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'float', uniform: 'positionY', label: 'Position Y', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'float', uniform: 'positionZ', label: 'Position Z', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'float', uniform: 'positionX', label: 'Position X', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, linkedPort: 'positionX', visibleWhen: { uniform: 'mode', equal: [1, 2] } },
+    { type: 'float', uniform: 'positionY', label: 'Position Y', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, linkedPort: 'positionY', visibleWhen: { uniform: 'mode', equal: [1, 2] } },
+    { type: 'float', uniform: 'positionZ', label: 'Position Z', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 5, linkedPort: 'positionZ', visibleWhen: { uniform: 'mode', equal: [1, 2] } },
+    { type: 'noderef', uniform: 'targetNodeId', label: 'Target', categories: ['object'], default: '', visibleWhen: { uniform: 'mode', equal: 1 } },
     // Point (2)
     { type: 'float', uniform: 'ptIntensity', label: 'Intensity', min: 0, max: 10, step: 0.1, hardMax: 100, default: 1, linkedPort: 'intensity', visibleWhen: { uniform: 'mode', equal: 2 } },
-    { type: 'float', uniform: 'distance', label: 'Distance', min: 0, max: 100, step: 1, hardMax: 10000, default: 0, visibleWhen: { uniform: 'mode', equal: 2 } },
-    { type: 'float', uniform: 'ptPositionX', label: 'Position X', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 3, visibleWhen: { uniform: 'mode', equal: 2 } },
-    { type: 'float', uniform: 'ptPositionY', label: 'Position Y', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 3, visibleWhen: { uniform: 'mode', equal: 2 } },
-    { type: 'float', uniform: 'ptPositionZ', label: 'Position Z', min: -10, max: 10, step: 0.5, hardMin: -10000, hardMax: 10000, default: 3, visibleWhen: { uniform: 'mode', equal: 2 } },
+    { type: 'float', uniform: 'distance', label: 'Distance', min: 0, max: 100, step: 1, hardMax: 10000, default: 0, linkedPort: 'distance', visibleWhen: { uniform: 'mode', equal: 2 } },
   ],
   defaults: {
     mode: 1,
     color: [1, 1, 1, 1],
     intensity: 0.5,
     dirIntensity: 1, positionX: 5, positionY: 5, positionZ: 5,
-    ptIntensity: 1, distance: 0, ptPositionX: 3, ptPositionY: 3, ptPositionZ: 3,
+    targetNodeId: '',
+    ptIntensity: 1, distance: 0,
   },
 }
 

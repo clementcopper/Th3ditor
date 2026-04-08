@@ -10,6 +10,39 @@ import { ToggleControl } from './controls/ToggleControl'
 import { SelectControl } from './controls/SelectControl'
 import type { PropertyDef } from '../../types/properties'
 
+function NodeRefControl({
+  prop,
+  value,
+  onChange,
+}: {
+  prop: PropertyDef
+  value: string
+  onChange: (v: string) => void
+}) {
+  const nodes = useGraphStore((s) => s.nodes)
+  const options = nodes.filter((n) =>
+    (prop.categories ?? []).includes(getNodeDef(n.type)?.category as string)
+  )
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-text-muted shrink-0 w-20">{prop.label}</span>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 text-[10px] bg-bg-elevated text-text-primary px-2 py-1 border border-border-default focus:outline-none focus:border-accent"
+        style={{ borderRadius: 0 }}
+      >
+        <option value="">— None —</option>
+        {options.map((n) => (
+          <option key={n.id} value={n.id}>
+            {(n.data.label as string) || n.type}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedNodeId)
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedId))
@@ -131,6 +164,15 @@ export function PropertiesPanel() {
                         param={prop}
                         value={getValue(prop) as number}
                         onChange={(v) => handleChange(prop.uniform, v)}
+                      />
+                    )
+                  case 'noderef':
+                    return (
+                      <NodeRefControl
+                        key={prop.uniform}
+                        prop={prop}
+                        value={(getValue(prop) as string) ?? ''}
+                        onChange={(v) => handleChange(prop.uniform, v || undefined)}
                       />
                     )
                   default:

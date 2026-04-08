@@ -26,6 +26,7 @@ export function NodePalette() {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const addNode = useGraphStore((s) => s.addNode)
+  const addEdge = useGraphStore((s) => s.addEdge)
 
   const allDefs = useMemo(() => getAllNodeDefs(), [])
 
@@ -48,13 +49,23 @@ export function NodePalette() {
   }, [filtered])
 
   const handleAdd = (def: NodeDefinition) => {
-    const id = `n${nextId++}`
-    addNode({
-      id,
-      type: def.type,
-      position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
-      data: {},
-    })
+    const baseX = 100 + Math.random() * 200
+    const baseY = 100 + Math.random() * 200
+
+    if (def.type === 'object/mesh') {
+      // Auto-create Geometry + Material and wire them into the Mesh
+      const geoId = `n${nextId++}`
+      const matId = `n${nextId++}`
+      const meshId = `n${nextId++}`
+      addNode({ id: geoId, type: 'geometry', position: { x: baseX - 300, y: baseY - 50 }, data: {} })
+      addNode({ id: matId, type: 'material', position: { x: baseX - 300, y: baseY + 80 }, data: {} })
+      addNode({ id: meshId, type: 'object/mesh', position: { x: baseX, y: baseY }, data: {} })
+      addEdge({ id: `e${nextId++}`, source: geoId, sourceHandle: 'geometry', target: meshId, targetHandle: 'geometry' })
+      addEdge({ id: `e${nextId++}`, source: matId, sourceHandle: 'material', target: meshId, targetHandle: 'material' })
+    } else {
+      const id = `n${nextId++}`
+      addNode({ id, type: def.type, position: { x: baseX, y: baseY }, data: {} })
+    }
     setOpen(false)
     setSearch('')
   }

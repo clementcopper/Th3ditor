@@ -15,6 +15,21 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 
 - `react-resizable-panels` exports: `Group`, `Panel`, `Separator` — not PanelGroup/PanelResizeHandle/direction.
 - Phase 4: Daniel reviews each step individually before starting the next.
+- ResizeHandle orientation arg must match PanelGroup orientation — swapping causes invisible handles.
+- LiveEvaluator `setScene` must include `camera` field or CameraView loses its camera on play.
+- Two separate R3F Canvas instances (not drei `<View>`) work cleanly with react-resizable-panels.
+- `SceneRenderer` takes `editorShading` prop — only EditorView passes it, CameraView does not.
+- Gizmo write-back: use `getState()` inside event handlers, not hook subscriptions (stale closure).
+- TransformControls + OrbitControls: `makeDefault` on OrbitControls → disable via `useThree().controls.enabled`.
+- After `updateNodeData`, wait 2 RAF frames before clearing `isDragging` (compiler runs in useEffect).
+- Mesh gizmo without Transform-Node: auto-create and wire into graph chain on first drag.
+- Light nodes: unified `positionX/Y/Z` for both Directional and Point — `ptPositionX/Y/Z` removed.
+- Camera/Light gizmo snap-back: also write to scene store directly on drag end, not just graph store.
+- `noderef` PropertyType: filter by `getNodeDef(n.type)?.category`, NOT `n.data.category`.
+- Node custom names: stored in `node.data.label`; `getNodeDisplayName()` in SceneExplorer.tsx.
+- `renderOrder={999}` + `depthTest={false}` required for viewport icons to appear in front of meshes.
+- Three.js `<color>` doesn't parse `oklch()` — use hex values for R3F Canvas backgrounds.
+- `useNodesInitialized` (xyflow) fires after node measurement — use for reliable fitView on init.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -47,8 +62,10 @@ Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-
 
 ### State Management (Zustand Multi-Store)
 - `graph-store.ts` — nodes, edges, CRUD operations
-- `editor-store.ts` — UI state: selected node, view mode, panel sizes
+- `editor-store.ts` — UI state: selected node, view mode, shadingMode, projectionMode
 - `scene-store.ts` — compiled scene (output of graph compiler)
+- `animation-store.ts` — playing, elapsed, play/pause/reset
+- `evaluator-store.ts` — live float values keyed by `"nodeId:portName"` (~10fps throttle)
 
 ### Project Structure
 ```
@@ -75,6 +92,8 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-05)
-- Phase 1 + 2 + 3 complete — see WVS-PLAN.md for details
-- Next: Phase 4 — Viewport Polish (Dual Viewport, Gizmos, Scene Explorer, Dark UI)
+## Current Status (2026-04-08)
+- Phase 1 + 2 + 3 complete
+- Phase 4 complete ✅: Layout, Dual Viewport, Camera-Node, Scene Explorer, Play/Pause, Shading/Perspektiv-Toggle, Gizmos, Viewport Helpers, Camera Rotation
+- Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
+- Next: Phase 5 — Custom GLSL Shader-Node + Texture-Nodes

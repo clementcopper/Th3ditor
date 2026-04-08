@@ -6,8 +6,8 @@ const math: NodeDefinition = {
   label: 'Math',
   category: 'math',
   inputs: [
-    { name: 'a', type: 'float', label: 'A', visibleWhen: { uniform: 'mode', equal: [1, 2, 5] } },
-    { name: 'b', type: 'float', label: 'B', visibleWhen: { uniform: 'mode', equal: [1, 2, 5] } },
+    { name: 'a', type: 'float', label: 'A', visibleWhen: { uniform: 'mode', equal: [1, 2, 5, 8] } },
+    { name: 'b', type: 'float', label: 'B', visibleWhen: { uniform: 'mode', equal: [1, 2, 5, 8] } },
     { name: 't', type: 'float', label: 'T', visibleWhen: { uniform: 'mode', equal: 5 } },
     { name: 'value', type: 'float', label: 'Value', visibleWhen: { uniform: 'mode', equal: [3, 4, 6, 7] } },
   ],
@@ -27,6 +27,7 @@ const math: NodeDefinition = {
         { label: 'Lerp', value: '5' },
         { label: 'Clamp', value: '6' },
         { label: 'Remap', value: '7' },
+        { label: 'Subtract', value: '8' },
       ],
     },
     // Number (0)
@@ -58,6 +59,9 @@ const math: NodeDefinition = {
     { type: 'float', uniform: 'clampValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 6 } },
     { type: 'float', uniform: 'clampMin', label: 'Min', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, visibleWhen: { uniform: 'mode', equal: 6 } },
     { type: 'float', uniform: 'clampMax', label: 'Max', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 1, visibleWhen: { uniform: 'mode', equal: 6 } },
+    // Subtract (8)
+    { type: 'float', uniform: 'subA', label: 'A', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'a', visibleWhen: { uniform: 'mode', equal: 8 } },
+    { type: 'float', uniform: 'subB', label: 'B', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'b', visibleWhen: { uniform: 'mode', equal: 8 } },
     // Remap (7)
     { type: 'float', uniform: 'remapValue', label: 'Value', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: 0, linkedPort: 'value', visibleWhen: { uniform: 'mode', equal: 7 } },
     { type: 'float', uniform: 'inMin', label: 'In Min', min: -10, max: 10, step: 0.1, hardMin: -Infinity, hardMax: Infinity, default: -1, visibleWhen: { uniform: 'mode', equal: 7 } },
@@ -75,6 +79,7 @@ const math: NodeDefinition = {
     lerpA: 0, lerpB: 1, lerpT: 0.5,
     clampValue: 0, clampMin: 0, clampMax: 1,
     remapValue: 0, inMin: -1, inMax: 1, outMin: 0, outMax: 1,
+    subA: 0, subB: 0,
   },
 }
 

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;600;800&family=Fira+Code:wght@400;500&display=swap');
+@import url('https://fonts.bunny.net/css2?family=Fira+Sans:wght@400;600;800&family=Fira+Code:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -11,19 +11,19 @@
   --color-accent-muted:     oklch(0.70 0.08 48);
 
   /* Surfaces — warm dunkel */
-  --color-surface-viewport: oklch(0.14 0.008 48);
-  --color-surface-base:     oklch(0.17 0.008 48);
-  --color-surface-panel:    oklch(0.20 0.008 48);
-  --color-surface-elevated: oklch(0.24 0.008 48);
+  --color-surface-viewport: oklch(0.19 0.008 48);
+  --color-surface-base:     oklch(0.22 0.008 48);
+  --color-surface-panel:    oklch(0.25 0.008 48);
+  --color-surface-elevated: oklch(0.29 0.008 48);
 
   /* Borders */
-  --color-border-default:   oklch(0.28 0.008 48);
-  --color-border-strong:    oklch(0.35 0.008 48);
+  --color-border-default:   oklch(0.50 0.008 48);
+  --color-border-strong:    oklch(0.75 0.008 48);
 
   /* Text */
   --color-text-primary:     oklch(0.90 0.010 48);
-  --color-text-secondary:   oklch(0.65 0.010 48);
-  --color-text-muted:       oklch(0.45 0.010 48);
+  --color-text-secondary:   oklch(0.70 0.010 48);
+  --color-text-muted:       oklch(0.50 0.010 48);
 }
 
 *,

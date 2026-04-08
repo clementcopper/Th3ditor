@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledTransform } from '../types/node-graph'
+import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledCamera, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 
 /** Maps geometry mode number to a subtype string for the renderer */
@@ -79,15 +79,44 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const props = getProps(n)
     const mode = (props.mode as number) ?? 0
     const lightType = LIGHT_SUBTYPES[mode] ?? 'directional'
+    const targetNodeId = lightType === 'directional' && props.targetNodeId
+      ? (props.targetNodeId as string)
+      : undefined
 
     return {
       id: n.id,
       lightType,
       props: normalizeLightProps(lightType, props),
+      targetNodeId,
     }
   })
 
-  return { meshes, lights }
+  // --- Camera (connected to Scene Output) ---
+  let camera: CompiledCamera | undefined
+  for (const soNode of sceneOutputNodes) {
+    const edge = edges.find((e) => e.target === soNode.id && e.targetHandle === 'camera')
+    if (!edge) continue
+    const camNode = nodeMap.get(edge.source)
+    if (!camNode || camNode.type !== 'camera') continue
+    const props = getProps(camNode)
+    camera = {
+      nodeId: camNode.id,
+      position: [
+        (props.positionX as number) ?? 0,
+        (props.positionY as number) ?? 5,
+        (props.positionZ as number) ?? 10,
+      ],
+      rotation: [
+        (props.rotationX as number) ?? 0,
+        (props.rotationY as number) ?? 0,
+        (props.rotationZ as number) ?? 0,
+      ],
+      fov: (props.fov as number) ?? 50,
+    }
+    break
+  }
+
+  return { meshes, lights, camera }
 }
 
 /** Normalize geometry props to a renderer-friendly format */
@@ -116,7 +145,7 @@ function normalizeLightProps(type: string, props: Record<string, unknown>): Reco
     case 'directional':
       return { color: props.color, intensity: props.dirIntensity, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
     case 'point':
-      return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.ptPositionX, positionY: props.ptPositionY, positionZ: props.ptPositionZ }
+      return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
     default:
       return props
   }

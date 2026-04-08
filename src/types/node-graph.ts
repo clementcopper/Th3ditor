@@ -69,7 +69,9 @@ export interface CompiledLight {
 }
 
 export interface CompiledCamera {
+  nodeId: string
   position: [number, number, number]
+  rotation: [number, number, number]  // degrees
   fov: number
 }
 

@@ -42,13 +42,31 @@ function ViewportControlsOverlay() {
   const setShadingMode = useEditorStore((s) => s.setShadingMode)
   const projectionMode = useEditorStore((s) => s.projectionMode)
   const setProjectionMode = useEditorStore((s) => s.setProjectionMode)
+  const gizmoMode = useEditorStore((s) => s.gizmoMode)
+  const setGizmoMode = useEditorStore((s) => s.setGizmoMode)
+
+  const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
 
   return (
     <div className="absolute top-3 right-3 z-10 flex items-center gap-1 pointer-events-auto">
-      <div
-        className="flex items-center border border-border-default"
-        style={{ background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }}
-      >
+      {/* Gizmo mode */}
+      <div className="flex items-center border border-border-default" style={overlayBg}>
+        {([['translate', 'T'], ['rotate', 'R'], ['scale', 'S']] as const).map(([mode, label]) => (
+          <button
+            key={mode}
+            onClick={() => setGizmoMode(mode)}
+            className="px-2 py-1 text-[9px] font-semibold transition-colors cursor-pointer"
+            style={{
+              color: gizmoMode === mode ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              background: gizmoMode === mode ? 'color-mix(in oklch, var(--color-accent) 12%, transparent)' : undefined,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {/* Shading */}
+      <div className="flex items-center border border-border-default" style={overlayBg}>
         {(['shaded', 'wireframe'] as const).map((mode) => (
           <button
             key={mode}
@@ -63,10 +81,8 @@ function ViewportControlsOverlay() {
           </button>
         ))}
       </div>
-      <div
-        className="flex items-center border border-border-default"
-        style={{ background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }}
-      >
+      {/* Projection */}
+      <div className="flex items-center border border-border-default" style={overlayBg}>
         {(['perspective', 'orthographic'] as const).map((mode) => (
           <button
             key={mode}
@@ -120,7 +136,7 @@ export function Viewport3D() {
           infiniteGrid
         />
 
-        <SceneRenderer editorShading />
+        <SceneRenderer editorShading isEditorView />
         <LiveEvaluator />
         <OrbitControls makeDefault />
       </Canvas>

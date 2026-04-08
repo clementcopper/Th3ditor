@@ -3,10 +3,23 @@ import { useEditorStore } from '../../store/editor-store'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { CATEGORY_COLORS } from '../../graph-engine/type-system'
 
+const SCENE_CATEGORIES = new Set(['object', 'light', 'camera'])
+
+const CATEGORY_ICONS: Record<string, string> = {
+  object: '▢',
+  light: '◉',
+  camera: '▷',
+}
+
 export function SceneExplorer() {
   const nodes = useGraphStore((s) => s.nodes)
   const selectedId = useEditorStore((s) => s.selectedNodeId)
   const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
+
+  const sceneNodes = nodes.filter((node) => {
+    const def = getNodeDef(node.type)
+    return def && SCENE_CATEGORIES.has(def.category)
+  })
 
   return (
     <div
@@ -21,10 +34,14 @@ export function SceneExplorer() {
           <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted">Scene</span>
         </div>
         <div className="flex flex-col">
-          {nodes.map((node) => {
+          {sceneNodes.length === 0 && (
+            <span className="px-2 py-1.5 text-[10px] text-text-muted italic">No objects</span>
+          )}
+          {sceneNodes.map((node) => {
             const def = getNodeDef(node.type)
             const label = def?.label ?? node.type
             const color = CATEGORY_COLORS[def?.category ?? 'scene'] ?? '#888'
+            const icon = CATEGORY_ICONS[def?.category ?? ''] ?? '·'
             const isSelected = node.id === selectedId
             return (
               <button
@@ -33,7 +50,7 @@ export function SceneExplorer() {
                 className="flex items-center gap-1.5 px-2 py-1 text-left hover:bg-surface-elevated transition-colors cursor-pointer"
                 style={{ background: isSelected ? 'color-mix(in oklch, var(--color-accent) 15%, transparent)' : undefined }}
               >
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                <span className="text-[9px] shrink-0 leading-none" style={{ color }}>{icon}</span>
                 <span className={`text-[10px] ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>{label}</span>
               </button>
             )

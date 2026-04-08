@@ -96,10 +96,16 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     if (!camNode || camNode.type !== 'camera') continue
     const props = getProps(camNode)
     camera = {
+      nodeId: camNode.id,
       position: [
         (props.positionX as number) ?? 0,
         (props.positionY as number) ?? 5,
         (props.positionZ as number) ?? 10,
+      ],
+      rotation: [
+        (props.rotationX as number) ?? 0,
+        (props.rotationY as number) ?? 0,
+        (props.rotationZ as number) ?? 0,
       ],
       fov: (props.fov as number) ?? 50,
     }

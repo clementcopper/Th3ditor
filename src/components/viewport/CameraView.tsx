@@ -13,6 +13,11 @@ function CameraViewContents() {
       <PerspectiveCamera
         makeDefault
         position={camera.position}
+        rotation={[
+          camera.rotation[0] * (Math.PI / 180),
+          camera.rotation[1] * (Math.PI / 180),
+          camera.rotation[2] * (Math.PI / 180),
+        ]}
         fov={camera.fov}
         near={0.1}
         far={1000}

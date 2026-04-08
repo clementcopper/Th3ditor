@@ -181,6 +181,7 @@ function LightObject({
   const hasPosition = light.lightType !== 'ambient'
 
   const groupRef = useRef<THREE.Group>(null)
+  const iconRef = useRef<THREE.Mesh>(null)
   const isDragging = useRef(false)
 
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -192,6 +193,18 @@ function LightObject({
   useFrame(() => {
     if (hasPosition && !isDragging.current && groupRef.current) {
       groupRef.current.position.set(pos[0], pos[1], pos[2])
+    }
+    // Rotate directional cone to face toward origin (where the light shines)
+    if (isEditorView && light.lightType === 'directional' && iconRef.current && groupRef.current) {
+      const p = groupRef.current.position
+      const dir = new THREE.Vector3(-p.x, -p.y, -p.z)
+      if (dir.length() > 0.001) {
+        const quat = new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, -1, 0),
+          dir.normalize(),
+        )
+        iconRef.current.quaternion.copy(quat)
+      }
     }
   })
 
@@ -214,6 +227,8 @@ function LightObject({
     return <ambientLight color={color} intensity={intensity} />
   }
 
+  const iconColor = isSelected ? '#ff8800' : '#ffdd44'
+
   return (
     <>
       <group ref={groupRef} position={pos}>
@@ -225,16 +240,19 @@ function LightObject({
         )}
         {isEditorView && (
           <mesh
+            ref={iconRef}
             onClick={(e) => {
               e.stopPropagation()
               setSelectedNode(isSelected ? null : light.id)
             }}
           >
-            <sphereGeometry args={[0.15, 8, 8]} />
-            <meshBasicMaterial
-              color={isSelected ? '#ff8800' : '#ffdd44'}
-              depthTest={false}
-            />
+            {light.lightType === 'point' && (
+              <sphereGeometry args={[0.15, 8, 6]} />
+            )}
+            {light.lightType === 'directional' && (
+              <coneGeometry args={[0.15, 0.35, 16]} />
+            )}
+            <meshBasicMaterial color={iconColor} wireframe depthTest={false} />
           </mesh>
         )}
       </group>
@@ -302,15 +320,19 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
     <>
       <group ref={groupRef} position={camera.position}>
         <mesh
+          rotation={[Math.PI / 2, Math.PI / 4, 0]}
+          position={[0, 0, -0.08]}
           onClick={(e) => {
             e.stopPropagation()
             setSelectedNode(isSelected ? null : camera.nodeId)
           }}
         >
-          <boxGeometry args={[0.3, 0.2, 0.4]} />
+          {/* Square pyramid — base faces -Z (camera look direction), apex at origin */}
+          <coneGeometry args={[0.22, 0.35, 4]} />
           <meshBasicMaterial
             color={isSelected ? '#ff8800' : '#38BDF8'}
             depthTest={false}
+            wireframe
           />
         </mesh>
       </group>

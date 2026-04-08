@@ -38,7 +38,7 @@ export function CameraView() {
         </div>
       )}
       <Canvas>
-        <color attach="background" args={['oklch(0.16 0.008 48)']} />
+        <color attach="background" args={['#191614']} />
         <CameraViewContents />
       </Canvas>
     </div>

@@ -19,6 +19,10 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - LiveEvaluator `setScene` must include `camera` field or CameraView loses its camera on play.
 - Two separate R3F Canvas instances (not drei `<View>`) work cleanly with react-resizable-panels.
 - `SceneRenderer` takes `editorShading` prop — only EditorView passes it, CameraView does not.
+- Gizmo write-back: use `getState()` inside event handlers, not hook subscriptions (stale closure).
+- TransformControls + OrbitControls: `makeDefault` on OrbitControls → disable via `useThree().controls.enabled`.
+- After `updateNodeData`, wait 2 RAF frames before clearing `isDragging` (compiler runs in useEffect).
+- Mesh gizmo without Transform-Node: auto-create and wire into graph chain on first drag.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -83,7 +87,6 @@ src/
 
 ## Current Status (2026-04-08)
 - Phase 1 + 2 + 3 complete
-- Phase 4 laufend: Layout-Fix ✅, Dual Viewport ✅, Scene Explorer ✅, Play/Pause Overlay ✅, Shading/Perspektiv-Toggle ✅
-- Noch offen in Phase 4: Gizmos
+- Phase 4 complete ✅: Layout, Dual Viewport, Camera-Node, Scene Explorer, Play/Pause, Shading/Perspektiv-Toggle, Gizmos, Viewport Helpers, Camera Rotation
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Gizmos (Batch 4), dann Phase 5
+- Next: Phase 5 — Custom GLSL Shader-Node + Texture-Nodes

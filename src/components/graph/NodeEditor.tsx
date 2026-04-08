@@ -1,8 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  useReactFlow,
+  useNodesInitialized,
   type Connection,
   type NodeChange,
   type EdgeChange,
@@ -17,6 +19,22 @@ import { DataEdge } from './DataEdge'
 import { NodePalette } from './NodePalette'
 import { getAllNodeDefs, getNodeDef } from '../../graph-engine/node-registry'
 import { canConnect } from '../../graph-engine/type-system'
+
+/** Fits the view once after nodes are fully initialized (measured + positioned by React Flow). */
+function FitViewOnInit() {
+  const { fitView } = useReactFlow()
+  const initialized = useNodesInitialized()
+  const hasFitted = useRef(false)
+
+  useEffect(() => {
+    if (initialized && !hasFitted.current) {
+      hasFitted.current = true
+      fitView({ padding: 0.2 })
+    }
+  }, [initialized, fitView])
+
+  return null
+}
 
 export function NodeEditor() {
   const nodes = useGraphStore((s) => s.nodes)
@@ -117,6 +135,7 @@ export function NodeEditor() {
         defaultEdgeOptions={{ type: 'data', animated: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--color-border-default)" />
+        <FitViewOnInit />
       </ReactFlow>
     </div>
   )

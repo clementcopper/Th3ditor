@@ -113,7 +113,7 @@ export function Viewport3D() {
 
       {/* 3D Canvas */}
       <Canvas>
-        <color attach="background" args={['oklch(0.19 0.008 48)']} />
+        <color attach="background" args={['#1e1b18']} />
 
         {projectionMode === 'perspective'
           ? <PerspectiveCamera makeDefault position={[3, 2, 3]} fov={50} />
@@ -127,12 +127,13 @@ export function Viewport3D() {
         <Grid
           args={[20, 20]}
           cellSize={0.5}
-          cellThickness={0.5}
-          cellColor="#2a2a4a"
+          cellThickness={0.6}
+          cellColor="#4a4540"
           sectionSize={2}
-          sectionThickness={1}
-          sectionColor="#3a3a5a"
-          fadeDistance={15}
+          sectionThickness={1.2}
+          sectionColor="#6a6055"
+          fadeDistance={40}
+          fadeStrength={0.3}
           infiniteGrid
         />
 

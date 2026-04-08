@@ -297,7 +297,10 @@ src/
 - [x] 3D Viewport Representationen: Sphere-Icon für Lights, Box-Icon für Camera (klickbar)
 - [x] Scene Explorer: zeigt nur Mesh/Light/Camera-Nodes mit Type-Icons
 - [x] Camera-Node: rotationX/Y/Z ergänzt; CameraView wendet Rotation an
-- [x] Default-Graph beim Start: Directional Light + Camera Node bereits verbunden
+- [x] Default-Graph beim Start: Directional Light + Camera Node bereits verbunden, zentriert via `useNodesInitialized`
+- [x] Light-Icons: Point-Light = Wireframe-Sphere, Directional-Light = Wireframe-Kegel (dynamisch auf Ziel ausgerichtet)
+- [x] Camera-Icon: Wireframe-Pyramide, Grundplatte zeigt Sichtrichtung
+- [x] Grid: warme Farben, fadeStrength 0.3 (kein starkes Ausblenden)
 
 ### Phase 5: Custom Shaders + Texturen
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)

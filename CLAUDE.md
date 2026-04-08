@@ -15,6 +15,10 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 
 - `react-resizable-panels` exports: `Group`, `Panel`, `Separator` — not PanelGroup/PanelResizeHandle/direction.
 - Phase 4: Daniel reviews each step individually before starting the next.
+- ResizeHandle orientation arg must match PanelGroup orientation — swapping causes invisible handles.
+- LiveEvaluator `setScene` must include `camera` field or CameraView loses its camera on play.
+- Two separate R3F Canvas instances (not drei `<View>`) work cleanly with react-resizable-panels.
+- `SceneRenderer` takes `editorShading` prop — only EditorView passes it, CameraView does not.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -47,8 +51,10 @@ Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-
 
 ### State Management (Zustand Multi-Store)
 - `graph-store.ts` — nodes, edges, CRUD operations
-- `editor-store.ts` — UI state: selected node, view mode, panel sizes
+- `editor-store.ts` — UI state: selected node, view mode, shadingMode, projectionMode
 - `scene-store.ts` — compiled scene (output of graph compiler)
+- `animation-store.ts` — playing, elapsed, play/pause/reset
+- `evaluator-store.ts` — live float values keyed by `"nodeId:portName"` (~10fps throttle)
 
 ### Project Structure
 ```
@@ -75,6 +81,9 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-05)
-- Phase 1 + 2 + 3 complete — see WVS-PLAN.md for details
-- Next: Phase 4 — Viewport Polish (Dual Viewport, Gizmos, Scene Explorer, Dark UI)
+## Current Status (2026-04-08)
+- Phase 1 + 2 + 3 complete
+- Phase 4 laufend: Layout-Fix ✅, Dual Viewport ✅, Scene Explorer ✅, Play/Pause Overlay ✅, Shading/Perspektiv-Toggle ✅
+- Noch offen in Phase 4: Gizmos
+- Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
+- Next: Gizmos (Batch 4), dann Phase 5

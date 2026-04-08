@@ -6,6 +6,7 @@ export const PORT_COLORS: Record<PortType, string> = {
   material: '#F47274', // pink
   mesh: '#60A5FA',     // blue
   light: '#FACC15',    // yellow
+  camera: '#38BDF8',   // sky blue
   scene: '#000000',    // amber
   float: '#A78BFA',    // violet
   vec3: '#D42DA2',     // teal
@@ -20,7 +21,7 @@ export const CATEGORY_COLORS: Record<NodeDefinition['category'], string> = {
   object: '#0073ff',
   transform: '#ff7300',
   light: '#ffcc00',
-  camera: '#000000',  
+  camera: '#0ea5e9',
   shader: '#000000',
   math: '#6600ff',
   color: '#FB923C',

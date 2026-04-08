@@ -8,6 +8,7 @@ const sceneOutput: NodeDefinition = {
   inputs: [
     { name: 'mesh', type: 'mesh', label: 'Mesh' },
     { name: 'light', type: 'light', label: 'Light' },
+    { name: 'camera', type: 'camera', label: 'Camera' },
   ],
   outputs: [],
   properties: [],

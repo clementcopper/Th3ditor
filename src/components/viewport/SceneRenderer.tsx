@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
+import { useEditorStore } from '../../store/editor-store'
 import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluator'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
@@ -14,10 +15,11 @@ function toThreeColor(color?: unknown): string {
   return `rgb(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)})`
 }
 
-function MeshObject({ mesh }: { mesh: CompiledMesh }) {
+function MeshObject({ mesh, editorShading }: { mesh: CompiledMesh; editorShading: boolean }) {
   const gp = mesh.geometryProps
   const mp = mesh.materialProps
   const t = mesh.transform
+  const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
 
   return (
     <mesh position={t.position} rotation={t.rotation} scale={t.scale}>
@@ -41,7 +43,7 @@ function MeshObject({ mesh }: { mesh: CompiledMesh }) {
         color={toThreeColor(mp.color)}
         metalness={(mp.metalness as number) ?? 0.1}
         roughness={(mp.roughness as number) ?? 0.5}
-        wireframe={(mp.wireframe as boolean) ?? false}
+        wireframe={wireframeOverride || ((mp.wireframe as boolean) ?? false)}
       />
     </mesh>
   )
@@ -223,24 +225,25 @@ function LiveEvaluator() {
     })
 
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, lights: newLights })
+      useSceneStore.getState().setScene({ meshes: newMeshes, lights: newLights, camera: scene.camera })
     }
   })
 
   return null
 }
 
-export function SceneRenderer() {
+export { LiveEvaluator }
+
+export function SceneRenderer({ editorShading = false }: { editorShading?: boolean }) {
   const scene = useSceneStore((s) => s.scene)
 
   return (
     <>
-      <LiveEvaluator />
       {scene.lights.map((light) => (
         <LightObject key={light.id} light={light} />
       ))}
       {scene.meshes.map((mesh) => (
-        <MeshObject key={mesh.id} mesh={mesh} />
+        <MeshObject key={mesh.id} mesh={mesh} editorShading={editorShading} />
       ))}
     </>
   )

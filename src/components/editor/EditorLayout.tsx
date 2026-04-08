@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { NodeEditor } from '../graph/NodeEditor'
 import { Viewport3D } from '../viewport/Viewport3D'
+import { CameraView } from '../viewport/CameraView'
 import { PropertiesPanel } from '../properties/PropertiesPanel'
 import { EditorToolbar } from './EditorToolbar'
 import { StatusBar } from './StatusBar'
@@ -55,33 +56,39 @@ export function EditorLayout() {
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base">
       <EditorToolbar />
 
-      {/* Main: left column (viewport + graph) | properties */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
+      {/* Main: viewport (top) | graph + properties (bottom) */}
+      <PanelGroup orientation="vertical" className="flex-1 min-h-0">
 
-        {/* Left column: viewport + graph */}
-        <Panel defaultSize={80} minSize={40}>
-          <PanelGroup orientation="vertical" className="h-full">
-
-            {/* 3D Viewport */}
-            <Panel defaultSize={62} minSize={20}>
+        {/* Viewport row: Editor | Camera */}
+        <Panel defaultSize={55} minSize={20}>
+          <PanelGroup orientation="horizontal" className="h-full">
+            <Panel defaultSize={50} minSize={20}>
               <Viewport3D />
             </Panel>
-
-            {resizeHandle('vertical')}
-
-            {/* Node Graph */}
-            <Panel defaultSize={38} minSize={15}>
-              <NodeEditor />
+            {resizeHandle('horizontal')}
+            <Panel defaultSize={50} minSize={20}>
+              <CameraView />
             </Panel>
-
           </PanelGroup>
         </Panel>
 
-        {resizeHandle('horizontal')}
+        {resizeHandle('vertical')}
 
-        {/* Properties Panel */}
-        <Panel defaultSize={20} minSize={10}>
-          <PropertiesPanel />
+        {/* Bottom row: node graph | properties */}
+        <Panel defaultSize={45} minSize={15}>
+          <PanelGroup orientation="horizontal" className="h-full">
+
+            <Panel defaultSize={80} minSize={40}>
+              <NodeEditor />
+            </Panel>
+
+            {resizeHandle('horizontal')}
+
+            <Panel defaultSize={20} minSize={10}>
+              <PropertiesPanel />
+            </Panel>
+
+          </PanelGroup>
         </Panel>
 
       </PanelGroup>

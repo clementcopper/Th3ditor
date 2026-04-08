@@ -286,13 +286,14 @@ src/
 ### Phase 4: Viewport Polish + Gizmos + Scene Explorer
 - [x] UI Style: Dark Theme + Orange Akzent + border-radius 0
 - [x] react-resizable-panels — alle Panel-Grenzen verschiebbar
-- [ ] Dual Viewport via @react-three/drei `<View>` (Editor + Kamera)
-- [ ] Scene Explorer Overlay (oben links im 3D Viewport)
-- [ ] Play/Pause/Stop als Bottom-Overlay im 3D Viewport
+- [x] Layout-Fix: Properties Panel nur neben Node Graph (untere Reihe), nicht full-height
+- [x] Dual Viewport: zwei separate R3F Canvas — Editor links, Kamera rechts
+- [x] Camera-Node: positionX/Y/Z + FOV, verbindet sich mit Scene Output camera-Port
+- [x] Scene Explorer Overlay (oben links im 3D Viewport)
+- [x] Play/Pause/Reset + Zeitanzeige als Bottom-Overlay im 3D Viewport
+- [x] Shading-Toggle: Shaded / Wireframe (oben rechts, nur EditorView)
+- [x] Perspektiv-Toggle: Perspektiv / Orthogonal (oben rechts im 3D Viewport)
 - [ ] Gizmos: TransformControls für Move/Rotate/Scale im Viewport
-- [ ] Shading-Toggle: Shaded / Wireframe / Solid (oben rechts im 3D Viewport)
-- [ ] Perspektiv-Toggle: Perspektiv / Orthogonal (Top, Front, Side)
-- [ ] Kamera-Viewport: eigene Szenen-Kamera via Camera-Node
 
 ### Phase 5: Custom Shaders + Texturen
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)

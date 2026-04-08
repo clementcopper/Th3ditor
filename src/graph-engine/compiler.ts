@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledTransform } from '../types/node-graph'
+import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledCamera, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 
 /** Maps geometry mode number to a subtype string for the renderer */
@@ -87,7 +87,26 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     }
   })
 
-  return { meshes, lights }
+  // --- Camera (connected to Scene Output) ---
+  let camera: CompiledCamera | undefined
+  for (const soNode of sceneOutputNodes) {
+    const edge = edges.find((e) => e.target === soNode.id && e.targetHandle === 'camera')
+    if (!edge) continue
+    const camNode = nodeMap.get(edge.source)
+    if (!camNode || camNode.type !== 'camera') continue
+    const props = getProps(camNode)
+    camera = {
+      position: [
+        (props.positionX as number) ?? 0,
+        (props.positionY as number) ?? 5,
+        (props.positionZ as number) ?? 10,
+      ],
+      fov: (props.fov as number) ?? 50,
+    }
+    break
+  }
+
+  return { meshes, lights, camera }
 }
 
 /** Normalize geometry props to a renderer-friendly format */

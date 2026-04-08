@@ -7,6 +7,7 @@ import { registerTransformNodes } from './node-definitions/transform'
 import { registerTimeNodes } from './node-definitions/time'
 import { registerMathNodes } from './node-definitions/math'
 import { registerInputNodes } from './node-definitions/input'
+import { registerCameraNodes } from './node-definitions/camera'
 
 let registered = false
 
@@ -22,4 +23,5 @@ export function registerAllNodes() {
   registerTimeNodes()
   registerMathNodes()
   registerInputNodes()
+  registerCameraNodes()
 }

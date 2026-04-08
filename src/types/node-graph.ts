@@ -2,7 +2,7 @@ import type { PropertyDef, VisibleWhenCondition } from './properties'
 
 // --- Port Types ---
 
-export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'scene' | 'float' | 'vec3' | 'color' | 'texture'
+export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'camera' | 'scene' | 'float' | 'vec3' | 'color' | 'texture'
 
 export interface PortDef {
   name: string
@@ -68,7 +68,13 @@ export interface CompiledLight {
   props: Record<string, unknown>
 }
 
+export interface CompiledCamera {
+  position: [number, number, number]
+  fov: number
+}
+
 export interface CompiledScene {
   meshes: CompiledMesh[]
   lights: CompiledLight[]
+  camera?: CompiledCamera
 }

@@ -21,8 +21,8 @@ function CameraLookAt({ targetNodeId }: { targetNodeId: string }) {
 
 /**
  * Applies Look Ahead orientation directly as a quaternion, bypassing euler angles.
- * Euler conversion of lookAt matrices causes gimbal-lock discontinuities on
- * XY / YZ orbits — quaternion application is always smooth.
+ * Uses the orbit-plane normal as up — the tangent of a circle path is always ⊥ to the
+ * plane normal, so lookAt is never degenerate and the quaternion is smooth for all θ.
  */
 function CameraPathLookAhead() {
   const { camera } = useThree()
@@ -39,12 +39,13 @@ function CameraPathLookAhead() {
     const tangent = evaluatePathTangent(path, t)
     const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2]).normalize()
 
-    // Use orbit-plane normal as up — tangent is always ⊥ up, no gimbal lock possible
-    // World-Y up gives the most natural-looking orbit (camera yaws/pitches visibly).
-    // Fallback to world-Z when tangent is nearly vertical to avoid lookAt singularity.
+    // World-Y up feels natural (scene stays upright). Fallback to world-X when tangent is
+    // nearly parallel to world-Y (XY/YZ circles at top/bottom). World-X is ≈ the same as
+    // what world-Y produces just outside the threshold, so the transition is smooth (<3°).
+    // Previously used world-Z as fallback — that caused a ~90° jump at the threshold.
     const worldUp = new THREE.Vector3(0, 1, 0)
     const up = Math.abs(dir.dot(worldUp)) > 0.999
-      ? new THREE.Vector3(0, 0, -1)
+      ? new THREE.Vector3(1, 0, 0)
       : worldUp
 
     const m = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir, up)

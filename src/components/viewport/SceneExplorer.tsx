@@ -6,9 +6,10 @@ import { CATEGORY_COLORS } from '../../graph-engine/type-system'
 import { getNodeIcon } from '../../utils/node-icons'
 import type { GraphNode } from '../../types/node-graph'
 
-const SCENE_CATEGORIES = new Set(['object', 'light', 'camera'])
+const SCENE_CATEGORIES = new Set(['object', 'light', 'camera', 'path'])
 
 const LIGHT_TYPE_LABELS = ['Ambient', 'Directional', 'Point']
+const PATH_TYPE_LABELS = ['Line', 'Circle', 'Arc']
 
 function NodeIcon({ node, color }: { node: GraphNode; color: string }) {
   const def = getNodeDef(node.type)
@@ -27,6 +28,11 @@ export function getNodeDisplayName(node: GraphNode): string {
     const defaultMode = (def?.defaults.mode as number) ?? 1
     const mode = (node.data.mode as number) ?? defaultMode
     const typeLabel = LIGHT_TYPE_LABELS[mode] ?? 'Light'
+    return customLabel ? `${typeLabel}: ${customLabel}` : typeLabel
+  }
+  if (node.type === 'path') {
+    const mode = (node.data.mode as number) ?? 0
+    const typeLabel = PATH_TYPE_LABELS[mode] ?? 'Path'
     return customLabel ? `${typeLabel}: ${customLabel}` : typeLabel
   }
   return customLabel ?? (getNodeDef(node.type)?.label ?? node.type)

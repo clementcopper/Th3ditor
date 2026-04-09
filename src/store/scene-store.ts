@@ -7,6 +7,6 @@ interface SceneState {
 }
 
 export const useSceneStore = create<SceneState>((set) => ({
-  scene: { meshes: [], lights: [] },
+  scene: { meshes: [], paths: [], lights: [] },
   setScene: (scene) => set({ scene }),
 }))

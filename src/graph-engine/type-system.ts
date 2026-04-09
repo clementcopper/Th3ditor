@@ -12,6 +12,7 @@ export const PORT_COLORS: Record<PortType, string> = {
   vec3: '#D42DA2',     // teal
   color: '#FB923C',    // orange
   texture: '#22D3EE',  // fuchsia
+  path: '#C084FC',     // purple
 }
 
 // Category header colors
@@ -30,6 +31,7 @@ export const CATEGORY_COLORS: Record<NodeDefinition['category'], string> = {
   input: '#7a7875',
   effect: '#000000',
   scene: '#ff0000',
+  path: '#7C3AED',
 }
 
 // Can source → target connect?

@@ -2,7 +2,7 @@ import type { PropertyDef, VisibleWhenCondition } from './properties'
 
 // --- Port Types ---
 
-export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'camera' | 'scene' | 'float' | 'vec3' | 'color' | 'texture'
+export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'camera' | 'scene' | 'float' | 'vec3' | 'color' | 'texture' | 'path'
 
 export interface PortDef {
   name: string
@@ -16,7 +16,7 @@ export interface PortDef {
 export interface NodeDefinition {
   type: string
   label: string
-  category: 'geometry' | 'material' | 'object' | 'transform' | 'light' | 'camera' | 'shader' | 'math' | 'color' | 'texture' | 'time' | 'input' | 'effect' | 'scene'
+  category: 'geometry' | 'material' | 'object' | 'transform' | 'light' | 'camera' | 'shader' | 'math' | 'color' | 'texture' | 'time' | 'input' | 'effect' | 'scene' | 'path'
   inputs: PortDef[]
   outputs: PortDef[]
   properties: PropertyDef[]
@@ -67,6 +67,8 @@ export interface CompiledLight {
   lightType: string  // 'ambient' | 'directional' | 'point'
   props: Record<string, unknown>
   targetNodeId?: string  // directional light target mesh node id
+  pathNodeId?: string
+  pathProgress?: number
 }
 
 export interface CompiledCamera {
@@ -74,12 +76,23 @@ export interface CompiledCamera {
   position: [number, number, number]
   rotation: [number, number, number]  // degrees
   fov: number
-  mode: number  // 0 = Free, 1 = Target
+  mode: number  // 0 = Free, 1 = Target, 2 = Path
   targetNodeId?: string
+  pathNodeId?: string
+  pathProgress?: number
+  pathLookAhead?: boolean
+}
+
+export interface CompiledPath {
+  id: string
+  pathType: 'line' | 'circle' | 'arc'
+  pathProps: Record<string, unknown>
+  position: [number, number, number]
 }
 
 export interface CompiledScene {
   meshes: CompiledMesh[]
+  paths: CompiledPath[]
   lights: CompiledLight[]
   camera?: CompiledCamera
 }

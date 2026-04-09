@@ -37,6 +37,10 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Alt+drag duplicate: use `useGraphStore.getState().setNodes(...)` in `onNodeDragStop` for atomic snap-back + new node.
 - CSS 3D cube face label bug: check labels first before changing transforms or rotation-sync sign.
 - Font sizes: always use Tailwind utility classes (`text-xs`, `text-[10px]`) — avoid inline `fontSize` px values.
+- Path constraints: connect via port cables (not noderef dropdown) — compiler detects via `edges.find(e => e.targetHandle === 'path')`.
+- Circle path: DO NOT clamp pathProgress — `evaluatePathPosition` handles wrap via `((t % 1) + 1) % 1`.
+- EditorView viewport lights: fixed ambient + directional (no scene lights) — CameraView uses scene lights.
+- Wireframe mode: use `meshBasicMaterial` (no lighting) not `meshStandardMaterial + wireframe=true`.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -67,7 +71,7 @@ Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-
 - Structural changes (add/remove node/edge) → full recompile
 - Per-frame updates (time, mouse) → only dynamic subgraph evaluation
 
-### State Management (Zustand Multi-Store)
+### State Management (State Multi-Store)
 - `graph-store.ts` — nodes, edges, CRUD operations
 - `editor-store.ts` — UI state: selected node, view mode, shadingMode, projectionMode
 - `scene-store.ts` — compiled scene (output of graph compiler)
@@ -100,8 +104,8 @@ src/
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
 ## Current Status (2026-04-09)
-- Phase 1 + 2 + 3 complete
-- Phase 4 complete ✅: Layout, Dual Viewport, Camera-Node, Scene Explorer, Play/Pause, Shading/Perspektiv-Toggle, Gizmos, Viewport Helpers, Camera Rotation
+- Phase 1 + 2 + 3 + 4 complete ✅
+- Phase 5a complete ✅: Path Nodes (Line/Circle/Arc), Camera/Light path ports, Path gizmos, SceneExplorer paths, EditorView fixed lighting, Wireframe flat shading
 - Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Phase 5a — glTF Import Node; danach Phase 5b — Custom GLSL Shader-Node
+- Next: Phase 5b — glTF Import Node; danach Phase 5c — Custom GLSL Shader-Node

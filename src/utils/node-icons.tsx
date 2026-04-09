@@ -1,7 +1,7 @@
 import {
   Cube, Shapes, PaintBucket, ArrowsOutCardinal,
   Sun, ArrowUpRight, Lightbulb, Camera,
-  MathOperations, Clock, CursorClick, Stack, Image, Palette, Code,
+  MathOperations, Clock, CursorClick, Stack, Image, Palette, Code, BezierCurve,
 } from '@phosphor-icons/react'
 import type { NodeDefinition } from '../types/node-graph'
 
@@ -22,6 +22,7 @@ const CATEGORY_ICON_MAP: Record<NodeDefinition['category'], PhosphorIcon> = {
   effect:    Code,
   shader:    Code,
   scene:     Stack,
+  path:      BezierCurve,
 }
 
 export function getNodeIcon(

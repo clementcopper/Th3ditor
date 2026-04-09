@@ -305,7 +305,7 @@ src/
 ### Phase 5: glTF Import + Custom Shaders + Texturen
 
 #### 5a: glTF Import Node
-- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
+- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`Als
 - [ ] Property: File-Picker Button (lokale Datei) + Dateiname-Anzeige
 - [ ] Lädt via `THREE.GLTFLoader` — rendert Modell mit seinen eigenen Materialien
 - [ ] Kette: `[glTF Import] → [Transform] → [Scene Output]`

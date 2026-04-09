@@ -6,11 +6,13 @@ const light: NodeDefinition = {
   label: 'Light',
   category: 'light',
   inputs: [
-    { name: 'intensity', type: 'float', label: 'Intensity' },
-    { name: 'positionX', type: 'float', label: 'Position X' },
-    { name: 'positionY', type: 'float', label: 'Position Y' },
-    { name: 'positionZ', type: 'float', label: 'Position Z' },
-    { name: 'distance', type: 'float', label: 'Distance' },
+    { name: 'intensity',    type: 'float', label: 'Intensity' },
+    { name: 'positionX',   type: 'float', label: 'Position X' },
+    { name: 'positionY',   type: 'float', label: 'Position Y' },
+    { name: 'positionZ',   type: 'float', label: 'Position Z' },
+    { name: 'distance',    type: 'float', label: 'Distance' },
+    { name: 'path',        type: 'path',  label: 'Path' },
+    { name: 'pathProgress', type: 'float', label: 'Progress' },
   ],
   outputs: [{ name: 'light', type: 'light', label: 'Light' }],
   properties: [
@@ -34,6 +36,8 @@ const light: NodeDefinition = {
     // Point (2)
     { type: 'float', uniform: 'ptIntensity', label: 'Intensity', min: 0, max: 10, step: 0.1, hardMax: 100, default: 1, linkedPort: 'intensity', visibleWhen: { uniform: 'mode', equal: 2 } },
     { type: 'float', uniform: 'distance', label: 'Distance', min: 0, max: 100, step: 1, hardMax: 10000, default: 0, linkedPort: 'distance', visibleWhen: { uniform: 'mode', equal: 2 } },
+    // Path constraint via port (Directional + Point only)
+    { type: 'float', uniform: 'pathProgress', label: 'Progress', min: 0, max: 1, step: 0.001, default: 0, linkedPort: 'pathProgress', visibleWhen: { uniform: 'mode', notEqual: 0 } },
   ],
   defaults: {
     mode: 1,
@@ -42,6 +46,7 @@ const light: NodeDefinition = {
     dirIntensity: 1, positionX: 5, positionY: 5, positionZ: 5,
     targetNodeId: '',
     ptIntensity: 1, distance: 0,
+    pathProgress: 0,
   },
 }
 

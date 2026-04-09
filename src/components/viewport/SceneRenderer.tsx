@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -9,7 +9,8 @@ import { useEditorStore } from '../../store/editor-store'
 import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluator'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
-import type { CompiledMesh, CompiledLight, CompiledCamera } from '../../types/node-graph'
+import { evaluatePathPosition, evaluatePathTangent } from '../../graph-engine/path-utils'
+import type { CompiledMesh, CompiledLight, CompiledCamera, CompiledPath } from '../../types/node-graph'
 
 function toThreeColor(color?: unknown): string {
   const c = color as [number, number, number, number] | undefined
@@ -148,12 +149,16 @@ function MeshObject({
           {mesh.geometryType === 'icosphere' && (
             <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
           )}
-          <meshStandardMaterial
-            color={toThreeColor(mp.color)}
-            metalness={(mp.metalness as number) ?? 0.1}
-            roughness={(mp.roughness as number) ?? 0.5}
-            wireframe={wireframeOverride || ((mp.wireframe as boolean) ?? false)}
-          />
+          {wireframeOverride ? (
+            <meshBasicMaterial color={toThreeColor(mp.color)} wireframe />
+          ) : (
+            <meshStandardMaterial
+              color={toThreeColor(mp.color)}
+              metalness={(mp.metalness as number) ?? 0.1}
+              roughness={(mp.roughness as number) ?? 0.5}
+              wireframe={(mp.wireframe as boolean) ?? false}
+            />
+          )}
         </mesh>
         {/* Selection highlight overlay */}
         {isEditorView && isSelected && (
@@ -285,6 +290,8 @@ function LightObject({
   }
 
   if (light.lightType === 'ambient') {
+    // In editor view the canvas has its own fixed ambient — skip scene ambient
+    if (isEditorView) return null
     return <ambientLight color={color} intensity={intensity} />
   }
 
@@ -294,10 +301,11 @@ function LightObject({
   return (
     <>
       <group ref={groupRef} position={pos}>
-        {light.lightType === 'directional' && (
+        {/* Only render actual scene lights in camera view */}
+        {!isEditorView && light.lightType === 'directional' && (
           <directionalLight ref={dirLightRef} color={color} intensity={intensity} />
         )}
-        {light.lightType === 'point' && (
+        {!isEditorView && light.lightType === 'point' && (
           <pointLight color={color} intensity={intensity} distance={(lp.distance as number) ?? 0} />
         )}
         {isEditorView && (
@@ -502,7 +510,8 @@ function LiveEvaluator() {
     const hasDynamic = nodes.some(
       (n) => n.type === 'time' || n.type === 'input' || n.type === 'math',
     )
-    if (!hasDynamic) return
+    const hasPath = !!scene.camera?.pathNodeId || scene.lights.some((l) => l.pathNodeId)
+    if (!hasDynamic && !hasPath) return
 
     let changed = false
     const newMeshes = scene.meshes.map((mesh) => {
@@ -568,6 +577,8 @@ function LiveEvaluator() {
       let lightChanged = false
       const props = { ...light.props }
 
+      let pathProgress = light.pathProgress ?? 0
+
       for (const edge of edges) {
         if (edge.target !== light.id) continue
 
@@ -578,15 +589,30 @@ function LiveEvaluator() {
         const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
         if (val === undefined) continue
 
-        if (light.props[edge.targetHandle as string] !== val) {
+        if (edge.targetHandle === 'pathProgress') {
+          pathProgress = val
+        } else if (light.props[edge.targetHandle as string] !== val) {
           props[edge.targetHandle] = val
           lightChanged = true
         }
       }
 
+      // Apply path position for lights
+      let updatedLight = lightChanged ? { ...light, props } : light
+      if (light.pathNodeId) {
+        const lightPath = scene.paths.find((p) => p.id === light.pathNodeId)
+        if (lightPath) {
+          const pos = evaluatePathPosition(lightPath, pathProgress)
+          if (pos[0] !== updatedLight.props.positionX || pos[1] !== updatedLight.props.positionY || pos[2] !== updatedLight.props.positionZ) {
+            updatedLight = { ...updatedLight, props: { ...updatedLight.props, positionX: pos[0], positionY: pos[1], positionZ: pos[2] }, pathProgress }
+            lightChanged = true
+          }
+        }
+      }
+
       if (lightChanged) {
         changed = true
-        return { ...light, props }
+        return updatedLight
       }
       return light
     })
@@ -618,17 +644,54 @@ function LiveEvaluator() {
           case 'rotationY': camRot[1] = val; break
           case 'rotationZ': camRot[2] = val; break
           case 'fov': camFov = val; break
+          case 'pathProgress':
+            if (scene.camera!.pathNodeId && scene.camera!.pathProgress !== val) {
+              newCamera = { ...(newCamera ?? scene.camera!), pathProgress: val }
+              camChanged = true
+            }
+            break
         }
       }
 
       if (camChanged) {
         changed = true
-        newCamera = { ...scene.camera, position: camPos, rotation: camRot, fov: camFov }
+        newCamera = { ...(newCamera ?? scene.camera!), position: camPos, rotation: camRot, fov: camFov }
+      }
+
+      // Apply path position when a path is connected
+      if (newCamera?.pathNodeId) {
+        const camPath = scene.paths.find((p) => p.id === newCamera!.pathNodeId)
+        if (camPath) {
+          const t = newCamera.pathProgress ?? 0
+          const pos = evaluatePathPosition(camPath, t)
+          let pathCamChanged = pos[0] !== newCamera.position[0] || pos[1] !== newCamera.position[1] || pos[2] !== newCamera.position[2]
+          let pathRot: [number, number, number] = newCamera.rotation
+
+          if (newCamera.pathLookAhead) {
+            const tangent = evaluatePathTangent(camPath, t)
+            const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2])
+            const euler = new THREE.Euler().setFromQuaternion(
+              new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir),
+              'YXZ',
+            )
+            const RAD2DEG = 180 / Math.PI
+            const newRot: [number, number, number] = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG]
+            if (newRot[0] !== pathRot[0] || newRot[1] !== pathRot[1] || newRot[2] !== pathRot[2]) {
+              pathRot = newRot
+              pathCamChanged = true
+            }
+          }
+
+          if (pathCamChanged) {
+            changed = true
+            newCamera = { ...newCamera, position: pos, rotation: pathRot }
+          }
+        }
       }
     }
 
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, lights: newLights, camera: newCamera })
+      useSceneStore.getState().setScene({ meshes: newMeshes, paths: scene.paths, lights: newLights, camera: newCamera })
     }
   })
 
@@ -636,6 +699,83 @@ function LiveEvaluator() {
 }
 
 export { LiveEvaluator }
+
+function PathObject({ path }: { path: CompiledPath }) {
+  const groupRef = useRef<THREE.Group>(null)
+  const isDragging = useRef(false)
+  const { controls } = useThree()
+
+  const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const isSelected = selectedNodeId === path.id
+
+  useFrame(() => {
+    if (!isDragging.current && groupRef.current) {
+      groupRef.current.position.set(path.position[0], path.position[1], path.position[2])
+    }
+  })
+
+  function handleDragStart() {
+    isDragging.current = true
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
+  }
+
+  function handleDragEnd() {
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = true
+    if (!groupRef.current) return
+    const p = groupRef.current.position
+    updateNodeData(path.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
+    requestAnimationFrame(() => requestAnimationFrame(() => { isDragging.current = false }))
+  }
+
+  // Path line points relative to group origin (no offset — group handles position)
+  const segs = (path.pathProps.segments as number) ?? 64
+  const positions = useMemo(() => {
+    const zeroPath = { ...path, position: [0, 0, 0] as [number, number, number] }
+    const arr = new Float32Array((segs + 1) * 3)
+    for (let i = 0; i <= segs; i++) {
+      const [x, y, z] = evaluatePathPosition(zeroPath, i / segs)
+      arr[i * 3] = x; arr[i * 3 + 1] = y; arr[i * 3 + 2] = z
+    }
+    return arr
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path.pathType, path.pathProps.length, path.pathProps.radius, path.pathProps.sweepAngle,
+      path.pathProps.lineAxis, path.pathProps.circleAxis, path.pathProps.segments])
+
+  const lineColor = isSelected ? '#ff8800' : '#7C3AED'
+
+  return (
+    <>
+      <group ref={groupRef} position={path.position}>
+        {/* Clickable origin marker */}
+        <mesh
+          renderOrder={999}
+          onClick={(e) => { e.stopPropagation(); setSelectedNode(isSelected ? null : path.id) }}
+        >
+          <octahedronGeometry args={[0.12, 0]} />
+          <meshBasicMaterial color={lineColor} wireframe depthTest={false} />
+        </mesh>
+        {/* Path line */}
+        <line>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial color={lineColor} />
+        </line>
+      </group>
+      {isSelected && (
+        <TransformControls
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          object={groupRef as any}
+          mode="translate"
+          onMouseDown={handleDragStart}
+          onMouseUp={handleDragEnd}
+        />
+      )}
+    </>
+  )
+}
 
 export function SceneRenderer({
   editorShading = false,
@@ -648,6 +788,9 @@ export function SceneRenderer({
 
   return (
     <>
+      {isEditorView && scene.paths.map((p) => (
+        <PathObject key={p.id} path={p} />
+      ))}
       {scene.lights.map((light) => (
         <LightObject key={light.id} light={light} isEditorView={isEditorView} meshes={scene.meshes} />
       ))}

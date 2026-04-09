@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledCamera, CompiledTransform } from '../types/node-graph'
+import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 
 /** Maps geometry mode number to a subtype string for the renderer */
@@ -6,6 +6,9 @@ const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 
 
 /** Maps light mode number to a subtype string */
 const LIGHT_SUBTYPES = ['ambient', 'directional', 'point'] as const
+
+/** Maps path mode number to a subtype string */
+const PATH_SUBTYPES = ['line', 'circle', 'arc'] as const
 
 /**
  * Compiles the node graph into a CompiledScene.
@@ -63,6 +66,23 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     })
   }
 
+  // --- Paths ---
+  const pathNodes = nodes.filter((n) => n.type === 'path')
+  const paths: CompiledPath[] = pathNodes.map((n) => {
+    const props = getProps(n)
+    const mode = (props.mode as number) ?? 0
+    return {
+      id: n.id,
+      pathType: PATH_SUBTYPES[mode] ?? 'line',
+      pathProps: props,
+      position: [
+        (props.positionX as number) ?? 0,
+        (props.positionY as number) ?? 0,
+        (props.positionZ as number) ?? 0,
+      ],
+    }
+  })
+
   // --- Lights (only those connected to Scene Output) ---
   const sceneOutputNodes = nodes.filter((n) => n.type === 'scene/output')
   const connectedLightIds = new Set<string>()
@@ -83,11 +103,19 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       ? (props.targetNodeId as string)
       : undefined
 
+    // Path via port connection
+    const pathEdge = lightType !== 'ambient'
+      ? edges.find((e) => e.target === n.id && e.targetHandle === 'path')
+      : undefined
+    const pathNodeId = pathEdge?.source
+
     return {
       id: n.id,
       lightType,
       props: normalizeLightProps(lightType, props),
       targetNodeId,
+      pathNodeId,
+      pathProgress: (props.pathProgress as number) ?? 0,
     }
   })
 
@@ -115,11 +143,15 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       fov: (props.fov as number) ?? 50,
       mode: camMode,
       targetNodeId: camMode === 1 && props.targetNodeId ? (props.targetNodeId as string) : undefined,
+      // Path via port connection
+      pathNodeId: edges.find((e) => e.target === camNode.id && e.targetHandle === 'path')?.source,
+      pathProgress: (props.pathProgress as number) ?? 0,
+      pathLookAhead: (props.pathLookAhead as boolean) ?? true,
     }
     break
   }
 
-  return { meshes, lights, camera }
+  return { meshes, paths, lights, camera }
 }
 
 /** Normalize geometry props to a renderer-friendly format */

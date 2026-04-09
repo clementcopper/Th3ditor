@@ -1,27 +1,45 @@
-import { Canvas } from '@react-three/fiber'
+import { useFrame, useThree, Canvas } from '@react-three/fiber'
 import { PerspectiveCamera } from '@react-three/drei'
 import { SceneRenderer } from './SceneRenderer'
 import { useSceneStore } from '../../store/scene-store'
+
+function CameraLookAt({ targetNodeId }: { targetNodeId: string }) {
+  const { camera } = useThree()
+
+  useFrame(() => {
+    const scene = useSceneStore.getState().scene
+    const target = scene.meshes.find((m) => m.id === targetNodeId)
+    if (!target) return
+    const [x, y, z] = target.transform.position
+    camera.lookAt(x, y, z)
+  })
+
+  return null
+}
 
 function CameraViewContents() {
   const camera = useSceneStore((s) => s.scene.camera)
 
   if (!camera) return null
 
+  const DEG2RAD = Math.PI / 180
+  const isTarget = camera.mode === 1 && !!camera.targetNodeId
+
   return (
     <>
       <PerspectiveCamera
         makeDefault
         position={camera.position}
-        rotation={[
-          camera.rotation[0] * (Math.PI / 180),
-          camera.rotation[1] * (Math.PI / 180),
-          camera.rotation[2] * (Math.PI / 180),
+        rotation={isTarget ? undefined : [
+          camera.rotation[0] * DEG2RAD,
+          camera.rotation[1] * DEG2RAD,
+          camera.rotation[2] * DEG2RAD,
         ]}
         fov={camera.fov}
         near={0.1}
         far={1000}
       />
+      {isTarget && <CameraLookAt targetNodeId={camera.targetNodeId!} />}
       <SceneRenderer />
     </>
   )

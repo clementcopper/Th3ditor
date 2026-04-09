@@ -128,19 +128,25 @@ function MeshObject({
           }}
         >
           {mesh.geometryType === 'box' && (
-            <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number]} />
+            <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
           )}
           {mesh.geometryType === 'sphere' && (
             <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
           )}
           {mesh.geometryType === 'plane' && (
-            <planeGeometry args={[gp.width as number, gp.height as number]} />
+            <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
           )}
           {mesh.geometryType === 'torus' && (
-            <torusGeometry args={[gp.radius as number, gp.tube as number, 16, 48]} />
+            <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
           )}
           {mesh.geometryType === 'cylinder' && (
             <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
+          )}
+          {mesh.geometryType === 'capsule' && (
+            <capsuleGeometry args={[gp.radius as number, gp.length as number, gp.capSegments as number, gp.radialSegments as number]} />
+          )}
+          {mesh.geometryType === 'icosphere' && (
+            <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
           )}
           <meshStandardMaterial
             color={toThreeColor(mp.color)}
@@ -153,19 +159,25 @@ function MeshObject({
         {isEditorView && isSelected && (
           <mesh renderOrder={10}>
             {mesh.geometryType === 'box' && (
-              <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number]} />
+              <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
             )}
             {mesh.geometryType === 'sphere' && (
               <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
             )}
             {mesh.geometryType === 'plane' && (
-              <planeGeometry args={[gp.width as number, gp.height as number]} />
+              <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
             )}
             {mesh.geometryType === 'torus' && (
-              <torusGeometry args={[gp.radius as number, gp.tube as number, 16, 48]} />
+              <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
             )}
             {mesh.geometryType === 'cylinder' && (
               <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
+            )}
+            {mesh.geometryType === 'capsule' && (
+              <capsuleGeometry args={[gp.radius as number, gp.length as number, gp.capSegments as number, gp.radialSegments as number]} />
+            )}
+            {mesh.geometryType === 'icosphere' && (
+              <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
             )}
             <meshBasicMaterial color="#ff8800" wireframe depthTest={false} />
           </mesh>
@@ -277,6 +289,7 @@ function LightObject({
   }
 
   const iconColor = isSelected ? '#ff8800' : '#ffdd44'
+  const iconScale = Math.max(0.5, Math.min(3.0, 0.8 + Math.sqrt(Math.max(0, intensity)) * 0.25))
 
   return (
     <>
@@ -290,6 +303,7 @@ function LightObject({
         {isEditorView && (
           <mesh
             ref={iconRef}
+            scale={iconScale}
             renderOrder={999}
             onClick={(e) => {
               e.stopPropagation()
@@ -335,11 +349,22 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
   useFrame(() => {
     if (!isDragging.current && groupRef.current) {
       groupRef.current.position.set(camera.position[0], camera.position[1], camera.position[2])
-      groupRef.current.rotation.set(
-        camera.rotation[0] * DEG2RAD,
-        camera.rotation[1] * DEG2RAD,
-        camera.rotation[2] * DEG2RAD,
-      )
+      if (camera.mode === 1 && camera.targetNodeId) {
+        const scene = useSceneStore.getState().scene
+        const target = scene.meshes.find((m) => m.id === camera.targetNodeId)
+        if (target) {
+          const [tx, ty, tz] = target.transform.position
+          const p = groupRef.current.position
+          // Look at the mirrored point so -Z (base) faces the target
+          groupRef.current.lookAt(2 * p.x - tx, 2 * p.y - ty, 2 * p.z - tz)
+        }
+      } else {
+        groupRef.current.rotation.set(
+          camera.rotation[0] * DEG2RAD,
+          camera.rotation[1] * DEG2RAD,
+          camera.rotation[2] * DEG2RAD,
+        )
+      }
     }
   })
 
@@ -474,9 +499,6 @@ function LiveEvaluator() {
       useEvaluatorStore.getState().setValues(cache)
     }
 
-    // Scene updates only when playing
-    if (!playing) return
-
     const hasDynamic = nodes.some(
       (n) => n.type === 'time' || n.type === 'input' || n.type === 'math',
     )
@@ -505,11 +527,9 @@ function LiveEvaluator() {
         if (!targetNode) continue
 
         if (targetNode.type === 'material') {
-          matProps[edge.targetHandle] = val
-          meshChanged = true
+          if (mesh.materialProps[edge.targetHandle] !== val) { matProps[edge.targetHandle] = val; meshChanged = true }
         } else if (targetNode.type === 'geometry') {
-          geoProps[edge.targetHandle] = val
-          meshChanged = true
+          if (mesh.geometryProps[edge.targetHandle] !== val) { geoProps[edge.targetHandle] = val; meshChanged = true }
         } else if (targetNode.type === 'transform') {
           const targetDef = getNodeDef(targetNode.type)
           const targetProps = { ...(targetDef?.defaults ?? {}), ...targetNode.data }
@@ -518,20 +538,20 @@ function LiveEvaluator() {
 
           if (mode === 0) {
             // Translate
-            if (prop === 'x') { transform.position = [...transform.position]; transform.position[0] = val; meshChanged = true }
-            if (prop === 'y') { transform.position = [...transform.position]; transform.position[1] = val; meshChanged = true }
-            if (prop === 'z') { transform.position = [...transform.position]; transform.position[2] = val; meshChanged = true }
+            if (prop === 'x' && transform.position[0] !== val) { transform.position = [...transform.position]; transform.position[0] = val; meshChanged = true }
+            if (prop === 'y' && transform.position[1] !== val) { transform.position = [...transform.position]; transform.position[1] = val; meshChanged = true }
+            if (prop === 'z' && transform.position[2] !== val) { transform.position = [...transform.position]; transform.position[2] = val; meshChanged = true }
           } else if (mode === 1) {
             // Rotate
             const DEG2RAD = Math.PI / 180
-            if (prop === 'x') { transform.rotation = [...transform.rotation]; transform.rotation[0] = val * DEG2RAD; meshChanged = true }
-            if (prop === 'y') { transform.rotation = [...transform.rotation]; transform.rotation[1] = val * DEG2RAD; meshChanged = true }
-            if (prop === 'z') { transform.rotation = [...transform.rotation]; transform.rotation[2] = val * DEG2RAD; meshChanged = true }
+            if (prop === 'x' && transform.rotation[0] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[0] = val * DEG2RAD; meshChanged = true }
+            if (prop === 'y' && transform.rotation[1] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[1] = val * DEG2RAD; meshChanged = true }
+            if (prop === 'z' && transform.rotation[2] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[2] = val * DEG2RAD; meshChanged = true }
           } else if (mode === 2) {
             // Scale
-            if (prop === 'x') { transform.scale = [...transform.scale]; transform.scale[0] = val; meshChanged = true }
-            if (prop === 'y') { transform.scale = [...transform.scale]; transform.scale[1] = val; meshChanged = true }
-            if (prop === 'z') { transform.scale = [...transform.scale]; transform.scale[2] = val; meshChanged = true }
+            if (prop === 'x' && transform.scale[0] !== val) { transform.scale = [...transform.scale]; transform.scale[0] = val; meshChanged = true }
+            if (prop === 'y' && transform.scale[1] !== val) { transform.scale = [...transform.scale]; transform.scale[1] = val; meshChanged = true }
+            if (prop === 'z' && transform.scale[2] !== val) { transform.scale = [...transform.scale]; transform.scale[2] = val; meshChanged = true }
           }
         }
       }
@@ -558,8 +578,10 @@ function LiveEvaluator() {
         const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
         if (val === undefined) continue
 
-        props[edge.targetHandle] = val
-        lightChanged = true
+        if (light.props[edge.targetHandle as string] !== val) {
+          props[edge.targetHandle] = val
+          lightChanged = true
+        }
       }
 
       if (lightChanged) {

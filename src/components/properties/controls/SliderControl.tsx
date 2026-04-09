@@ -76,6 +76,20 @@ export function SliderControl({ param, value, onChange }: Props) {
     }
   }, [isEditing])
 
+  useEffect(() => {
+    const el = fieldRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent) => {
+      if (isEditing) return
+      e.preventDefault()
+      const direction = e.deltaY < 0 ? 1 : -1
+      const newVal = snap(clampTyped(value + direction * step))
+      onChange(newVal)
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [isEditing, value, step, onChange])
+
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-semibold text-text-secondary">{param.label}</label>

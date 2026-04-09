@@ -8,20 +8,28 @@ interface Props {
 
 export function ToggleControl({ param, value, onChange }: Props) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-1">
       <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
-      <button
-        onClick={() => onChange(!value)}
-        className={`w-9 h-5 rounded-full transition-colors cursor-pointer relative ${
-          value ? 'bg-brand-500' : 'bg-border-default'
-        }`}
-      >
-        <div
-          className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm absolute top-0.75 transition-transform ${
-            value ? 'translate-x-4.5' : 'translate-x-0.75'
-          }`}
-        />
-      </button>
+      <div className="flex border border-border-default overflow-hidden">
+        {(['Off', 'On'] as const).map((label, i) => {
+          const isActive = value === (i === 1)
+          return (
+            <button
+              key={label}
+              onClick={() => onChange(i === 1)}
+              className={`flex-1 h-7 text-xs font-medium transition-colors cursor-pointer ${
+                isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
+              } ${i > 0 ? 'border-l border-border-default' : ''}`}
+              style={isActive ? {
+                color: 'var(--color-accent)',
+                background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
+              } : {}}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

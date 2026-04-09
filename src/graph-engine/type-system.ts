@@ -27,7 +27,7 @@ export const CATEGORY_COLORS: Record<NodeDefinition['category'], string> = {
   color: '#FB923C',
   texture: '#22D3EE',
   time: '#0004ff',
-  input: '#000000',
+  input: '#7a7875',
   effect: '#000000',
   scene: '#ff0000',
 }

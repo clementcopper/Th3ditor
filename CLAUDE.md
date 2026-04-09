@@ -36,6 +36,7 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Persp↔Ortho camera preservation: watch `useThree(s => s.camera)` object reference change in `useEffect`.
 - Alt+drag duplicate: use `useGraphStore.getState().setNodes(...)` in `onNodeDragStop` for atomic snap-back + new node.
 - CSS 3D cube face label bug: check labels first before changing transforms or rotation-sync sign.
+- Font sizes: always use Tailwind utility classes (`text-xs`, `text-[10px]`) — avoid inline `fontSize` px values.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -98,8 +99,9 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-08)
+## Current Status (2026-04-09)
 - Phase 1 + 2 + 3 complete
 - Phase 4 complete ✅: Layout, Dual Viewport, Camera-Node, Scene Explorer, Play/Pause, Shading/Perspektiv-Toggle, Gizmos, Viewport Helpers, Camera Rotation
+- Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Phase 5 — Custom GLSL Shader-Node + Texture-Nodes
+- Next: Phase 5a — glTF Import Node; danach Phase 5b — Custom GLSL Shader-Node

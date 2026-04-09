@@ -74,6 +74,8 @@ export interface CompiledCamera {
   position: [number, number, number]
   rotation: [number, number, number]  // degrees
   fov: number
+  mode: number  // 0 = Free, 1 = Target
+  targetNodeId?: string
 }
 
 export interface CompiledScene {

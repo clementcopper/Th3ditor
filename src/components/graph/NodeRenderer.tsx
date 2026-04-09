@@ -4,10 +4,13 @@ import { getNodeDef } from '../../graph-engine/node-registry'
 import { PORT_COLORS, CATEGORY_COLORS, isVisible } from '../../graph-engine/type-system'
 import { useGraphStore } from '../../store/graph-store'
 import { useEvaluatorStore } from '../../store/evaluator-store'
+import { getNodeIcon } from '../../utils/node-icons'
+
+const EMPTY_DATA: Record<string, unknown> = {}
 
 function NodeRendererInner({ id, type, selected }: NodeProps) {
   const def = getNodeDef(type ?? '')
-  const nodeData = useGraphStore((s) => s.nodes.find((n) => n.id === id)?.data ?? {})
+  const nodeData = useGraphStore((s) => s.nodes.find((n) => n.id === id)?.data ?? EMPTY_DATA)
   const values = useEvaluatorStore((s) => s.values)
   const edges = useEdges()
   if (!def) return null
@@ -35,6 +38,8 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
     ? `${baseLabel}: ${customLabel}`
     : baseLabel
 
+  const Icon = getNodeIcon(type ?? '', def.category, nodeData)
+
   return (
     <div
       className={`min-w-[140px] rounded-lg border bg-surface-base shadow-lg ${
@@ -43,10 +48,11 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
     >
       {/* Header with category color */}
       <div
-        className="px-3 py-1.5 rounded-t-lg border-b border-border-default"
+        className="px-3 py-1.5 rounded-t-lg border-b border-border-default flex items-center gap-1.5"
         style={{ backgroundColor: categoryColor + '15'}}
       >
-        <span className="text-[11px] font-semibold text-text-primary">{headerLabel}</span>
+        <span className="flex items-center shrink-0"><Icon size={11} weight="fill" color={categoryColor} /></span>
+        <span className="text-[11px] font-semibold text-text-primary leading-none">{headerLabel}</span>
       </div>
 
       {/* Ports */}
@@ -68,9 +74,9 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
                   className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-surface-base"
                   style={{ background: PORT_COLORS[port.type], left: -5 }}
                 />
-                <span className="text-[10px] text-text-muted ml-2">{port.label ?? port.name}</span>
+                <span className="text-[10px] text-text-muted ml-2 leading-none">{port.label ?? port.name}</span>
                 {portValue !== undefined && (
-                  <span className="text-[9px] font-mono text-text-secondary">{portValue.toFixed(2)}</span>
+                  <span className="text-[10px] font-mono leading-none text-accent">{portValue.toFixed(2)}</span>
                 )}
               </div>
             )
@@ -84,9 +90,9 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
             return (
               <div key={port.name} className="relative flex items-center gap-1">
                 {portValue !== undefined && (
-                  <span className="text-[9px] font-mono text-text-secondary">{portValue.toFixed(2)}</span>
+                  <span className="font-mono" style={{ fontSize: 10, color: 'var(--color-accent)' }}>{portValue.toFixed(2)}</span>
                 )}
-                <span className="text-[10px] text-text-muted mr-2">{port.label ?? port.name}</span>
+                <span className="text-[10px] text-text-muted mr-2 leading-none">{port.label ?? port.name}</span>
                 <Handle
                   type="source"
                   position={Position.Right}

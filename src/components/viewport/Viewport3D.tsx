@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
+import { Play, Pause, Stop } from '@phosphor-icons/react'
 import { SceneRenderer, LiveEvaluator } from './SceneRenderer'
 import { SceneExplorer } from './SceneExplorer'
 import { useEditorStore } from '../../store/editor-store'
@@ -32,36 +33,22 @@ function PlaybackOverlay() {
         style={overlayBg}
       >
         <button
-          onClick={play}
-          className="font-semibold transition-colors cursor-pointer px-1"
-          style={{
-            fontSize: 11,
-            color: playing ? 'var(--color-text-muted)' : 'var(--color-accent)',
-          }}
+          onClick={playing ? pause : play}
+          className="transition-colors cursor-pointer flex items-center justify-center px-1"
+          style={{ color: 'var(--color-accent)' }}
         >
-          ▶
-        </button>
-        <div className="w-px h-3 bg-border-default" />
-        <button
-          onClick={pause}
-          className="font-semibold transition-colors cursor-pointer px-1"
-          style={{
-            fontSize: 11,
-            color: !playing ? 'var(--color-text-muted)' : 'var(--color-accent)',
-          }}
-        >
-          ⏸
+          {playing ? <Pause size={14} weight="fill" /> : <Play size={14} weight="fill" />}
         </button>
         <div className="w-px h-3 bg-border-default" />
         <button
           onClick={stop}
-          className="transition-colors cursor-pointer px-1"
-          style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}
+          className="transition-colors cursor-pointer flex items-center justify-center px-1"
+          style={{ color: 'var(--color-text-secondary)' }}
         >
-          ⏹
+          <Stop size={14} weight="fill" />
         </button>
         <div className="w-px h-3 bg-border-default" />
-        <span className="font-mono text-text-muted w-10 text-right" style={{ fontSize: 9 }}>
+        <span className="text-xs font-mono text-text-muted w-10 text-right">
           {elapsed.toFixed(1)}s
         </span>
       </div>
@@ -126,9 +113,9 @@ function ViewCube() {
                 justifyContent: 'center',
                 cursor: 'pointer',
                 userSelect: 'none',
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.04em',
+                fontSize: 12,
+                fontWeight: 500,
+                letterSpacing: '0.02em',
                 border: '1px solid',
                 borderColor: isHovered
                   ? 'var(--color-accent)'
@@ -230,7 +217,7 @@ function ViewportControlsOverlay() {
           <button
             key={mode}
             onClick={() => setShadingMode(mode)}
-            className="px-2 py-1 text-[9px] font-semibold transition-colors cursor-pointer capitalize"
+            className="px-2 py-1 text-xs font-medium transition-colors cursor-pointer capitalize"
             style={{
               color: shadingMode === mode ? 'var(--color-accent)' : 'var(--color-text-muted)',
               background: shadingMode === mode ? 'color-mix(in oklch, var(--color-accent) 12%, transparent)' : undefined,
@@ -246,7 +233,7 @@ function ViewportControlsOverlay() {
           <button
             key={mode}
             onClick={() => setProjectionMode(mode)}
-            className="px-2 py-1 text-[9px] font-semibold transition-colors cursor-pointer capitalize"
+            className="px-2 py-1 text-xs font-medium transition-colors cursor-pointer capitalize"
             style={{
               color: projectionMode === mode ? 'var(--color-accent)' : 'var(--color-text-muted)',
               background: projectionMode === mode ? 'color-mix(in oklch, var(--color-accent) 12%, transparent)' : undefined,

@@ -302,7 +302,18 @@ src/
 - [x] Camera-Icon: Wireframe-Pyramide, Grundplatte zeigt Sichtrichtung
 - [x] Grid: warme Farben, fadeStrength 0.3 (kein starkes Ausblenden)
 
-### Phase 5: Custom Shaders + Texturen
+### Phase 5: glTF Import + Custom Shaders + Texturen
+
+#### 5a: glTF Import Node
+- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
+- [ ] Property: File-Picker Button (lokale Datei) + Dateiname-Anzeige
+- [ ] Lädt via `THREE.GLTFLoader` — rendert Modell mit seinen eigenen Materialien
+- [ ] Kette: `[glTF Import] → [Transform] → [Scene Output]`
+- [ ] Scene Explorer zeigt glTF-Node wie andere Objekte
+- [ ] Test-Modelle: `glTF/red-brick-3d-model`, `glTF/western-electric-tangent-galvanometer-3d-model`
+- [ ] Compiler + SceneRenderer: neuer `CompiledGLTF`-Typ neben `CompiledMesh`
+
+#### 5b: Custom Shaders + Texturen
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)
 - [ ] GLSL-Code Editor (TextArea-Control mit Monospace)
 - [ ] GLSL-Chunks als inkludierbare Snippets

@@ -97,7 +97,7 @@ export function ColorControl({ param, value, onChange }: Props) {
       {/* Swatch + hex display */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border-default bg-surface-primary hover:border-border-strong transition-colors cursor-pointer"
+        className="flex items-center gap-2 px-2 h-7 border border-border-default bg-surface-base hover:bg-surface-panel transition-colors cursor-pointer"
       >
         <div className="relative w-5 h-5 rounded border border-border-default overflow-hidden">
           {/* Checkerboard for alpha */}
@@ -120,27 +120,32 @@ export function ColorControl({ param, value, onChange }: Props) {
 
       {/* Picker popover */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 bg-surface-primary border border-border-default rounded-lg shadow-xl p-3 w-[240px]">
+        <div className="absolute left-0 top-full z-50 mt-1 bg-surface-panel border border-border-default shadow-xl p-3 w-[240px]">
           {/* Color picker */}
           <div className="mb-3 [&_.react-colorful]:!w-full [&_.react-colorful]:!h-[160px]">
             <RgbaColorPicker color={pickerColor} onChange={handlePickerChange} />
           </div>
 
           {/* Color space tabs */}
-          <div className="flex gap-0.5 mb-3 bg-surface-secondary rounded-md p-0.5">
-            {COLOR_SPACES.map((cs) => (
-              <button
-                key={cs.id}
-                onClick={() => setSpace(cs.id)}
-                className={`flex-1 text-[10px] font-semibold py-1 rounded transition-colors cursor-pointer ${
-                  space === cs.id
-                    ? 'bg-surface-primary text-text-primary shadow-sm'
-                    : 'text-text-tertiary hover:text-text-secondary'
-                }`}
-              >
-                {cs.label}
-              </button>
-            ))}
+          <div className="flex border border-border-default overflow-hidden mb-3">
+            {COLOR_SPACES.map((cs, i) => {
+              const isActive = space === cs.id
+              return (
+                <button
+                  key={cs.id}
+                  onClick={() => setSpace(cs.id)}
+                  className={`flex-1 h-7 text-xs font-medium transition-colors cursor-pointer ${
+                    isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
+                  } ${i > 0 ? 'border-l border-border-default' : ''}`}
+                  style={isActive ? {
+                    color: 'var(--color-accent)',
+                    background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
+                  } : {}}
+                >
+                  {cs.label}
+                </button>
+              )
+            })}
           </div>
 
           {/* Value inputs */}
@@ -158,7 +163,7 @@ export function ColorControl({ param, value, onChange }: Props) {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleHexCommit((e.target as HTMLInputElement).value)
                     }}
-                    className="w-full px-1.5 py-1 rounded border border-border-default bg-surface-primary text-[11px] font-mono text-text-primary text-center"
+                    className="w-full px-1.5 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
                     maxLength={9}
                   />
                 </div>
@@ -175,7 +180,7 @@ export function ColorControl({ param, value, onChange }: Props) {
                       const newAlpha = Math.min(100, Math.max(0, Number(e.target.value))) / 100
                       onChange([rgba[0], rgba[1], rgba[2], newAlpha])
                     }}
-                    className="w-full px-1 py-1 rounded border border-border-default bg-surface-primary text-[11px] font-mono text-text-primary text-center"
+                    className="w-full px-1 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
                   />
                 </div>
               </>
@@ -191,7 +196,7 @@ export function ColorControl({ param, value, onChange }: Props) {
                     step={fields.steps[i]}
                     value={fields.values[i]}
                     onChange={(e) => handleFieldChange(i, Number(e.target.value))}
-                    className="w-full px-1 py-1 rounded border border-border-default bg-surface-primary text-[11px] font-mono text-text-primary text-center"
+                    className="w-full px-1 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
                   />
                 </div>
               ))

@@ -24,21 +24,25 @@ function NodeRefControl({
     (prop.categories ?? []).includes(getNodeDef(n.type)?.category as string)
   )
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] text-text-muted shrink-0 w-20">{prop.label}</span>
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex-1 text-[10px] bg-bg-elevated text-text-primary px-2 py-1 border border-border-default focus:outline-none focus:border-accent"
-        style={{ borderRadius: 0 }}
-      >
-        <option value="">— None —</option>
-        {options.map((n) => (
-          <option key={n.id} value={n.id}>
-            {(n.data.label as string) || n.type}
-          </option>
-        ))}
-      </select>
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-text-secondary">{prop.label}</span>
+      <div className="relative">
+        <select
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none text-xs bg-surface-base text-text-primary px-2 pr-7 h-7 border border-border-default hover:bg-surface-panel focus:outline-none focus:border-accent cursor-pointer transition-colors"
+        >
+          <option value="">— None —</option>
+          {options.map((n) => (
+            <option key={n.id} value={n.id}>
+              {(n.data.label as string) || n.type}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-2 top-0 bottom-0 flex items-center pointer-events-none">
+          <span className="text-text-muted text-[10px]">▾</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -116,14 +120,13 @@ export function PropertiesPanel() {
                   const edge = connectedEdges.find((e) => e.targetHandle === prop.linkedPort)
                   const connectedValue = edge ? evalValues.get(`${edge.source}:${edge.sourceHandle}`) : undefined
                   return (
-                    <div key={prop.uniform} className="flex items-center gap-2">
-                      <span className="text-[10px] text-text-muted shrink-0">{prop.label}</span>
-                      <span
-                        className="text-[10px] font-mono px-1.5 py-0.5"
-                        style={{ color: 'var(--color-accent)', background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)' }}
-                      >
-                        → {connectedValue !== undefined ? connectedValue.toFixed(2) : '—'}
-                      </span>
+                    <div key={prop.uniform} className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold text-text-secondary">{prop.label}</span>
+                      <div className="h-7 flex items-center justify-center border border-border-default bg-accent/15">
+                        <span className="text-xs font-mono text-accent">
+                          {connectedValue !== undefined ? connectedValue.toFixed(2) : '—'}
+                        </span>
+                      </div>
                     </div>
                   )
                 }

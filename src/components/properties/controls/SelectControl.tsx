@@ -14,18 +14,20 @@ export function SelectControl({ param, value, onChange }: Props) {
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
-        <div className="flex rounded-md border border-border-default overflow-hidden">
+        <div className="flex border border-border-default overflow-hidden">
           {options.map((opt, i) => {
             const isActive = value === parseFloat(opt.value)
             return (
               <button
                 key={opt.value}
                 onClick={() => onChange(parseFloat(opt.value))}
-                className={`flex-1 px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
+                className={`flex-1 px-2 h-7 text-xs font-medium transition-colors cursor-pointer ${
+                  isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
                 } ${i > 0 ? 'border-l border-border-default' : ''}`}
+                style={isActive ? {
+                  color: 'var(--color-accent)',
+                  background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
+                } : {}}
               >
                 {opt.label}
               </button>
@@ -39,17 +41,22 @@ export function SelectControl({ param, value, onChange }: Props) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="px-2 py-1.5 rounded-md border border-border-default bg-surface-base text-xs text-text-primary cursor-pointer hover:border-border-strong transition-colors"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="w-full appearance-none px-2 pr-7 h-7 border border-border-default bg-surface-base text-xs text-text-primary cursor-pointer hover:bg-surface-panel transition-colors"
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-2 top-0 bottom-0 flex items-center pointer-events-none">
+          <span className="text-text-muted text-[10px]">▾</span>
+        </div>
+      </div>
     </div>
   )
 }

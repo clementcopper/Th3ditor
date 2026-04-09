@@ -33,6 +33,17 @@
   border-radius: 0 !important;
 }
 
+/* ReactFlow built-in node types ('input', 'output', 'default') apply default white styling.
+   Our custom NodeRenderer handles all styling — reset the wrappers. */
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-default {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
 body {
   margin: 0;
   background: var(--color-surface-base);

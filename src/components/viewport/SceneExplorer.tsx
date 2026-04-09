@@ -3,17 +3,19 @@ import { useGraphStore } from '../../store/graph-store'
 import { useEditorStore } from '../../store/editor-store'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { CATEGORY_COLORS } from '../../graph-engine/type-system'
+import { getNodeIcon } from '../../utils/node-icons'
 import type { GraphNode } from '../../types/node-graph'
 
 const SCENE_CATEGORIES = new Set(['object', 'light', 'camera'])
 
-const CATEGORY_ICONS: Record<string, string> = {
-  object: '▢',
-  light: '◉',
-  camera: '▷',
-}
-
 const LIGHT_TYPE_LABELS = ['Ambient', 'Directional', 'Point']
+
+function NodeIcon({ node, color }: { node: GraphNode; color: string }) {
+  const def = getNodeDef(node.type)
+  if (!def) return null
+  const Icon = getNodeIcon(node.type, def.category, node.data)
+  return <Icon size={12} weight="fill" color={color} />
+}
 
 export function getNodeDisplayName(node: GraphNode): string {
   const customLabel = node.data.label as string | undefined
@@ -65,7 +67,7 @@ export function SceneExplorer() {
         style={{ background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }}
       >
         <div className="px-2 py-1 border-b border-border-default">
-          <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted">Scene</span>
+          <span className="text-xs font-medium uppercase tracking-widest text-text-muted">Scene</span>
         </div>
         <div className="flex flex-col">
           {sceneNodes.length === 0 && (
@@ -74,7 +76,6 @@ export function SceneExplorer() {
           {sceneNodes.map((node) => {
             const def = getNodeDef(node.type)
             const color = CATEGORY_COLORS[def?.category ?? 'scene'] ?? '#888'
-            const icon = CATEGORY_ICONS[def?.category ?? ''] ?? '·'
             const isSelected = node.id === selectedId
             const isRenaming = renamingId === node.id
 
@@ -84,7 +85,9 @@ export function SceneExplorer() {
                 className="flex items-center gap-1.5 px-2 py-1"
                 style={{ background: isSelected ? 'color-mix(in oklch, var(--color-accent) 15%, transparent)' : undefined }}
               >
-                <span className="text-[9px] shrink-0 leading-none" style={{ color }}>{icon}</span>
+                <span className="shrink-0 leading-none flex items-center">
+                  <NodeIcon node={node} color={color} />
+                </span>
                 {isRenaming ? (
                   <input
                     autoFocus
@@ -95,14 +98,14 @@ export function SceneExplorer() {
                       if (e.key === 'Enter') commitRename(node.id)
                       if (e.key === 'Escape') setRenamingId(null)
                     }}
-                    className="text-[10px] bg-transparent text-text-primary outline-none border-b border-accent flex-1 min-w-0"
+                    className="text-xs font-medium bg-transparent text-text-primary outline-none border-b border-accent flex-1 min-w-0"
                     placeholder="Name…"
                   />
                 ) : (
                   <button
                     onClick={() => setSelectedNode(isSelected ? null : node.id)}
                     onDoubleClick={() => startRename(node)}
-                    className={`text-[10px] text-left flex-1 min-w-0 truncate cursor-pointer ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}
+                    className={`text-xs font-medium text-left flex-1 min-w-0 truncate cursor-pointer ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}
                   >
                     {getNodeDisplayName(node)}
                   </button>

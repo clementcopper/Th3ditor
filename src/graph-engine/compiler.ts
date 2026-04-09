@@ -2,7 +2,7 @@ import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, 
 import { getNodeDef } from './node-registry'
 
 /** Maps geometry mode number to a subtype string for the renderer */
-const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder'] as const
+const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 'icosphere'] as const
 
 /** Maps light mode number to a subtype string */
 const LIGHT_SUBTYPES = ['ambient', 'directional', 'point'] as const
@@ -99,6 +99,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const camNode = nodeMap.get(edge.source)
     if (!camNode || camNode.type !== 'camera') continue
     const props = getProps(camNode)
+    const camMode = (props.mode as number) ?? 0
     camera = {
       nodeId: camNode.id,
       position: [
@@ -112,6 +113,8 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
         (props.rotationZ as number) ?? 0,
       ],
       fov: (props.fov as number) ?? 50,
+      mode: camMode,
+      targetNodeId: camMode === 1 && props.targetNodeId ? (props.targetNodeId as string) : undefined,
     }
     break
   }
@@ -123,15 +126,19 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
 function normalizeGeoProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
   switch (type) {
     case 'box':
-      return { width: props.width, height: props.height, depth: props.depth }
+      return { width: props.width, height: props.height, depth: props.depth, widthSegs: props.boxWidthSegs, heightSegs: props.boxHeightSegs, depthSegs: props.boxDepthSegs }
     case 'sphere':
       return { radius: props.radius, widthSegments: props.widthSegments, heightSegments: props.heightSegments }
     case 'plane':
-      return { width: props.planeWidth, height: props.planeHeight }
+      return { width: props.planeWidth, height: props.planeHeight, widthSegs: props.planeWidthSegs, heightSegs: props.planeHeightSegs }
     case 'torus':
-      return { radius: props.torusRadius, tube: props.tube }
+      return { radius: props.torusRadius, tube: props.tube, radialSegments: props.torusRadialSegs, tubularSegments: props.torusTubularSegs }
     case 'cylinder':
       return { radiusTop: props.radiusTop, radiusBottom: props.radiusBottom, height: props.cylHeight, radialSegments: props.radialSegments }
+    case 'capsule':
+      return { radius: props.capsuleRadius, length: props.capsuleLength, capSegments: props.capSegments, radialSegments: props.capsuleRadialSegments }
+    case 'icosphere':
+      return { radius: props.icoRadius, detail: props.icoDetail }
     default:
       return props
   }

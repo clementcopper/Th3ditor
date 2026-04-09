@@ -9,7 +9,7 @@ import { useEditorStore } from '../../store/editor-store'
 import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluator'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
-import { evaluatePathPosition, evaluatePathTangent } from '../../graph-engine/path-utils'
+import { evaluatePathPosition } from '../../graph-engine/path-utils'
 import type { CompiledMesh, CompiledLight, CompiledCamera, CompiledPath } from '../../types/node-graph'
 
 function toThreeColor(color?: unknown): string {
@@ -672,32 +672,10 @@ function LiveEvaluator() {
           let pathCamChanged = pos[0] !== newCamera.position[0] || pos[1] !== newCamera.position[1] || pos[2] !== newCamera.position[2]
           let pathRot: [number, number, number] = newCamera.rotation
 
-          if (newCamera.pathLookAhead) {
-            const tangent = evaluatePathTangent(camPath, t)
-            const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2]).normalize()
-            // Use orbit-plane normal as "up" so the camera tangent is always ⊥ up
-            // → eliminates gimbal lock on XY / YZ orbits
-            const planeAxis = (camPath.pathProps.circleAxis as number) ?? 1
-            const up =
-              camPath.pathType !== 'line'
-                ? planeAxis === 0
-                  ? new THREE.Vector3(0, 0, -1)   // XY plane → normal is -Z
-                  : planeAxis === 2
-                    ? new THREE.Vector3(1, 0, 0)  // YZ plane → normal is X
-                    : new THREE.Vector3(0, 1, 0)  // XZ plane (default) → normal is Y
-                : new THREE.Vector3(0, 1, 0)      // Line → world up
-            const m = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir, up)
-            const euler = new THREE.Euler().setFromQuaternion(
-              new THREE.Quaternion().setFromRotationMatrix(m),
-              'YXZ',
-            )
-            const RAD2DEG = 180 / Math.PI
-            const newRot: [number, number, number] = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG]
-            if (newRot[0] !== pathRot[0] || newRot[1] !== pathRot[1] || newRot[2] !== pathRot[2]) {
-              pathRot = newRot
-              pathCamChanged = true
-            }
-          }
+          // pathLookAhead orientation is handled entirely by CameraPathLookAhead
+          // in CameraView.tsx via per-frame quaternion override. Do NOT compute or
+          // store euler here: the plane-normal lookAt decomposition is discontinuous
+          // for XY/YZ circles and overwrites the quaternion before gl.render().
 
           if (pathCamChanged) {
             changed = true

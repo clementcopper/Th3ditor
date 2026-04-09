@@ -302,10 +302,52 @@ src/
 - [x] Camera-Icon: Wireframe-Pyramide, Grundplatte zeigt Sichtrichtung
 - [x] Grid: warme Farben, fadeStrength 0.3 (kein starkes Ausblenden)
 
-### Phase 5: glTF Import + Custom Shaders + Texturen
+### Phase 5a: Path Nodes + Path Constraints ✅ DONE
+- [x] Path-Node-Typen: Line, Circle, Arc
+- [x] Path-Ports an Camera und Light Nodes (`path` + `pathProgress` Inputs)
+- [x] Path-Constraints via Port-Kabel (nicht Noderef-Dropdown)
+- [x] Compiler: `CompiledPath`-Typ, `pathNodeId`/`pathProgress`/`pathLookAhead` an CompiledCamera
+- [x] LiveEvaluator: Position-Update per Frame entlang Path
+- [x] Camera Look Ahead: `pathLookAhead` Bool-Property, Tangenten-basierte Orientierung
+- [x] Path-Gizmos im EditorView (Linie/Kreis visualisiert)
+- [x] SceneExplorer: Paths anzeigen
+- [x] EditorView: feste Viewport-Beleuchtung (Ambient + Directional), keine Szenen-Lichter
+- [x] Wireframe: flat shading via `meshBasicMaterial`
+- [x] Circle Path Properties: Radius, Plane (XY/XZ/YZ), Center Offset
+- [x] Geometry Nodes erweitert: Capsule, Icosphere (alle mit Segment-Properties)
 
-#### 5a: glTF Import Node
-- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`Als
+**⚠️ Offener Bug: Camera Look-Ahead auf XY/YZ Circle Paths**
+
+Camera auf XZ-Kreis dreht korrekt durchgehend. Camera auf XY- oder YZ-Kreis zeigt A→B→A Bounce — die Kamera scheint die Runde nicht abzuschließen sondern zurückzuspringen.
+
+**Root Cause (Analyse):**
+Drei Faktoren spielen zusammen — keiner allein löst das Problem:
+
+1. **Up-Vektor Singularität**: World-Y als Up-Vektor für lookAt ist degeneriert wenn der Tangent parallel zu World-Y ist (XY-Kreis bei θ=0,π; YZ-Kreis bei θ=π/2,3π/2). Der abgeleitete Up-Vektor hat Periode π statt 2π → unvermeidlicher 180°-Flip pro Halborbit.
+
+2. **LiveEvaluator Euler-Interferenz**: Der LiveEvaluator in SceneRenderer.tsx berechnet Euler-Winkel aus der lookAt-Matrix und schreibt sie in den Zustand. PerspectiveCamera wendet diese via `rotation`-Prop an und überschreibt den Quaternion von CameraPathLookAhead.
+
+3. **PerspectiveCamera `rotation`-Prop Override**: Die `rotation`-Prop erzeugt bei jedem React-Render ein neues Array → R3F setzt `camera.rotation` zurück → überschreibt den per useFrame gesetzten Quaternion.
+
+**Bisherige Fix-Versuche (alle gescheitert):**
+
+| # | Ansatz | Ergebnis |
+|---|--------|----------|
+| 1 | World-Y Up + World-Z Fallback (threshold 0.999) | ~90° Sprung an der Threshold-Grenze |
+| 2 | World-Y Up + World-X Fallback | Smooth beim Eintritt, 180°-Flip beim Austritt |
+| 3 | Plane-Normal als Up-Vektor (mathematisch korrekt) | Kein Bild — LiveEvaluator Euler überschreibt Quaternion |
+| 4 | Plane-Normal + LiveEvaluator Euler-Block entfernt | Bounce bleibt — PerspectiveCamera rotation-Prop Override |
+| 5 | Plane-Normal + kein Euler + rotation-Prop conditional (nur ohne LookAhead) | Bounce bleibt — unbekannte weitere Ursache |
+
+**Betroffene Dateien:**
+- `src/components/viewport/CameraView.tsx` — `CameraPathLookAhead` Komponente
+- `src/components/viewport/SceneRenderer.tsx` — LiveEvaluator Camera-Path-Block
+- `src/graph-engine/path-utils.ts` — `evaluatePathTangent`, `evaluatePathPosition`
+
+**Nächster Ansatz:** Frische Analyse nötig. Möglicherweise muss die gesamte Camera-Orientierung imperativ in einem einzigen useFrame erfolgen (Position + Quaternion), statt über React-Props + nachträglichen Quaternion-Override.
+
+### Phase 5b: glTF Import Node
+- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
 - [ ] Property: File-Picker Button (lokale Datei) + Dateiname-Anzeige
 - [ ] Lädt via `THREE.GLTFLoader` — rendert Modell mit seinen eigenen Materialien
 - [ ] Kette: `[glTF Import] → [Transform] → [Scene Output]`
@@ -313,7 +355,7 @@ src/
 - [ ] Test-Modelle: `glTF/red-brick-3d-model`, `glTF/western-electric-tangent-galvanometer-3d-model`
 - [ ] Compiler + SceneRenderer: neuer `CompiledGLTF`-Typ neben `CompiledMesh`
 
-#### 5b: Custom Shaders + Texturen
+#### 5c: Custom Shaders + Texturen
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)
 - [ ] GLSL-Code Editor (TextArea-Control mit Monospace)
 - [ ] GLSL-Chunks als inkludierbare Snippets

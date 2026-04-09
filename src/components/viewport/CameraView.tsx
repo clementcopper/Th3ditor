@@ -39,14 +39,19 @@ function CameraPathLookAhead() {
     const tangent = evaluatePathTangent(path, t)
     const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2]).normalize()
 
-    // World-Y up feels natural (scene stays upright). Fallback to world-X when tangent is
-    // nearly parallel to world-Y (XY/YZ circles at top/bottom). World-X is ≈ the same as
-    // what world-Y produces just outside the threshold, so the transition is smooth (<3°).
-    // Previously used world-Z as fallback — that caused a ~90° jump at the threshold.
-    const worldUp = new THREE.Vector3(0, 1, 0)
-    const up = Math.abs(dir.dot(worldUp)) > 0.999
-      ? new THREE.Vector3(1, 0, 0)
-      : worldUp
+    // Plane-normal as up: for circle/arc paths the tangent is always ⊥ to the plane
+    // normal, so lookAt is never degenerate and the quaternion is continuous for all θ.
+    // World-Y based up is impossible for vertical circles (XY/YZ) — any such choice
+    // produces a 180° flip per half-orbit (the up vector has period π, not 2π).
+    const planeAxis = (path.pathProps?.circleAxis as number) ?? 1
+    const up =
+      path.pathType !== 'line'
+        ? planeAxis === 0
+          ? new THREE.Vector3(0, 0, -1)  // XY plane
+          : planeAxis === 2
+            ? new THREE.Vector3(1, 0, 0) // YZ plane
+            : new THREE.Vector3(0, 1, 0) // XZ plane
+        : new THREE.Vector3(0, 1, 0)     // line → world up
 
     const m = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir, up)
     camera.quaternion.setFromRotationMatrix(m)
@@ -66,22 +71,27 @@ function CameraViewContents() {
 
   return (
     <>
-      {/* Always provide a valid rotation — CameraPathLookAhead overrides via quaternion each frame */}
+      {/* When look-ahead or target mode is active, do NOT pass rotation —
+          it would override the quaternion set by CameraPathLookAhead / CameraLookAt each frame */}
       <PerspectiveCamera
         makeDefault
         position={camera.position}
-        rotation={[
-          camera.rotation[0] * DEG2RAD,
-          camera.rotation[1] * DEG2RAD,
-          camera.rotation[2] * DEG2RAD,
-        ]}
+        {...(!(hasPathLookAhead || isTarget) ? {
+          rotation: [
+            camera.rotation[0] * DEG2RAD,
+            camera.rotation[1] * DEG2RAD,
+            camera.rotation[2] * DEG2RAD,
+          ],
+        } : {})}
         fov={camera.fov}
         near={0.1}
         far={1000}
       />
       {isTarget && <CameraLookAt targetNodeId={camera.targetNodeId!} />}
-      {hasPathLookAhead && <CameraPathLookAhead />}
       <SceneRenderer />
+      {/* Must be after SceneRenderer so its useFrame runs after LiveEvaluator,
+          ensuring the quaternion override is the last write before gl.render() */}
+      {hasPathLookAhead && <CameraPathLookAhead />}
     </>
   )
 }

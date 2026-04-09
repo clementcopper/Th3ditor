@@ -41,9 +41,12 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Circle path: DO NOT clamp pathProgress — `evaluatePathPosition` handles wrap via `((t % 1) + 1) % 1`.
 - EditorView viewport lights: fixed ambient + directional (no scene lights) — CameraView uses scene lights.
 - Wireframe mode: use `meshBasicMaterial` (no lighting) not `meshStandardMaterial + wireframe=true`.
-- Camera Look-Ahead XY/YZ bug: world-Y up, euler override, rotation-prop override all tried — see WVS-PLAN.md Phase 5a.
+- Camera Look-Ahead bounce on rotated circles: 10+ attempts failed — see WVS-PLAN.md Phase 5a. Deferred.
 - R3F PerspectiveCamera `rotation` prop overrides quaternion set by useFrame — new array ref triggers re-apply every render.
 - LiveEvaluator must NOT compute euler for pathLookAhead — only CameraPathLookAhead handles orientation.
+- CameraView uses raw THREE.PerspectiveCamera (no drei) — all state set imperatively in useFrame.
+- Look-ahead only in Free mode (mode=0) — Target mode always uses lookAt to target mesh.
+- Three.js cam.quaternion._onChangeCallback corrupts multi-step quaternion ops — use scratch quaternion + copy.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -109,7 +112,7 @@ src/
 ## Current Status (2026-04-09)
 - Phase 1 + 2 + 3 + 4 complete ✅
 - Phase 5a complete ✅: Path Nodes (Line/Circle/Arc), Camera/Light path ports, Path gizmos, SceneExplorer paths, EditorView fixed lighting, Wireframe flat shading
-- **⚠️ Open Bug:** Camera Look-Ahead bounces on XY/YZ circle paths (XZ works). 5 fix attempts failed — see WVS-PLAN.md Phase 5a for details.
+- **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths (XZ works). 10+ fix attempts failed — see WVS-PLAN.md Phase 5a. Tangent values themselves bounce — issue is in `evaluatePathTangent` or `applyEulerXYZ`.
 - Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 - Next: Phase 5b — glTF Import Node; danach Phase 5c — Custom GLSL Shader-Node

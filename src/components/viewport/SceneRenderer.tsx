@@ -714,11 +714,20 @@ function PathObject({ path }: { path: CompiledPath }) {
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const gizmoMode = useEditorStore((s) => s.gizmoMode)
   const isSelected = selectedNodeId === path.id
+
+  const DEG2RAD = Math.PI / 180
+  const RAD2DEG = 180 / Math.PI
 
   useFrame(() => {
     if (!isDragging.current && groupRef.current) {
       groupRef.current.position.set(path.position[0], path.position[1], path.position[2])
+      groupRef.current.rotation.set(
+        ((path.pathProps.rotationX as number) ?? 0) * DEG2RAD,
+        ((path.pathProps.rotationY as number) ?? 0) * DEG2RAD,
+        ((path.pathProps.rotationZ as number) ?? 0) * DEG2RAD,
+      )
     }
   })
 
@@ -731,14 +740,29 @@ function PathObject({ path }: { path: CompiledPath }) {
     if (controls) (controls as unknown as { enabled: boolean }).enabled = true
     if (!groupRef.current) return
     const p = groupRef.current.position
-    updateNodeData(path.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
+    const r = groupRef.current.rotation
+
+    if (gizmoMode === 'translate') {
+      updateNodeData(path.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
+    } else if (gizmoMode === 'rotate') {
+      updateNodeData(path.id, {
+        rotationX: r.x * RAD2DEG,
+        rotationY: r.y * RAD2DEG,
+        rotationZ: r.z * RAD2DEG,
+      })
+    }
     requestAnimationFrame(() => requestAnimationFrame(() => { isDragging.current = false }))
   }
 
   // Path line points relative to group origin (no offset — group handles position)
   const segs = (path.pathProps.segments as number) ?? 64
   const positions = useMemo(() => {
-    const zeroPath = { ...path, position: [0, 0, 0] as [number, number, number] }
+    // Compute points in local space (no offset, no rotation) — group handles both
+    const zeroPath = {
+      ...path,
+      position: [0, 0, 0] as [number, number, number],
+      pathProps: { ...path.pathProps, rotationX: 0, rotationY: 0, rotationZ: 0 },
+    }
     const arr = new Float32Array((segs + 1) * 3)
     for (let i = 0; i <= segs; i++) {
       const [x, y, z] = evaluatePathPosition(zeroPath, i / segs)
@@ -747,7 +771,8 @@ function PathObject({ path }: { path: CompiledPath }) {
     return arr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path.pathType, path.pathProps.length, path.pathProps.radius, path.pathProps.sweepAngle,
-      path.pathProps.lineAxis, path.pathProps.circleAxis, path.pathProps.segments])
+      path.pathProps.lineAxis, path.pathProps.segments,
+      path.pathProps.rotationX, path.pathProps.rotationY, path.pathProps.rotationZ])
 
   const lineColor = isSelected ? '#ff8800' : '#7C3AED'
 
@@ -774,7 +799,7 @@ function PathObject({ path }: { path: CompiledPath }) {
         <TransformControls
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           object={groupRef as any}
-          mode="translate"
+          mode={gizmoMode === 'scale' ? 'translate' : gizmoMode}
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
         />

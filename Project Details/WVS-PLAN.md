@@ -316,35 +316,39 @@ src/
 - [x] Circle Path Properties: Radius, Plane (XY/XZ/YZ), Center Offset
 - [x] Geometry Nodes erweitert: Capsule, Icosphere (alle mit Segment-Properties)
 
-**⚠️ Offener Bug: Camera Look-Ahead auf XY/YZ Circle Paths**
+**⚠️ Deferred Bug: Camera Look-Ahead Bounce auf rotierten Circle Paths**
 
-Camera auf XZ-Kreis dreht korrekt durchgehend. Camera auf XY- oder YZ-Kreis zeigt A→B→A Bounce — die Kamera scheint die Runde nicht abzuschließen sondern zurückzuspringen.
+Camera auf XZ-Kreis (ohne Rotation) dreht korrekt durchgehend. Sobald der Circle Path rotiert wird (z.B. 90° um X → XY-Ebene), zeigt die Kamera A→B→A Bounce — die Quaternion-Werte laufen vorwärts bis zu einem Punkt, dann rückwärts.
 
-**Root Cause (Analyse):**
-Drei Faktoren spielen zusammen — keiner allein löst das Problem:
+**Aktueller Stand (2026-04-09):**
+- CameraView nutzt jetzt raw `THREE.PerspectiveCamera` (kein drei) — alle Transforms imperativ in einem useFrame
+- Plane-Dropdown (XY/XZ/YZ) durch rotationX/Y/Z Properties ersetzt — Kreise immer in XZ berechnet, dann rotiert
+- Look-Ahead nur in Free-Modus (mode=0) aktiv — Target-Modus nutzt lookAt zum Target
+- Debug-HUD eingebaut (position, quaternion, tangent, up-vector)
 
-1. **Up-Vektor Singularität**: World-Y als Up-Vektor für lookAt ist degeneriert wenn der Tangent parallel zu World-Y ist (XY-Kreis bei θ=0,π; YZ-Kreis bei θ=π/2,3π/2). Der abgeleitete Up-Vektor hat Periode π statt 2π → unvermeidlicher 180°-Flip pro Halborbit.
-
-2. **LiveEvaluator Euler-Interferenz**: Der LiveEvaluator in SceneRenderer.tsx berechnet Euler-Winkel aus der lookAt-Matrix und schreibt sie in den Zustand. PerspectiveCamera wendet diese via `rotation`-Prop an und überschreibt den Quaternion von CameraPathLookAhead.
-
-3. **PerspectiveCamera `rotation`-Prop Override**: Die `rotation`-Prop erzeugt bei jedem React-Render ein neues Array → R3F setzt `camera.rotation` zurück → überschreibt den per useFrame gesetzten Quaternion.
-
-**Bisherige Fix-Versuche (alle gescheitert):**
+**Bisherige Fix-Versuche (alle gescheitert — 10+):**
 
 | # | Ansatz | Ergebnis |
 |---|--------|----------|
-| 1 | World-Y Up + World-Z Fallback (threshold 0.999) | ~90° Sprung an der Threshold-Grenze |
-| 2 | World-Y Up + World-X Fallback | Smooth beim Eintritt, 180°-Flip beim Austritt |
-| 3 | Plane-Normal als Up-Vektor (mathematisch korrekt) | Kein Bild — LiveEvaluator Euler überschreibt Quaternion |
-| 4 | Plane-Normal + LiveEvaluator Euler-Block entfernt | Bounce bleibt — PerspectiveCamera rotation-Prop Override |
-| 5 | Plane-Normal + kein Euler + rotation-Prop conditional (nur ohne LookAhead) | Bounce bleibt — unbekannte weitere Ursache |
+| 1 | World-Y Up + World-Z Fallback (threshold) | Sprung an Threshold-Grenze |
+| 2 | World-Y Up + World-X Fallback | 180°-Flip beim Austritt |
+| 3 | Plane-Normal als Up-Vektor | LiveEvaluator Euler überschreibt Quaternion |
+| 4 | Plane-Normal + Euler-Block entfernt | PerspectiveCamera rotation-Prop Override |
+| 5 | Conditional rotation-Prop | Bounce bleibt |
+| 6 | Fully imperative position + quaternion (drei bypass) | Bounce bleibt |
+| 7 | Analytical quaternion (qOrbit × Q_INIT_XZ, no lookAt) | Bounce — Formel nur für XZ korrekt |
+| 8 | Path rotation statt Plane-Dropdown | Bounce bei Rotation |
+| 9 | Scratch-Quaternion (Three.js _onChangeCallback umgehen) | Bounce bleibt |
+| 10 | Tangent-basiertes lookAt + rotierte Plane-Normal + Quaternion-Sign-Continuity | Bounce bleibt |
+
+**Vermutete Root Cause:**
+Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt vermutlich in `evaluatePathTangent` (finite difference von `evaluatePathPosition`) oder in `applyEulerXYZ` in `path-utils.ts`. Die Euler-Rotation der lokalen Kreispunkte erzeugt möglicherweise eine nicht-monotone Tangente bei bestimmten Winkeln.
 
 **Betroffene Dateien:**
-- `src/components/viewport/CameraView.tsx` — `CameraPathLookAhead` Komponente
-- `src/components/viewport/SceneRenderer.tsx` — LiveEvaluator Camera-Path-Block
-- `src/graph-engine/path-utils.ts` — `evaluatePathTangent`, `evaluatePathPosition`
+- `src/components/viewport/CameraView.tsx` — RawCamera mit useFrame
+- `src/graph-engine/path-utils.ts` — `evaluatePathTangent`, `evaluatePathPosition`, `applyEulerXYZ`
 
-**Nächster Ansatz:** Frische Analyse nötig. Möglicherweise muss die gesamte Camera-Orientierung imperativ in einem einzigen useFrame erfolgen (Position + Quaternion), statt über React-Props + nachträglichen Quaternion-Override.
+**Nächster Ansatz (wenn wieder aufgegriffen):** `applyEulerXYZ` debuggen — Rückgabewert `[x3, y3, z2]` prüfen (z-Komponente nach Rz-Rotation nicht aktualisiert?). Alternativ: `evaluatePathTangent` analytisch statt per finite difference berechnen.
 
 ### Phase 5b: glTF Import Node
 - [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`

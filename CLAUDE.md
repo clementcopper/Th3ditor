@@ -30,6 +30,12 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - `renderOrder={999}` + `depthTest={false}` required for viewport icons to appear in front of meshes.
 - Three.js `<color>` doesn't parse `oklch()` — use hex values for R3F Canvas backgrounds.
 - `useNodesInitialized` (xyflow) fires after node measurement — use for reliable fitView on init.
+- `useReactFlow()` must be inside `<ReactFlow>` tree — crashes with "zustand provider" error otherwise.
+- ReactFlow `panOnDrag={[0]}` + `onPaneMouseDown` unreliable for right-click; use container `onMouseDown` instead.
+- CSS 3D ViewCube: sync rotation via `useFrame` + OrbitControls `getPolarAngle`/`getAzimuthalAngle`; mutate DOM directly.
+- Persp↔Ortho camera preservation: watch `useThree(s => s.camera)` object reference change in `useEffect`.
+- Alt+drag duplicate: use `useGraphStore.getState().setNodes(...)` in `onNodeDragStop` for atomic snap-back + new node.
+- CSS 3D cube face label bug: check labels first before changing transforms or rotation-sync sign.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.

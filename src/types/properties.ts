@@ -19,5 +19,7 @@ export interface PropertyDef {
   visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]
 }
 
-export type VisibleWhenCondition = { uniform: string; equal?: number | number[]; notEqual?: number }
+export type VisibleWhenCondition =
+  | { uniform: string; equal?: number | number[]; notEqual?: number }
+  | { portDisconnected: string }
 

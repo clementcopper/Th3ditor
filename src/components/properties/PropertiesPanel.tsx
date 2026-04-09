@@ -102,6 +102,25 @@ export function PropertiesPanel() {
 
       {/* Properties */}
       <div className="p-4 flex flex-col gap-3">
+        {connectedInputPorts.has('path') && (
+          <div className="flex flex-col gap-1.5 pb-1">
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Path Position</div>
+            {(['positionX', 'positionY', 'positionZ'] as const).map((key, i) => {
+              const val = evalValues.get(`${selectedId}:${key}`)
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted w-4">{['X', 'Y', 'Z'][i]}</span>
+                  <div className="flex-1 h-6 flex items-center px-2 border border-border-default bg-accent/10">
+                    <span className="text-xs font-mono text-text-secondary">
+                      {val !== undefined ? val.toFixed(3) : '—'}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {Array.from(groups.entries()).map(([group, props]) => (
           <div key={group}>
             {group && (
@@ -113,7 +132,7 @@ export function PropertiesPanel() {
                 if (!isVisible(prop.visibleWhen, (u) => {
                   const p = def.properties.find((p) => p.uniform === u)
                   return p ? getValue(p) : undefined
-                })) return null
+                }, connectedInputPorts)) return null
 
                 // If linked port is connected, show read-only value instead of control
                 if (prop.linkedPort && connectedInputPorts.has(prop.linkedPort)) {

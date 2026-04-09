@@ -500,18 +500,19 @@ function LiveEvaluator() {
       }
     }
 
-    // Throttled update of evaluator store for edge labels (~10fps)
-    const now = performance.now()
-    if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
-      lastStoreUpdate.current = now
-      useEvaluatorStore.getState().setValues(cache)
-    }
-
     const hasDynamic = nodes.some(
       (n) => n.type === 'time' || n.type === 'input' || n.type === 'math',
     )
     const hasPath = !!scene.camera?.pathNodeId || scene.lights.some((l) => l.pathNodeId)
-    if (!hasDynamic && !hasPath) return
+    if (!hasDynamic && !hasPath) {
+      // Still update evaluator store for edge labels even when no path/dynamic nodes
+      const now = performance.now()
+      if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
+        lastStoreUpdate.current = now
+        useEvaluatorStore.getState().setValues(cache)
+      }
+      return
+    }
 
     let changed = false
     const newMeshes = scene.meshes.map((mesh) => {
@@ -607,6 +608,10 @@ function LiveEvaluator() {
             updatedLight = { ...updatedLight, props: { ...updatedLight.props, positionX: pos[0], positionY: pos[1], positionZ: pos[2] }, pathProgress }
             lightChanged = true
           }
+          // Push live position into evaluator store for PropertiesPanel display
+          cache.set(`${light.id}:positionX`, pos[0])
+          cache.set(`${light.id}:positionY`, pos[1])
+          cache.set(`${light.id}:positionZ`, pos[2])
         }
       }
 
@@ -669,9 +674,21 @@ function LiveEvaluator() {
 
           if (newCamera.pathLookAhead) {
             const tangent = evaluatePathTangent(camPath, t)
-            const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2])
+            const dir = new THREE.Vector3(tangent[0], tangent[1], tangent[2]).normalize()
+            // Use orbit-plane normal as "up" so the camera tangent is always ⊥ up
+            // → eliminates gimbal lock on XY / YZ orbits
+            const planeAxis = (camPath.pathProps.circleAxis as number) ?? 1
+            const up =
+              camPath.pathType !== 'line'
+                ? planeAxis === 0
+                  ? new THREE.Vector3(0, 0, -1)   // XY plane → normal is -Z
+                  : planeAxis === 2
+                    ? new THREE.Vector3(1, 0, 0)  // YZ plane → normal is X
+                    : new THREE.Vector3(0, 1, 0)  // XZ plane (default) → normal is Y
+                : new THREE.Vector3(0, 1, 0)      // Line → world up
+            const m = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir, up)
             const euler = new THREE.Euler().setFromQuaternion(
-              new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir),
+              new THREE.Quaternion().setFromRotationMatrix(m),
               'YXZ',
             )
             const RAD2DEG = 180 / Math.PI
@@ -686,12 +703,23 @@ function LiveEvaluator() {
             changed = true
             newCamera = { ...newCamera, position: pos, rotation: pathRot }
           }
+          // Push live position into evaluator store for PropertiesPanel display
+          cache.set(`${scene.camera!.nodeId}:positionX`, pos[0])
+          cache.set(`${scene.camera!.nodeId}:positionY`, pos[1])
+          cache.set(`${scene.camera!.nodeId}:positionZ`, pos[2])
         }
       }
     }
 
     if (changed) {
       useSceneStore.getState().setScene({ meshes: newMeshes, paths: scene.paths, lights: newLights, camera: newCamera })
+    }
+
+    // Throttled update of evaluator store for edge labels + path positions (~10fps)
+    const now = performance.now()
+    if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
+      lastStoreUpdate.current = now
+      useEvaluatorStore.getState().setValues(cache)
     }
   })
 

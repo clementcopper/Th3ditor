@@ -43,10 +43,14 @@ export function canConnect(sourceType: PortType, targetType: PortType): boolean 
 export function isVisible(
   visibleWhen: import('../types/properties').VisibleWhenCondition | import('../types/properties').VisibleWhenCondition[] | undefined,
   getData: (uniform: string) => unknown,
+  connectedPorts?: Set<string>,
 ): boolean {
   if (!visibleWhen) return true
   const conditions = Array.isArray(visibleWhen) ? visibleWhen : [visibleWhen]
   return conditions.every((cond) => {
+    if ('portDisconnected' in cond) {
+      return !connectedPorts?.has(cond.portDisconnected)
+    }
     const depVal = getData(cond.uniform)
     if (cond.equal !== undefined) {
       const eq = cond.equal

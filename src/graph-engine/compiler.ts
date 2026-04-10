@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
+import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 
 /** Maps geometry mode number to a subtype string for the renderer */
@@ -63,6 +63,49 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       materialProps: matProps,
       transformNodeIds,
       transform,
+    })
+  }
+
+  // --- Null Objects (compiled into meshes[] with geometryType 'null') ---
+  const nullNodes = nodes.filter((n) => n.type === 'object/null')
+  for (const nullNode of nullNodes) {
+    const { transform, nodeIds: transformNodeIds, reachesOutput } = resolveTransformChain(nullNode.id, nodes, edges)
+    if (!reachesOutput) continue
+    meshes.push({
+      id: nullNode.id,
+      geometryNodeId: nullNode.id,
+      geometryType: 'null',
+      geometryProps: {},
+      materialNodeId: nullNode.id,
+      materialType: 'null',
+      materialProps: {},
+      transformNodeIds,
+      transform,
+    })
+  }
+
+  // --- glTF Objects ---
+  const gltfNodes = nodes.filter((n) => n.type === 'object/gltf')
+  const gltfObjects: CompiledGLTF[] = []
+
+  for (const gltfNode of gltfNodes) {
+    const { transform, nodeIds: transformNodeIds, reachesOutput } = resolveTransformChain(gltfNode.id, nodes, edges)
+    if (!reachesOutput) continue
+
+    const props = getProps(gltfNode)
+    const glbFile = props.glbFile as { name: string; dataUrl: string } | '' | undefined
+
+    gltfObjects.push({
+      id: gltfNode.id,
+      fileDataUrl: typeof glbFile === 'object' ? glbFile.dataUrl : undefined,
+      fileName: typeof glbFile === 'object' ? glbFile.name : undefined,
+      extraFiles: typeof glbFile === 'object' ? glbFile.extraFiles : undefined,
+      centerMode: (props.centerMode as number) ?? 0,
+      originX: (props.originX as number) ?? 0,
+      originY: (props.originY as number) ?? 0,
+      originZ: (props.originZ as number) ?? 0,
+      transform,
+      transformNodeIds,
     })
   }
 
@@ -166,7 +209,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     break
   }
 
-  return { meshes, paths, lights, camera }
+  return { meshes, gltfObjects, paths, lights, camera }
 }
 
 /** Normalize geometry props to a renderer-friendly format */

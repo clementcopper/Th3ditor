@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
@@ -10,7 +11,7 @@ import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluato
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
 import { evaluatePathPosition } from '../../graph-engine/path-utils'
-import type { CompiledMesh, CompiledLight, CompiledCamera, CompiledPath } from '../../types/node-graph'
+import type { CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath } from '../../types/node-graph'
 
 function toThreeColor(color?: unknown): string {
   const c = color as [number, number, number, number] | undefined
@@ -116,6 +117,38 @@ function MeshObject({
     requestAnimationFrame(() => requestAnimationFrame(() => {
       isDragging.current = false
     }))
+  }
+
+  // Null object — only visible in editor as a small marker, never in camera view
+  if (mesh.geometryType === 'null') {
+    return (
+      <>
+        <group ref={groupRef}>
+          {isEditorView && (
+            <mesh
+              renderOrder={999}
+              onClick={(e) => { e.stopPropagation(); setSelectedNode(isSelected ? null : mesh.id) }}
+            >
+              <octahedronGeometry args={[0.15, 0]} />
+              <meshBasicMaterial
+                color={isSelected ? '#ff8800' : '#aaaaaa'}
+                wireframe
+                depthTest={false}
+              />
+            </mesh>
+          )}
+        </group>
+        {canGizmo && (
+          <TransformControls
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            object={groupRef as any}
+            mode={gizmoMode}
+            onMouseDown={handleDragStart}
+            onMouseUp={handleDragEnd}
+          />
+        )}
+      </>
+    )
   }
 
   return (
@@ -360,6 +393,7 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
       if (camera.mode === 1 && camera.targetNodeId) {
         const scene = useSceneStore.getState().scene
         const target = scene.meshes.find((m) => m.id === camera.targetNodeId)
+          ?? scene.gltfObjects.find((g) => g.id === camera.targetNodeId)
         if (target) {
           const [tx, ty, tz] = target.transform.position
           const p = groupRef.current.position
@@ -573,6 +607,54 @@ function LiveEvaluator() {
       return mesh
     })
 
+    // Evaluate float inputs on gltf object transform nodes
+    const newGltfObjects = scene.gltfObjects.map((gltf) => {
+      let gltfChanged = false
+      const transform = { ...gltf.transform }
+
+      const ownedNodeIds = new Set([gltf.id, ...gltf.transformNodeIds])
+
+      for (const edge of edges) {
+        if (!ownedNodeIds.has(edge.target)) continue
+
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        if (sourceNode.type !== 'time' && sourceNode.type !== 'math' && sourceNode.type !== 'input') continue
+
+        const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+        if (val === undefined) continue
+
+        const targetNode = nodes.find((n) => n.id === edge.target)
+        if (!targetNode || targetNode.type !== 'transform') continue
+
+        const targetDef = getNodeDef(targetNode.type)
+        const targetProps = { ...(targetDef?.defaults ?? {}), ...targetNode.data }
+        const mode = (targetProps.mode as number) ?? 0
+        const prop = edge.targetHandle
+
+        if (mode === 0) {
+          if (prop === 'x' && transform.position[0] !== val) { transform.position = [...transform.position]; transform.position[0] = val; gltfChanged = true }
+          if (prop === 'y' && transform.position[1] !== val) { transform.position = [...transform.position]; transform.position[1] = val; gltfChanged = true }
+          if (prop === 'z' && transform.position[2] !== val) { transform.position = [...transform.position]; transform.position[2] = val; gltfChanged = true }
+        } else if (mode === 1) {
+          const DEG2RAD = Math.PI / 180
+          if (prop === 'x' && transform.rotation[0] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[0] = val * DEG2RAD; gltfChanged = true }
+          if (prop === 'y' && transform.rotation[1] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[1] = val * DEG2RAD; gltfChanged = true }
+          if (prop === 'z' && transform.rotation[2] !== val * DEG2RAD) { transform.rotation = [...transform.rotation]; transform.rotation[2] = val * DEG2RAD; gltfChanged = true }
+        } else if (mode === 2) {
+          if (prop === 'x' && transform.scale[0] !== val) { transform.scale = [...transform.scale]; transform.scale[0] = val; gltfChanged = true }
+          if (prop === 'y' && transform.scale[1] !== val) { transform.scale = [...transform.scale]; transform.scale[1] = val; gltfChanged = true }
+          if (prop === 'z' && transform.scale[2] !== val) { transform.scale = [...transform.scale]; transform.scale[2] = val; gltfChanged = true }
+        }
+      }
+
+      if (gltfChanged) {
+        changed = true
+        return { ...gltf, transform: transform as any }
+      }
+      return gltf
+    })
+
     // Evaluate float inputs on light nodes
     const newLights = scene.lights.map((light) => {
       let lightChanged = false
@@ -756,7 +838,7 @@ function LiveEvaluator() {
     })
 
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, paths: newPaths, lights: newLights, camera: newCamera })
+      useSceneStore.getState().setScene({ meshes: newMeshes, gltfObjects: newGltfObjects, paths: newPaths, lights: newLights, camera: newCamera })
     }
 
     // Throttled update of evaluator store for edge labels + path positions (~10fps)
@@ -771,6 +853,252 @@ function LiveEvaluator() {
 }
 
 export { LiveEvaluator }
+
+function GltfObject({
+  gltf,
+  editorShading,
+  isEditorView,
+}: {
+  gltf: CompiledGLTF
+  editorShading: boolean
+  isEditorView: boolean
+}) {
+  const groupRef = useRef<THREE.Group>(null)
+  const pivotRef = useRef<THREE.Group>(null)
+  const loadedRef = useRef<THREE.Group | null>(null)
+  const isDragging = useRef(false)
+  const rawBboxCenter = useRef<THREE.Vector3 | null>(null)
+  const rawBboxMin = useRef<THREE.Vector3 | null>(null)
+  const t = gltf.transform
+
+  // Cross-shaped canvas texture for origin indicator (created once)
+  const crossTex = useMemo(() => {
+    const s = 32
+    const canvas = document.createElement('canvas')
+    canvas.width = s; canvas.height = s
+    const ctx = canvas.getContext('2d')!
+    ctx.strokeStyle = 'white'
+    ctx.lineWidth = 3
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(5, s / 2); ctx.lineTo(s - 5, s / 2)
+    ctx.moveTo(s / 2, 5); ctx.lineTo(s / 2, s - 5)
+    ctx.stroke()
+    return new THREE.CanvasTexture(canvas)
+  }, [])
+
+  const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
+  const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
+  const gizmoMode = useEditorStore((s) => s.gizmoMode)
+  const isSelected = selectedNodeId === gltf.id
+  const { controls } = useThree()
+
+  const wireframeOverrideRef = useRef(wireframeOverride)
+  wireframeOverrideRef.current = wireframeOverride
+
+  function applyWireframeToScene(scene: THREE.Group, wf: boolean) {
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mat = (child as THREE.Mesh).material
+        const set = (m: THREE.Material) => {
+          if (m instanceof THREE.MeshStandardMaterial || m instanceof THREE.MeshBasicMaterial) {
+            m.wireframe = wf
+          }
+        }
+        if (Array.isArray(mat)) mat.forEach(set)
+        else set(mat)
+      }
+    })
+  }
+
+  // Always-fresh centering params — avoids stale closures in async callbacks
+  const centeringRef = useRef({ centerMode: gltf.centerMode, originX: gltf.originX, originY: gltf.originY, originZ: gltf.originZ })
+  centeringRef.current = { centerMode: gltf.centerMode, originX: gltf.originX, originY: gltf.originY, originZ: gltf.originZ }
+
+  // Apply centering using cached raw bbox (computed before scene is added to any parent)
+  function applyCenterToScene(scene: THREE.Group) {
+    const { centerMode, originX, originY, originZ } = centeringRef.current
+    scene.position.set(0, 0, 0)
+    if (centerMode === 1 && rawBboxCenter.current) {
+      const c = rawBboxCenter.current
+      scene.position.set(-c.x, -c.y, -c.z)
+    } else if (centerMode === 2 && rawBboxCenter.current && rawBboxMin.current) {
+      const c = rawBboxCenter.current
+      scene.position.set(-c.x, -rawBboxMin.current.y, -c.z)
+    } else if (centerMode === 3) {
+      scene.position.set(-originX, -originY, -originZ)
+    }
+  }
+
+  // Load GLB/GLTF only when fileDataUrl changes
+  useEffect(() => {
+    if (!gltf.fileDataUrl || !groupRef.current) return
+    let cancelled = false
+
+    const manager = new THREE.LoadingManager()
+
+    // For multi-file .gltf: map relative filenames → data URLs
+    if (gltf.extraFiles && gltf.extraFiles.length > 0) {
+      const urlMap = new Map(gltf.extraFiles.map((f) => [f.name, f.dataUrl]))
+      manager.setURLModifier((url) => {
+        const filename = url.split('/').pop()?.split('?')[0] ?? ''
+        return urlMap.get(filename) ?? url
+      })
+    }
+
+    const loader = new GLTFLoader(manager)
+    loader.load(gltf.fileDataUrl, (result) => {
+      if (cancelled || !groupRef.current) return
+      if (loadedRef.current) groupRef.current.remove(loadedRef.current)
+
+      // Compute raw bbox BEFORE adding to parent — keeps it in scene-local space
+      result.scene.position.set(0, 0, 0)
+      result.scene.updateMatrixWorld(true)
+      const rawBox = new THREE.Box3().setFromObject(result.scene, true)
+      if (!rawBox.isEmpty()) {
+        rawBboxCenter.current = rawBox.getCenter(new THREE.Vector3())
+        rawBboxMin.current = rawBox.min.clone()
+      } else {
+        rawBboxCenter.current = null
+        rawBboxMin.current = null
+      }
+
+      loadedRef.current = result.scene
+      groupRef.current.add(result.scene)
+      applyCenterToScene(result.scene)
+      applyWireframeToScene(result.scene, wireframeOverrideRef.current)
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf.fileDataUrl])
+
+  // Re-center without reloading when mode or manual origin changes
+  useEffect(() => {
+    if (!loadedRef.current) return
+    applyCenterToScene(loadedRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf.centerMode, gltf.originX, gltf.originY, gltf.originZ])
+
+  // Apply wireframe override only when shadingMode changes
+  useEffect(() => {
+    if (!loadedRef.current) return
+    applyWireframeToScene(loadedRef.current, wireframeOverride)
+  }, [wireframeOverride])
+
+  // Sync transform from compiled scene
+  useFrame(() => {
+    if (!isDragging.current && groupRef.current) {
+      groupRef.current.position.set(t.position[0], t.position[1], t.position[2])
+      groupRef.current.rotation.set(t.rotation[0], t.rotation[1], t.rotation[2])
+      groupRef.current.scale.set(t.scale[0], t.scale[1], t.scale[2])
+    }
+  })
+
+  function handleDragStart() {
+    isDragging.current = true
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = false
+  }
+
+  function handleDragEnd() {
+    if (controls) (controls as unknown as { enabled: boolean }).enabled = true
+    if (!groupRef.current) return
+
+    const gs = useGraphStore.getState()
+    const RAD2DEG = 180 / Math.PI
+    const pos = groupRef.current.position
+    const rot = groupRef.current.rotation
+    const scale = groupRef.current.scale
+
+    const modeIndex = gizmoMode === 'translate' ? 0 : gizmoMode === 'rotate' ? 1 : 2
+    const transformNode = gltf.transformNodeIds
+      .map((id) => gs.nodes.find((n) => n.id === id))
+      .find((n) => n?.type === 'transform' && ((n.data.mode as number) ?? 0) === modeIndex)
+
+    if (transformNode) {
+      if (gizmoMode === 'translate') {
+        gs.updateNodeData(transformNode.id, { tx: pos.x, ty: pos.y, tz: pos.z })
+      } else if (gizmoMode === 'rotate') {
+        gs.updateNodeData(transformNode.id, { rx: rot.x * RAD2DEG, ry: rot.y * RAD2DEG, rz: rot.z * RAD2DEG })
+      } else if (gizmoMode === 'scale') {
+        gs.updateNodeData(transformNode.id, { sx: scale.x, sy: scale.y, sz: scale.z })
+      }
+    } else {
+      const baseData = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, sx: 1, sy: 1, sz: 1 }
+      const modeData =
+        gizmoMode === 'translate' ? { mode: 0, tx: pos.x, ty: pos.y, tz: pos.z } :
+        gizmoMode === 'rotate' ? { mode: 1, rx: rot.x * RAD2DEG, ry: rot.y * RAD2DEG, rz: rot.z * RAD2DEG } :
+        { mode: 2, sx: scale.x, sy: scale.y, sz: scale.z }
+
+      const lastId = gltf.transformNodeIds.length > 0
+        ? gltf.transformNodeIds[gltf.transformNodeIds.length - 1]
+        : gltf.id
+      const outEdge = gs.edges.find((e) => e.source === lastId && e.sourceHandle === 'mesh')
+      if (!outEdge) return
+
+      const gltfGraphNode = gs.nodes.find((n) => n.id === gltf.id)
+      const newId = `transform-${Date.now()}`
+
+      gs.removeEdge(outEdge.id)
+      gs.addNode({
+        id: newId,
+        type: 'transform',
+        position: { x: (gltfGraphNode?.position.x ?? 0) + 220, y: gltfGraphNode?.position.y ?? 0 },
+        data: { ...baseData, ...modeData },
+      })
+      gs.addEdge({ id: `e-${lastId}-${newId}`, source: lastId, sourceHandle: 'mesh', target: newId, targetHandle: 'mesh' })
+      gs.addEdge({ id: `e-${newId}-${outEdge.target}`, source: newId, sourceHandle: 'mesh', target: outEdge.target, targetHandle: outEdge.targetHandle })
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      isDragging.current = false
+    }))
+  }
+
+  const canGizmo = isEditorView && isSelected
+
+  return (
+    <>
+      <group
+        ref={groupRef}
+        onClick={(e) => {
+          if (!isEditorView) return
+          e.stopPropagation()
+          setSelectedNode(isSelected ? null : gltf.id)
+        }}
+      >
+        {/* Origin indicator — fixed screen-space cross, always visible in editor */}
+        <group ref={pivotRef}>
+          {isEditorView && (
+            <points renderOrder={999}>
+              <bufferGeometry>
+                <bufferAttribute attach="attributes-position" args={[new Float32Array([0, 0, 0]), 3]} />
+              </bufferGeometry>
+              <pointsMaterial
+                size={14}
+                sizeAttenuation={false}
+                color="#ff3300"
+                map={crossTex}
+                transparent
+                alphaTest={0.1}
+                depthTest={false}
+              />
+            </points>
+          )}
+        </group>
+      </group>
+      {canGizmo && (
+        <TransformControls
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          object={groupRef as any}
+          mode={gizmoMode}
+          onMouseDown={handleDragStart}
+          onMouseUp={handleDragEnd}
+        />
+      )}
+    </>
+  )
+}
 
 function PathObject({ path }: { path: CompiledPath }) {
   const groupRef = useRef<THREE.Group>(null)
@@ -926,6 +1254,9 @@ export function SceneRenderer({
       ))}
       {scene.meshes.map((mesh) => (
         <MeshObject key={mesh.id} mesh={mesh} editorShading={editorShading} isEditorView={isEditorView} />
+      ))}
+      {scene.gltfObjects.map((gltf) => (
+        <GltfObject key={gltf.id} gltf={gltf} editorShading={editorShading} isEditorView={isEditorView} />
       ))}
       {isEditorView && scene.camera && (
         <CameraIcon camera={scene.camera} />

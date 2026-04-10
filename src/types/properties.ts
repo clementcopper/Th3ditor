@@ -1,4 +1,4 @@
-export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'curve' | 'noderef'
+export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'curve' | 'noderef' | 'file'
 
 export interface PropertyDef {
   type: PropertyType
@@ -14,6 +14,8 @@ export interface PropertyDef {
   options?: { label: string; value: string; visibleWhenPortDisconnected?: string }[]
   /** For type='noderef': which node categories to list in the dropdown */
   categories?: string[]
+  /** For type='file': accepted file extensions, e.g. '.gltf,.glb' */
+  accept?: string
   suffix?: string
   linkedPort?: string
   /** When true: if a 'path' port is connected, show this property as a live read-only display

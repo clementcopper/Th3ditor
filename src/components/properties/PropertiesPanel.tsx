@@ -8,6 +8,7 @@ import { SliderControl } from './controls/SliderControl'
 import { ColorControl } from './controls/ColorControl'
 import { ToggleControl } from './controls/ToggleControl'
 import { SelectControl } from './controls/SelectControl'
+import { FileControl } from './controls/FileControl'
 import type { PropertyDef } from '../../types/properties'
 
 function NodeRefControl({
@@ -200,6 +201,15 @@ export function PropertiesPanel() {
                         prop={prop}
                         value={(getValue(prop) as string) ?? ''}
                         onChange={(v) => handleChange(prop.uniform, v || undefined)}
+                      />
+                    )
+                  case 'file':
+                    return (
+                      <FileControl
+                        key={prop.uniform}
+                        param={prop}
+                        value={getValue(prop)}
+                        onChange={(v) => handleChange(prop.uniform, v)}
                       />
                     )
                   default:

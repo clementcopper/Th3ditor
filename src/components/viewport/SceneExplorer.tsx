@@ -23,6 +23,14 @@ export function getNodeDisplayName(node: GraphNode): string {
   if (node.type === 'object/mesh') {
     return customLabel ? `Mesh: ${customLabel}` : 'Mesh'
   }
+  if (node.type === 'object/null') {
+    return customLabel ? `Null: ${customLabel}` : 'Null'
+  }
+  if (node.type === 'object/gltf') {
+    const file = node.data.glbFile as { name: string } | '' | undefined
+    const filename = typeof file === 'object' && file !== null ? file.name : null
+    return customLabel ? `glTF: ${customLabel}` : filename ? `glTF: ${filename}` : 'glTF Import'
+  }
   if (node.type === 'light') {
     const def = getNodeDef(node.type)
     const defaultMode = (def?.defaults.mode as number) ?? 1

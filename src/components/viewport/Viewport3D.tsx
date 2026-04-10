@@ -17,39 +17,98 @@ const savedCameraState = {
   target: [0, 0, 0] as [number, number, number],
 }
 
+const SCRUBBER_DURATION = 30 // seconds
+
 function PlaybackOverlay() {
+  // Only `playing` triggers re-render (on play/pause/stop) — not elapsed (60fps)
   const playing = useAnimationStore((s) => s.playing)
   const play = useAnimationStore((s) => s.play)
   const pause = useAnimationStore((s) => s.pause)
   const stop = useAnimationStore((s) => s.stop)
-  const elapsed = useAnimationStore((s) => s.elapsed)
+  const setElapsed = useAnimationStore((s) => s.setElapsed)
+
+  const scrubberRef = useRef<HTMLInputElement>(null)
+  const timeDisplayRef = useRef<HTMLSpanElement>(null)
+  const isScrubbingRef = useRef(false)
+
+  // Imperative DOM updates — bypasses React reconciliation every frame
+  useEffect(() => {
+    return useAnimationStore.subscribe((state) => {
+      const pos = state.elapsed % SCRUBBER_DURATION
+      const pct = (pos / SCRUBBER_DURATION) * 100
+      // Don't overwrite scrubber position while user is dragging
+      if (scrubberRef.current && !isScrubbingRef.current) {
+        scrubberRef.current.value = String(pos)
+        scrubberRef.current.style.background =
+          `linear-gradient(to right, var(--color-accent) ${pct}%, var(--color-border-default) ${pct}%)`
+      }
+      if (timeDisplayRef.current) {
+        timeDisplayRef.current.textContent = `${state.elapsed.toFixed(1)}s`
+      }
+    })
+  }, [])
+
+  function handleScrubStart() { isScrubbingRef.current = true }
+
+  function handleScrubEnd(e: React.PointerEvent<HTMLInputElement>) {
+    isScrubbingRef.current = false
+    pause()
+    setElapsed(parseFloat((e.target as HTMLInputElement).value))
+  }
+
+  function handleScrub(e: React.ChangeEvent<HTMLInputElement>) {
+    // Update background fill live while dragging
+    const val = parseFloat(e.target.value)
+    const pct = (val / SCRUBBER_DURATION) * 100
+    e.target.style.background =
+      `linear-gradient(to right, var(--color-accent) ${pct}%, var(--color-border-default) ${pct}%)`
+    pause()
+    setElapsed(val)
+  }
 
   const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
 
   return (
     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 pointer-events-auto">
       <div
-        className="flex items-center gap-1 px-2 py-1 border border-border-default"
+        className="flex items-center gap-2 px-2 py-1 border border-border-default"
         style={overlayBg}
       >
         <button
           onClick={playing ? pause : play}
-          className="transition-colors cursor-pointer flex items-center justify-center px-1"
+          className="transition-colors cursor-pointer flex items-center justify-center"
           style={{ color: 'var(--color-accent)' }}
         >
           {playing ? <Pause size={14} weight="fill" /> : <Play size={14} weight="fill" />}
         </button>
-        <div className="w-px h-3 bg-border-default" />
         <button
           onClick={stop}
-          className="transition-colors cursor-pointer flex items-center justify-center px-1"
+          className="transition-colors cursor-pointer flex items-center justify-center"
           style={{ color: 'var(--color-text-secondary)' }}
         >
           <Stop size={14} weight="fill" />
         </button>
         <div className="w-px h-3 bg-border-default" />
-        <span className="text-xs font-mono text-text-muted w-10 text-right">
-          {elapsed.toFixed(1)}s
+        <input
+          ref={scrubberRef}
+          type="range"
+          min={0}
+          max={SCRUBBER_DURATION}
+          step={0.05}
+          defaultValue={0}
+          onPointerDown={handleScrubStart}
+          onPointerUp={handleScrubEnd}
+          onChange={handleScrub}
+          className="timeline-scrubber w-40"
+          style={{
+            background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-border-default) 0%)`,
+          }}
+        />
+        <span
+          ref={timeDisplayRef}
+          className="text-xs font-mono text-text-muted w-10 text-right tabular-nums"
+        >
+          0.0s
         </span>
       </div>
     </div>
@@ -298,8 +357,8 @@ export function Viewport3D() {
         }
 
         {/* Editor ambient lights */}
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 5, 5]} intensity={0.8} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[5, 5, 5]} intensity={1.2} />
 
         <Grid
           args={[20, 20]}

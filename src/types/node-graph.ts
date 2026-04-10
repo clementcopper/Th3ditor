@@ -91,8 +91,24 @@ export interface CompiledPath {
   transformNodeIds: string[]  // Transform nodes downstream from this path (in order)
 }
 
+export interface CompiledGLTF {
+  id: string
+  fileDataUrl?: string
+  fileName?: string
+  /** Associated files for multi-file .gltf (bin, textures) — mapped by filename */
+  extraFiles?: { name: string; dataUrl: string }[]
+  /** 0=Off, 1=BBox-Mitte, 2=BBox-Boden, 3=Manuell */
+  centerMode: number
+  originX: number
+  originY: number
+  originZ: number
+  transform: CompiledTransform
+  transformNodeIds: string[]
+}
+
 export interface CompiledScene {
   meshes: CompiledMesh[]
+  gltfObjects: CompiledGLTF[]
   paths: CompiledPath[]
   lights: CompiledLight[]
   camera?: CompiledCamera

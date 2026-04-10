@@ -113,6 +113,7 @@ function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | nu
     // --- Orientation: target mode ---
     if (isTarget && !hasLookAhead) {
       const target = scene.meshes.find((m) => m.id === camData.targetNodeId)
+        ?? scene.gltfObjects.find((g) => g.id === camData.targetNodeId)
       if (target) {
         const [tx, ty, tz] = target.transform.position
         cam.lookAt(tx, ty, tz)

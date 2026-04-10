@@ -9,6 +9,7 @@
 - Keep responses concise — fix first, explain briefly
 - Dev server: `pnpm dev` / Build: `pnpm build`
 - Daniel communicates in German, tests live in browser, reports visual bugs
+- **All UI text in the app must be English** — labels, options, button text, placeholders, everything
 - Daniel works on two computers — keep `CLAUDE.md` and `WVS-PLAN.md` updated as the cross-machine context sync
 - Keep CLAUDE.md <200 lines
 - Don't make changes until 95% confident. Ask follow-up questions until that confidence is reached.
@@ -53,6 +54,12 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Path position/rotation via Transform chain — Path node has NO ports/props for position. See PATTERNS.md.
 - `linkedPath: true` on PropertyDef → shows live evaluator value when `path` input port connected.
 - Path gizmo drag without downstream edge: fallback silently (no Transform auto-create). Connect path first.
+- `linkedPath: true` shows real world position (evaluatePathPosition result), NOT the Transform offset.
+- `portConnected`/`uniformFalsy` added to VisibleWhenCondition — use for conditional port/property display.
+- Compiler recompile on graph node drag: use `useGraphStore.subscribe` with custom equality, not hook deps.
+- Scale on Transform hidden when path port connected (`visibleWhenPortDisconnected: 'path'` on option).
+- glTF bbox centering: compute raw bbox BEFORE `groupRef.current.add(scene)` — world matrices include parent transform otherwise.
+- All UI text in the app must be in English (labels, options, buttons, placeholders).
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -121,4 +128,5 @@ src/
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Phase 5b — glTF Import Node; danach Phase 5c — Custom GLSL Shader-Node
+- Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control (Off/BBox Center/BBox Bottom/Manual), Timeline Scrubber
+- Next: Phase 5c — Color-Node → Color-Ops → Custom GLSL Shader-Node

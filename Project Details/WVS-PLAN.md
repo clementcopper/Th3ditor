@@ -352,21 +352,28 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 
 **Nächster Ansatz (wenn wieder aufgegriffen):** `applyEulerXYZ` debuggen — Rückgabewert `[x3, y3, z2]` prüfen (z-Komponente nach Rz-Rotation nicht aktualisiert?). Alternativ: `evaluatePathTangent` analytisch statt per finite difference berechnen.
 
-### Phase 5b: glTF Import Node
-- [ ] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
-- [ ] Property: File-Picker Button (lokale Datei) + Dateiname-Anzeige
-- [ ] Lädt via `THREE.GLTFLoader` — rendert Modell mit seinen eigenen Materialien
-- [ ] Kette: `[glTF Import] → [Transform] → [Scene Output]`
-- [ ] Scene Explorer zeigt glTF-Node wie andere Objekte
-- [ ] Test-Modelle: `glTF/red-brick-3d-model`, `glTF/western-electric-tangent-galvanometer-3d-model`
-- [ ] Compiler + SceneRenderer: neuer `CompiledGLTF`-Typ neben `CompiledMesh`
+### Phase 5b: glTF Import Node ✅ DONE
+- [x] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
+- [x] Property: File-Picker (GLB single file + glTF folder via `webkitdirectory`), Dateiname-Anzeige
+- [x] Lädt via `THREE.GLTFLoader` + `LoadingManager` (multi-file .gltf mit bin/textures)
+- [x] Kette: `[glTF Import] → [Transform] → [Scene Output]`
+- [x] Scene Explorer zeigt glTF-Node mit Dateiname
+- [x] Compiler + SceneRenderer: `CompiledGLTF`-Typ neben `CompiledMesh`
+- [x] `object/null` Node (Null-Objekt als Camera/Light Target, Viewport-Oktaeder-Indikator)
+- [x] Origin-Control: Off / BBox Center / BBox Bottom / Manual (originX/Y/Z Slider)
+  - Raw bbox vor `groupRef.add()` berechnen (world-matrix-safe)
+  - Origin-Punkt: fixer Screen-Space Cross (14px, sizeAttenuation=false), immer sichtbar
+- [x] Camera Target auf glTF-Objekte möglich (CameraView + LiveEvaluator lookup)
+- [x] Timeline Scrubber — imperative DOM-Updates via Zustand-Subscribe (keine Re-Renders)
+- [x] Viewport Ambient/Directional Light erhöht für bessere Modell-Sichtbarkeit
 
 #### 5c: Custom Shaders + Texturen
+- [ ] Color-Node — Color-Picker + `color` Output-Port; optional `r`/`g`/`b` Float-Input-Ports für Kanal-Animation via Math/Time
+- [ ] Color-Ops-Nodes (Mix, HSL Shift, Ramp)
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)
 - [ ] GLSL-Code Editor (TextArea-Control mit Monospace)
 - [ ] GLSL-Chunks als inkludierbare Snippets
 - [ ] Texture-Nodes (Image, Noise, Gradient)
-- [ ] Color-Ops-Nodes (Mix, HSL Shift, Ramp)
 
 ### Phase 6: Export + Post-Processing + Polish
 - [ ] Export als React+R3F-Komponente

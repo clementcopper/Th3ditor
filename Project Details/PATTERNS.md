@@ -137,6 +137,42 @@ Der `scene/output`-Node ist der einzige Ort für **szenen-weite Render-Einstellu
 - ❌ OrbitControls top/bottom mit custom `camera.up` ([0,0,-1]) — swapped axes; epsilon-Offset + `up:[0,1,0]` verwenden
 - ❌ `RectAreaLightHelper` aus three-stdlib für Area Light Visual — enthält unerwünschtes BackSide-Mesh, keinen Bogen; custom LineSegments + Line verwenden
 - ❌ `EnvironmentLoader` `threeScene.background = null` unconditional — nur löschen wenn `showEnvBgRef.current` true; sonst überschreibt es die `<color>`-Komponente
+- ❌ Same internal port `name` on both input and output side of the same node — ReactFlow handle collision; use unique names (`source` as input, `texture` as output)
+- ❌ `alwaysHandle: true` ghost handle (0x0 invisible Handle) for always-present ports — causes edge misalignment because ReactFlow places the edge at the ghost handle's Y position, not the visible port
+- ❌ `computeVertexNormals()` on tileable noise — destroys UV topology; just regenerate the CanvasTexture with new props
+
+---
+
+## Pattern G — Texture Node (Image / Noise / Normal)
+
+The `texture` node uses a single node type with a `mode` property to switch between three sub-modes:
+
+| Mode | Value | Inputs | Outputs |
+|---|---|---|---|
+| Image | 0 | — | `texture` (Texture →) |
+| Noise | 1 | `scale`, `detail`, `roughness`, `resolution` (all float) | `texture` (Texture →) |
+| Normal | 2 | `source` (→ Texture) | `texture` (Texture →) |
+
+**Port naming convention:**
+- Internal port `name` = the ReactFlow handle ID — must be **unique per node** (no same name on input AND output side)
+- Port `label` = the display text shown to the user (can match other labels)
+- Example: input port `name: 'source'`, `label: '→ Texture'` — NOT `name: 'texture'` (would collide with output `name: 'texture'`)
+
+**visibleWhen + connection order:**
+- Ports with `visibleWhen` only render their Handle when the condition is true
+- User MUST set the correct mode before connecting a cable — the handle doesn't exist in DOM otherwise
+- Normal mode: user sets mode=2, THEN connects a Noise/Image texture to the `source` port
+
+**UV seam prevention:**
+- All generated canvas textures: `wrapS = wrapT = THREE.RepeatWrapping`
+- All loaded image textures: `wrapS = wrapT = THREE.RepeatWrapping`
+- Noise canvas: use tileable lattice — `tileX = round(scale)`, sample at `(i/resolution)*tileX`
+- fBm octaves: wrap lattice coordinates at `tileX*freq` per octave to maintain periodicity
+
+**Known geometry limitations (UV seam gaps under displacement):**
+- Cylinder / Capsule: cap UV (radial) and side UV (rectangular) are different UV islands at the same 3D vertex position → displacement gap at cap rim is unfixable with Three.js procedural geometry
+- SphereGeometry poles: pole vertices have u=0..1 range at same 3D position → star artifact under displacement; use Icosphere instead
+- Fix path: replace with Quad-Mesh primitives (Blender .glb, bundled as `src/assets/geometry/`)
 
 ---
 

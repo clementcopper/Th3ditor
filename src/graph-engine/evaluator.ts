@@ -1,5 +1,6 @@
 import type { GraphNode, GraphEdge } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
+import { rgbToHsl, hslToRgb } from '../utils/color'
 
 /**
  * Runtime context passed each frame.
@@ -11,6 +12,101 @@ export interface EvalContext {
   mouseY: number    // pixel Y
   screenW: number
   screenH: number
+}
+
+/**
+ * Evaluates a color output port by walking the graph backwards.
+ * Handles: color, color/mix, color/hsl
+ */
+export function evaluateColorPort(
+  nodeId: string,
+  portName: string,
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  ctx: EvalContext,
+  floatCache: Map<string, number>,
+): [number, number, number, number] | undefined {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+  return evalColorPort(nodeId, portName, nodeMap, edges, ctx, floatCache)
+}
+
+function evalColorPort(
+  nodeId: string,
+  portName: string,
+  nodeMap: Map<string, GraphNode>,
+  edges: GraphEdge[],
+  ctx: EvalContext,
+  floatCache: Map<string, number>,
+): [number, number, number, number] | undefined {
+  const node = nodeMap.get(nodeId)
+  if (!node) return undefined
+
+  const def = getNodeDef(node.type)
+  const props = { ...(def?.defaults ?? {}), ...node.data }
+
+  // Helper: resolve upstream color input or fall back to a property
+  function getColorInput(handle: string, fallback: string): [number, number, number, number] {
+    const edge = edges.find((e) => e.target === nodeId && e.targetHandle === handle)
+    if (edge) {
+      const v = evalColorPort(edge.source, edge.sourceHandle, nodeMap, edges, ctx, floatCache)
+      if (v !== undefined) return v
+    }
+    return (props[fallback] as [number, number, number, number]) ?? [1, 1, 1, 1]
+  }
+
+  // Helper: resolve upstream float input or fall back to a property
+  function getFloatInput(handle: string, fallback: string): number {
+    const edge = edges.find((e) => e.target === nodeId && e.targetHandle === handle)
+    if (edge) {
+      const v = evalPort(edge.source, edge.sourceHandle, nodeMap, edges, ctx, floatCache)
+      if (v !== undefined) return v
+    }
+    return (props[fallback] as number) ?? 0
+  }
+
+  switch (node.type) {
+    case 'color': {
+      if (portName !== 'color') return undefined
+      const base = props.color as [number, number, number, number] ?? [1, 1, 1, 1]
+      const rEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'r')
+      const gEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'g')
+      const bEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'b')
+      const r = rEdge ? (evalPort(rEdge.source, rEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[0]) : base[0]
+      const g = gEdge ? (evalPort(gEdge.source, gEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[1]) : base[1]
+      const b = bEdge ? (evalPort(bEdge.source, bEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[2]) : base[2]
+      return [r, g, b, base[3]]
+    }
+
+    case 'color/mix': {
+      if (portName !== 'color') return undefined
+      const a = getColorInput('colorA', 'colorA')
+      const b = getColorInput('colorB', 'colorB')
+      const t = Math.min(1, Math.max(0, getFloatInput('t', 't')))
+      return [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+      ]
+    }
+
+    case 'color/hsl': {
+      if (portName !== 'color') return undefined
+      const base = getColorInput('color', 'color')
+      const hueShift = getFloatInput('hue', 'hue')
+      const satShift = getFloatInput('saturation', 'saturation')
+      const lightShift = getFloatInput('lightness', 'lightness')
+      const [h, s, l] = rgbToHsl(base[0], base[1], base[2])
+      const newH = ((h + hueShift) % 360 + 360) % 360
+      const newS = Math.min(100, Math.max(0, s + satShift))
+      const newL = Math.min(100, Math.max(0, l + lightShift))
+      const [r, g, b] = hslToRgb(newH, newS, newL)
+      return [r, g, b, base[3]]
+    }
+
+    default:
+      return undefined
+  }
 }
 
 /**
@@ -181,7 +277,7 @@ export function isDynamicNode(
 
   if (node.type === 'time' || node.type === 'input') return true
 
-  if (node.type === 'math') {
+  if (node.type === 'math' || node.type === 'color' || node.type === 'color/mix' || node.type === 'color/hsl') {
     const incomingEdges = edges.filter((e) => e.target === nodeId)
     return incomingEdges.some((e) => isDynamicNode(e.source, nodeMap, edges, visited))
   }

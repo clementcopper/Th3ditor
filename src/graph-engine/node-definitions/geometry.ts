@@ -53,7 +53,7 @@ const geometry: NodeDefinition = {
     { type: 'int', uniform: 'capsuleRadialSegments', label: 'Radial Segments', min: 3, max: 64, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 5 } },
     // Icosphere (6)
     { type: 'float', uniform: 'icoRadius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 6 } },
-    { type: 'int', uniform: 'icoDetail', label: 'Detail', min: 0, max: 6, step: 1, default: 2, visibleWhen: { uniform: 'mode', equal: 6 } },
+    { type: 'int', uniform: 'icoDetail', label: 'Detail', min: 0, max: 12, step: 1, default: 2, visibleWhen: { uniform: 'mode', equal: 6 } },
   ],
   defaults: {
     mode: 0,

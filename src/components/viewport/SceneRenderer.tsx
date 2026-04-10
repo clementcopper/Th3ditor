@@ -12,7 +12,7 @@ import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
 import { useEditorStore } from '../../store/editor-store'
-import { evaluateFloatPort, type EvalContext } from '../../graph-engine/evaluator'
+import { evaluateFloatPort, evaluateColorPort, type EvalContext } from '../../graph-engine/evaluator'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
 import { evaluatePathPosition } from '../../graph-engine/path-utils'
@@ -22,6 +22,102 @@ function toThreeColor(color?: unknown): string {
   const c = color as [number, number, number, number] | undefined
   if (!c) return '#ffffff'
   return `rgb(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)})`
+}
+
+type TextureSlot = {
+  nodeId: string
+  dataUrl?: string
+  noiseProps?: Record<string, unknown>
+  normalFrom?: { dataUrl?: string; noiseProps?: Record<string, unknown> }
+  normalStrength?: number
+  normalSourceNodeId?: string
+}
+
+function generateNoiseCanvas(noiseProps: Record<string, unknown>): HTMLCanvasElement {
+  const resolution = Math.round((noiseProps.resolution as number) ?? 256)
+  const scale = (noiseProps.scale as number) ?? 4
+  const detail = Math.max(1, Math.round((noiseProps.detail as number) ?? 4))
+  const roughness = (noiseProps.roughness as number) ?? 0.5
+  const noiseType = (noiseProps.noiseType as number) ?? 0
+  // Snap scale to nearest integer — noise must tile exactly at the boundary for RepeatWrapping to work.
+  const tileX = Math.max(1, Math.round(scale))
+  const tileY = tileX
+  const canvas = document.createElement('canvas')
+  canvas.width = resolution; canvas.height = resolution
+  const ctx = canvas.getContext('2d')!
+  const imageData = ctx.createImageData(resolution, resolution)
+  function hash(x: number, y: number) { const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123; return n - Math.floor(n) }
+  // Tile only in X: wrap x lattice at period tx, leave y as-is
+  // Tile in both X and Y — wrap lattice at tile period per octave
+  function hashT(x: number, y: number, tx: number, ty: number) {
+    return hash(((x % tx) + tx) % tx, ((y % ty) + ty) % ty)
+  }
+  function valueNoise(px: number, py: number, tx: number, ty: number) {
+    const ix = Math.floor(px), iy = Math.floor(py), fx = px - ix, fy = py - iy
+    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy)
+    return hashT(ix,iy,tx,ty)*(1-ux)*(1-uy)+hashT(ix+1,iy,tx,ty)*ux*(1-uy)+hashT(ix,iy+1,tx,ty)*(1-ux)*uy+hashT(ix+1,iy+1,tx,ty)*ux*uy
+  }
+  function noiseFbm(px: number, py: number) {
+    let val=0,amp=1,freq=1,max=0
+    for(let i=0;i<detail;i++){val+=valueNoise(px*freq,py*freq,tileX*freq,tileY*freq)*amp;max+=amp;amp*=roughness;freq*=2}
+    return val/max
+  }
+  function ridgedFbm(px: number, py: number) {
+    let val=0,amp=1,freq=1,max=0,prev=1
+    for(let i=0;i<detail;i++){const n=1-Math.abs(valueNoise(px*freq,py*freq,tileX*freq,tileY*freq)*2-1);val+=n*n*amp*prev;prev=n*n;max+=amp;amp*=roughness;freq*=2}
+    return max>0?val/max:0
+  }
+  function voronoiFbm(px: number, py: number) {
+    let val=0,amp=1,freq=1,max=0
+    for(let i=0;i<detail;i++){
+      const tx=tileX*freq,ty=tileY*freq
+      const gx=Math.floor(px*freq),gy=Math.floor(py*freq);let md=1e9
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const cx=((gx+dx)%tx+tx)%tx,cy=((gy+dy)%ty+ty)%ty
+        const ox=hash(cx+0.5,cy),oy=hash(cx,cy+0.5)
+        const nx=gx+dx+ox-px*freq,ny=gy+dy+oy-py*freq
+        const d=Math.sqrt(nx*nx+ny*ny);if(d<md)md=d
+      }
+      val+=Math.min(1,md)*amp;max+=amp;amp*=roughness;freq*=2
+    }
+    return max>0?val/max:0
+  }
+  const fn = noiseType===2?voronoiFbm:noiseType===1?ridgedFbm:noiseFbm
+  // Sample using tileX/tileY so canvas covers exactly one tile period — RepeatWrapping then seals the seam
+  for(let j=0;j<resolution;j++)for(let i=0;i<resolution;i++){const v=Math.round(fn((i/resolution)*tileX,(j/resolution)*tileY)*255),idx=(j*resolution+i)*4;imageData.data[idx]=v;imageData.data[idx+1]=v;imageData.data[idx+2]=v;imageData.data[idx+3]=255}
+  ctx.putImageData(imageData,0,0)
+  return canvas
+}
+
+
+/** Derive a normal map from a height map canvas using Sobel gradient. */
+function canvasToNormalMap(src: HTMLCanvasElement, strength: number = 3): THREE.CanvasTexture {
+  const w = src.width, h = src.height
+  const srcData = src.getContext('2d')!.getImageData(0, 0, w, h).data
+  const dst = document.createElement('canvas')
+  dst.width = w; dst.height = h
+  const dstCtx = dst.getContext('2d')!
+  const out = dstCtx.createImageData(w, h)
+  const get = (x: number, y: number) => srcData[(((y % h) + h) % h * w + ((x % w) + w) % w) * 4] / 255
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // Sobel 3×3
+      const dx = (get(x+1,y-1) + 2*get(x+1,y) + get(x+1,y+1)) - (get(x-1,y-1) + 2*get(x-1,y) + get(x-1,y+1))
+      const dy = (get(x-1,y+1) + 2*get(x,y+1) + get(x+1,y+1)) - (get(x-1,y-1) + 2*get(x,y-1) + get(x+1,y-1))
+      const nx = -dx * strength, ny = -dy * strength, nz = 1
+      const len = Math.sqrt(nx*nx + ny*ny + nz*nz)
+      const i = (y * w + x) * 4
+      out.data[i]   = Math.round((nx/len * 0.5 + 0.5) * 255)
+      out.data[i+1] = Math.round((ny/len * 0.5 + 0.5) * 255)
+      out.data[i+2] = Math.round((nz/len * 0.5 + 0.5) * 255)
+      out.data[i+3] = 255
+    }
+  }
+  dstCtx.putImageData(out, 0, 0)
+  const tex = new THREE.CanvasTexture(dst)
+  tex.colorSpace = THREE.LinearSRGBColorSpace
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  return tex
 }
 
 function MeshObject({
@@ -39,6 +135,78 @@ function MeshObject({
 
   const groupRef = useRef<THREE.Group>(null)
   const isDragging = useRef(false)
+
+  // Load / generate all texture slots generically
+  const textureSlots = (mp.textureSlots ?? {}) as Record<string, TextureSlot>
+  const COLOR_SLOTS = new Set(['map', 'emissiveMap'])
+  const slotKey = Object.entries(textureSlots)
+    .map(([k, v]) => {
+      if (v.normalFrom) {
+        const src = v.normalFrom.dataUrl
+          ? `img`
+          : v.normalFrom.noiseProps
+            ? `n:${v.normalFrom.noiseProps.noiseType}:${v.normalFrom.noiseProps.scale}:${v.normalFrom.noiseProps.detail}:${v.normalFrom.noiseProps.roughness}:${v.normalFrom.noiseProps.resolution}`
+            : 'empty'
+        return `${k}:normal:${src}:s${v.normalStrength ?? 3}`
+      }
+      if (v.dataUrl) return `${k}:img:${v.nodeId}`
+      if (v.noiseProps) return `${k}:n:${v.noiseProps.noiseType}:${v.noiseProps.scale}:${v.noiseProps.detail}:${v.noiseProps.roughness}:${v.noiseProps.resolution}`
+      return `${k}:${v.nodeId}`
+    })
+    .sort().join('|')
+  const [loadedTextures, setLoadedTextures] = useState<Record<string, THREE.Texture>>({})
+  useEffect(() => {
+    const result: Record<string, THREE.Texture> = {}
+    const imageLoads: Promise<void>[] = []
+    let cancelled = false
+    for (const [slot, data] of Object.entries(textureSlots)) {
+      if (data.normalFrom) {
+        // texture/normal node: generate/load source canvas then convert to normal map
+        const strength = data.normalStrength ?? 3
+        if (data.normalFrom.dataUrl) {
+          imageLoads.push(new Promise<void>((resolve) => {
+            new THREE.TextureLoader().load(data.normalFrom!.dataUrl!, (tex) => {
+              const img = tex.image as HTMLImageElement
+              const c = document.createElement('canvas')
+              c.width = img.width; c.height = img.height
+              c.getContext('2d')!.drawImage(img, 0, 0)
+              tex.dispose()
+              result[slot] = canvasToNormalMap(c, strength)
+              resolve()
+            })
+          }))
+        } else if (data.normalFrom.noiseProps) {
+          const noiseCanvas = generateNoiseCanvas(data.normalFrom.noiseProps)
+          result[slot] = canvasToNormalMap(noiseCanvas, strength)
+        }
+      } else if (data.dataUrl) {
+        imageLoads.push(new Promise<void>((resolve) => {
+          new THREE.TextureLoader().load(data.dataUrl!, (tex) => {
+            tex.colorSpace = COLOR_SLOTS.has(slot) ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+            result[slot] = tex
+            resolve()
+          })
+        }))
+      } else if (data.noiseProps) {
+        const noiseCanvas = generateNoiseCanvas(data.noiseProps)
+        const tex = new THREE.CanvasTexture(noiseCanvas)
+        tex.colorSpace = COLOR_SLOTS.has(slot) ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+        result[slot] = tex
+      }
+    }
+    const apply = () => {
+      if (cancelled) { Object.values(result).forEach(t => t.dispose()); return }
+      setLoadedTextures(prev => { Object.values(prev).forEach(t => t.dispose()); return result })
+    }
+    if (imageLoads.length > 0) Promise.all(imageLoads).then(apply); else apply()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotKey])
+
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
+  useEffect(() => { if (matRef.current) matRef.current.needsUpdate = true }, [loadedTextures])
 
   const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -160,6 +328,8 @@ function MeshObject({
     <>
       <group ref={groupRef}>
         <mesh
+          castShadow
+          receiveShadow
           onClick={(e) => {
             if (!isEditorView) return
             e.stopPropagation()
@@ -191,9 +361,26 @@ function MeshObject({
             <meshBasicMaterial color={toThreeColor(mp.color)} wireframe />
           ) : (
             <meshStandardMaterial
-              color={toThreeColor(mp.color)}
+              ref={matRef}
+              color={loadedTextures.map ? '#ffffff' : toThreeColor(mp.color)}
+              map={loadedTextures.map ?? null}
+              normalMap={loadedTextures.normalMap ?? null}
+              normalScale={[(mp.normalScale as number) ?? 1, (mp.normalScale as number) ?? 1]}
+              roughnessMap={loadedTextures.roughnessMap ?? null}
+              metalnessMap={loadedTextures.metalnessMap ?? null}
+              aoMap={loadedTextures.aoMap ?? null}
+              aoMapIntensity={(mp.aoMapIntensity as number) ?? 1}
+              emissiveMap={loadedTextures.emissiveMap ?? null}
+              emissive={toThreeColor(mp.emissive)}
+              emissiveIntensity={(mp.emissiveIntensity as number) ?? 1}
+              displacementMap={loadedTextures.displacementMap ?? null}
+              displacementScale={(mp.displacementScale as number) ?? 0.1}
+              displacementBias={(mp.displacementBias as number) ?? 0}
               metalness={(mp.metalness as number) ?? 0.1}
               roughness={(mp.roughness as number) ?? 0.5}
+              transparent={(mp.transparent as boolean) ?? false}
+              opacity={(mp.opacity as number) ?? 1}
+              side={((mp.side as number) ?? 0) as 0 | 1 | 2}
               wireframe={(mp.wireframe as boolean) ?? false}
             />
           )}
@@ -451,10 +638,16 @@ function LightObject({
       <group ref={groupRef} position={pos}>
         {/* Only render actual scene lights in camera view */}
         {!isEditorView && light.lightType === 'directional' && (
-          <directionalLight ref={dirLightRef} color={color} intensity={intensity} />
+          <directionalLight
+            ref={dirLightRef} color={color} intensity={intensity} castShadow
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-near={0.1} shadow-camera-far={50}
+            shadow-camera-left={-12} shadow-camera-right={12}
+            shadow-camera-top={12} shadow-camera-bottom={-12}
+          />
         )}
         {!isEditorView && light.lightType === 'point' && (
-          <pointLight color={color} intensity={intensity} distance={(lp.distance as number) ?? 0} />
+          <pointLight color={color} intensity={intensity} distance={(lp.distance as number) ?? 0} castShadow shadow-mapSize={[1024, 1024]} />
         )}
         {/* Area light: RectAreaLight + RectAreaLightHelper added imperatively via useEffect */}
         {isEditorView && !isArea && (
@@ -649,6 +842,7 @@ function LiveEvaluator() {
     }
 
     const cache = new Map<string, number>()
+    const colorCache = new Map<string, [number, number, number, number]>()
 
     // Evaluate ALL float source ports so edge labels work
     for (const edge of edges) {
@@ -659,16 +853,26 @@ function LiveEvaluator() {
       }
     }
 
+    // Evaluate ALL color source ports so node previews and properties work
+    for (const edge of edges) {
+      const sourceNode = nodes.find((n) => n.id === edge.source)
+      if (!sourceNode) continue
+      if (sourceNode.type === 'color' || sourceNode.type === 'color/mix' || sourceNode.type === 'color/hsl') {
+        const val = evaluateColorPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+        if (val) colorCache.set(`${sourceNode.id}:${edge.sourceHandle}`, val)
+      }
+    }
+
     const hasDynamic = nodes.some(
       (n) => n.type === 'time' || n.type === 'input' || n.type === 'math',
     )
     const hasPath = !!scene.camera?.pathNodeId || scene.lights.some((l) => l.pathNodeId)
     if (!hasDynamic && !hasPath) {
-      // Still update evaluator store for edge labels even when no path/dynamic nodes
+      // Still update evaluator store for edge labels + color previews even when no dynamic nodes
       const now = performance.now()
-      if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
+      if ((cache.size > 0 || colorCache.size > 0) && now - lastStoreUpdate.current > 100) {
         lastStoreUpdate.current = now
-        useEvaluatorStore.getState().setValues(cache)
+        useEvaluatorStore.getState().setValues(cache, colorCache)
       }
       return
     }
@@ -680,7 +884,11 @@ function LiveEvaluator() {
       const geoProps = { ...mesh.geometryProps }
       const transform = { ...mesh.transform }
 
-      const ownedNodeIds = new Set([mesh.id, mesh.geometryNodeId, mesh.materialNodeId, ...mesh.transformNodeIds])
+      const texSlots = mesh.materialProps.textureSlots as Record<string, TextureSlot> | undefined
+      const texNodeIds = texSlots
+        ? Object.values(texSlots).flatMap(s => [s.nodeId, ...(s.normalSourceNodeId ? [s.normalSourceNodeId] : [])])
+        : []
+      const ownedNodeIds = new Set([mesh.id, mesh.geometryNodeId, mesh.materialNodeId, ...mesh.transformNodeIds, ...texNodeIds])
 
       for (const edge of edges) {
         if (!ownedNodeIds.has(edge.target)) continue
@@ -695,7 +903,30 @@ function LiveEvaluator() {
         const targetNode = nodes.find((n) => n.id === edge.target)
         if (!targetNode) continue
 
-        if (targetNode.type === 'material') {
+        if (targetNode.type === 'texture') {
+          // Update matching slot's noiseProps (direct or via normalFrom) so canvas texture regenerates
+          const slots = matProps.textureSlots as Record<string, TextureSlot> | undefined
+          if (slots) {
+            // Direct texture slot
+            const direct = Object.entries(slots).find(([, s]) => s.nodeId === targetNode.id)
+            if (direct) {
+              const [slotName, slotData] = direct
+              if (slotData.noiseProps && slotData.noiseProps[edge.targetHandle] !== val) {
+                matProps.textureSlots = { ...slots, [slotName]: { ...slotData, noiseProps: { ...slotData.noiseProps, [edge.targetHandle]: val } } }
+                meshChanged = true
+              }
+            }
+            // texture/normal slot — upstream source
+            const normalEntry = Object.entries(slots).find(([, s]) => s.normalSourceNodeId === targetNode.id)
+            if (normalEntry) {
+              const [slotName, slotData] = normalEntry
+              if (slotData.normalFrom?.noiseProps && slotData.normalFrom.noiseProps[edge.targetHandle] !== val) {
+                matProps.textureSlots = { ...slots, [slotName]: { ...slotData, normalFrom: { ...slotData.normalFrom, noiseProps: { ...slotData.normalFrom.noiseProps, [edge.targetHandle]: val } } } }
+                meshChanged = true
+              }
+            }
+          }
+        } else if (targetNode.type === 'material') {
           if (mesh.materialProps[edge.targetHandle] !== val) { matProps[edge.targetHandle] = val; meshChanged = true }
         } else if (targetNode.type === 'geometry') {
           if (mesh.geometryProps[edge.targetHandle] !== val) { geoProps[edge.targetHandle] = val; meshChanged = true }
@@ -722,6 +953,22 @@ function LiveEvaluator() {
             if (prop === 'y' && transform.scale[1] !== val) { transform.scale = [...transform.scale]; transform.scale[1] = val; meshChanged = true }
             if (prop === 'z' && transform.scale[2] !== val) { transform.scale = [...transform.scale]; transform.scale[2] = val; meshChanged = true }
           }
+        }
+      }
+
+      // Evaluate dynamic color port connections (color, color/mix, color/hsl)
+      for (const edge of edges) {
+        if (edge.target !== mesh.materialNodeId) continue
+        if (edge.targetHandle !== 'color') continue
+        const colorSrcNode = nodes.find((n) => n.id === edge.source)
+        if (!colorSrcNode) continue
+
+        const colorVal = evaluateColorPort(colorSrcNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+        if (colorVal === undefined) continue
+        const existing = matProps.color as [number, number, number, number] | undefined
+        if (!existing || colorVal.some((v, i) => v !== existing[i])) {
+          matProps.color = colorVal
+          meshChanged = true
         }
       }
 
@@ -968,9 +1215,9 @@ function LiveEvaluator() {
 
     // Throttled update of evaluator store for edge labels + path positions (~10fps)
     const now = performance.now()
-    if (cache.size > 0 && now - lastStoreUpdate.current > 100) {
+    if ((cache.size > 0 || colorCache.size > 0) && now - lastStoreUpdate.current > 100) {
       lastStoreUpdate.current = now
-      useEvaluatorStore.getState().setValues(cache)
+      useEvaluatorStore.getState().setValues(cache, colorCache)
     }
   })
 

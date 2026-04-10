@@ -22,6 +22,8 @@ export interface PropertyDef {
    *  sourced from the evaluator cache (keyed by own node id). */
   linkedPath?: boolean
   visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]
+  /** For type='color': render the picker inline (always open) instead of as a dropdown */
+  inline?: boolean
 }
 
 export type VisibleWhenCondition =

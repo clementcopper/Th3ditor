@@ -9,6 +9,8 @@ import { registerMathNodes } from './node-definitions/math'
 import { registerInputNodes } from './node-definitions/input'
 import { registerCameraNodes } from './node-definitions/camera'
 import { registerPathNodes } from './node-definitions/path'
+import { registerColorNodes } from './node-definitions/color'
+import { registerTextureNodes } from './node-definitions/texture'
 
 let registered = false
 
@@ -26,4 +28,6 @@ export function registerAllNodes() {
   registerInputNodes()
   registerCameraNodes()
   registerPathNodes()
+  registerColorNodes()
+  registerTextureNodes()
 }

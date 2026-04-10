@@ -392,15 +392,38 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 - [x] Compiler: `'area'` in `LIGHT_SUBTYPES`, `normalizeLightProps` für area
 - [x] Prop-Reihenfolge: Type → Target → Color → Intensity → Width/Height → Distance → Position → Rotation → Progress
 
-#### 5d: Custom Shaders + Texturen
-- [ ] Color-Node — Color-Picker + `color` Output-Port; optional `r`/`g`/`b` Float-Input-Ports für Kanal-Animation via Math/Time
-- [ ] Color-Ops-Nodes (Mix, HSL Shift, Ramp)
-- [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)
-- [ ] GLSL-Code Editor (TextArea-Control mit Monospace)
-- [ ] GLSL-Chunks als inkludierbare Snippets
-- [ ] Texture-Nodes (Image, Noise, Gradient)
+#### 5d: Color-Nodes + Texture-Nodes + Custom GLSL
+- [x] Color-Node — Color-Picker + `color` Output-Port; optional `r`/`g`/`b` Float-Input-Ports für Kanal-Animation via Math/Time
+- [x] Color-Ops-Nodes: Mix, HSL Shift (Ramp → Phase 7, braucht GradientControl)
+- [x] **Texture-Node** (unified, 3 Modi):
+  - `Image` — File-Picker (.png/.jpg/.webp), Dateiname im Node-Body
+  - `Noise` — fBm / Ridged / Voronoi; Float-Input-Ports Scale/Detail/Roughness/Resolution mit linkedPort-Pattern; tileable via integer-scale + RepeatWrapping → UV-Seams eliminiert
+  - `Normal` — konvertiert Source-Texture per Sobel-Gradient in Normal Map; Strength-Slider; Input-Port `source` (interner Name, Label `→ Texture`), Output `texture` (Label `Texture →`)
+  - Port-Naming-Konvention: `source`/`texture` statt beide `texture` → verhindert ReactFlow Handle-Kollision
+- [x] **PBR Material-Node** — vollständiger PBR: 7 Texture-Map-Ports (map, normalMap, roughnessMap, metalnessMap, aoMap, emissiveMap, displacementMap), Metalness, Roughness, Emissive, Opacity, Transparent, Side, Wireframe, NormalScale, AOIntensity, DisplacementScale/Bias
+- [x] **Shadow-Support** — `shadows="soft"` (PCFSoftShadowMap) auf beiden Canvases; Directional Light mit 2048×2048 Shadow Map; Meshes castShadow/receiveShadow
+- [x] **Texture-Seam-Fix** — `wrapS = wrapT = RepeatWrapping` + tileable Noise (integer-scale Lattice-Wrap) eliminiert UV-Seams auf Cylinder, Capsule, Torus, Sphere-Seite
+- [x] **IcosphereGeometry Detail** — max. von 6 auf 12 erhöht
+- [x] Default-Graph Camera/Light-Positionen — Camera 0/0/5, Light 3/3/3
+- [ ] **Custom GLSL Shader-Node** (Vertex + Fragment, Uniform-Ports)
+- [ ] **GLSL-Code Editor** (TextAreaControl mit Monospace-Font)
 
-### Phase 6: Export + Post-Processing + Polish
+**⚠️ Bekannte Geometry-Limitations (Displacement):**
+- `SphereGeometry` Pole: Vertices an identischer 3D-Position mit unterschiedlichen U-Werten → Stern-Artefakt. Fix: Icosphere verwenden.
+- `CylinderGeometry` / `CapsuleGeometry` Cap-Rim: Seite und Kappen haben getrennte UV-Islands → Spalt am Rand. Fix: Quad-Meshes (siehe Phase 6).
+- `BoxGeometry` Kanten: Displacement-Lücken an Geometrie-Kanten (separate Face-UVs). Inherent.
+
+### Phase 6: Quad-Mesh Primitives + Export + Post-Processing
+
+#### Quad-Mesh Primitives (Langfrist-Fix für Displacement-Seams)
+- [ ] Daniel liefert Blender-authored Quad-Meshes als `.glb` pro Primitive
+- [ ] Assets bundlen in `src/assets/geometry/` (Sphere, Cylinder, Capsule, Torus)
+- [ ] SceneRenderer: `.glb` laden → `BufferGeometry` extrahieren, ersetzt procedural `SphereGeometry` etc.
+- [ ] Parameter (Radius, Height) via Skalierung der Base-Mesh, Segmente via Vertex-Count im Asset
+- **Anforderungen an Meshes:** einzelnes UV-Island pro Mesh, keine Pol-Singularitäten, Seite+Kappen im selben UV-Space, ≥32×32 Quads für Displacement
+- **Vorteil:** Eliminiert alle UV-Seam-Probleme dauerhaft ohne Code-Hacks
+
+#### Export + Polish
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Video-Export via MediaRecorder

@@ -1,6 +1,6 @@
 import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
-import { rgbaToHex6 } from '../utils/color'
+import { rgbaToHex6, rgbToHsl, hslToRgb } from '../utils/color'
 
 /** Maps geometry mode number to a subtype string for the renderer */
 const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 'icosphere'] as const
@@ -46,6 +46,25 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
 
     const geoProps = getProps(geoNode)
     const matProps = getProps(matNode)
+
+    // Resolve color port connection: walk upstream color nodes at compile time
+    const colorEdge = edges.find((e) => e.target === matNode.id && e.targetHandle === 'color')
+    if (colorEdge) {
+      const colorSrcNode = nodeMap.get(colorEdge.source)
+      if (colorSrcNode) {
+        const resolved = resolveStaticColor(colorSrcNode, edges, nodeMap)
+        if (resolved) matProps.color = resolved
+      }
+    }
+
+    // Resolve all texture map ports into a textureSlots dict
+    const TEXTURE_PORTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'displacementMap'] as const
+    const textureSlots: Record<string, { nodeId: string; dataUrl?: string; noiseProps?: Record<string, unknown> }> = {}
+    for (const port of TEXTURE_PORTS) {
+      const slot = resolveTextureSlot(port, matNode.id, edges, nodeMap)
+      if (slot) textureSlots[port] = slot
+    }
+    if (Object.keys(textureSlots).length > 0) matProps.textureSlots = textureSlots
 
     // Resolve geometry subtype from mode
     const geoMode = (geoProps.mode as number) ?? 0
@@ -262,6 +281,118 @@ function normalizeLightProps(type: string, props: Record<string, unknown>): Reco
     default:
       return props
   }
+}
+
+/**
+ * Resolve a single texture input port into a slot descriptor for SceneRenderer.
+ * Handles plain texture nodes and texture/normal conversion nodes.
+ */
+function resolveTextureSlot(
+  portName: string,
+  targetNodeId: string,
+  edges: GraphEdge[],
+  nodeMap: Map<string, GraphNode>,
+): { nodeId: string; dataUrl?: string; noiseProps?: Record<string, unknown>; normalFrom?: { dataUrl?: string; noiseProps?: Record<string, unknown> }; normalStrength?: number; normalSourceNodeId?: string } | null {
+  const edge = edges.find((e) => e.target === targetNodeId && e.targetHandle === portName)
+  if (!edge) return null
+  const node = nodeMap.get(edge.source)
+  if (!node) return null
+
+  if (node.type !== 'texture') return null
+  const texDef = getNodeDef(node.type)
+  const texProps = { ...(texDef?.defaults ?? {}), ...node.data } as Record<string, unknown>
+  const texMode = (texProps.mode as number) ?? 0
+
+  if (texMode === 0) {
+    // Image mode
+    const imageFile = texProps.imageFile as { name: string; dataUrl: string } | '' | undefined
+    if (typeof imageFile !== 'object' || !imageFile) return null
+    return { nodeId: node.id, dataUrl: imageFile.dataUrl }
+  }
+
+  if (texMode === 1) {
+    // Noise mode
+    return { nodeId: node.id, noiseProps: texProps }
+  }
+
+  if (texMode === 2) {
+    // Normal mode: walk upstream via 'texture' input port to find source texture
+    const strength = (texProps.strength as number) ?? 3
+    const srcEdge = edges.find((e) => e.target === node.id && e.targetHandle === 'source')
+    if (!srcEdge) return null
+    const srcNode = nodeMap.get(srcEdge.source)
+    if (srcNode?.type !== 'texture') return null
+    const srcDef = getNodeDef(srcNode.type)
+    const srcProps = { ...(srcDef?.defaults ?? {}), ...srcNode.data } as Record<string, unknown>
+    const srcMode = (srcProps.mode as number) ?? 0
+    let normalFrom: { dataUrl?: string; noiseProps?: Record<string, unknown> }
+    if (srcMode === 0) {
+      const imageFile = srcProps.imageFile as { name: string; dataUrl: string } | '' | undefined
+      if (typeof imageFile !== 'object' || !imageFile) return null
+      normalFrom = { dataUrl: imageFile.dataUrl }
+    } else {
+      normalFrom = { noiseProps: srcProps }
+    }
+    return { nodeId: node.id, normalFrom, normalStrength: strength, normalSourceNodeId: srcNode.id }
+  }
+
+  return null
+}
+
+/**
+ * Statically resolve a color value from a color-type node chain (no dynamic context).
+ * Used by the compiler to set initial materialProps.color at compile time.
+ */
+function resolveStaticColor(
+  node: GraphNode,
+  edges: GraphEdge[],
+  nodeMap: Map<string, GraphNode>,
+): [number, number, number, number] | undefined {
+  const def = getNodeDef(node.type)
+  const props = { ...(def?.defaults ?? {}), ...node.data }
+
+  function upstreamColor(handle: string, fallback: string): [number, number, number, number] {
+    const edge = edges.find((e) => e.target === node.id && e.targetHandle === handle)
+    if (edge) {
+      const src = nodeMap.get(edge.source)
+      if (src) {
+        const v = resolveStaticColor(src, edges, nodeMap)
+        if (v) return v
+      }
+    }
+    return (props[fallback] as [number, number, number, number]) ?? [1, 1, 1, 1]
+  }
+
+  if (node.type === 'color') {
+    return (props.color as [number, number, number, number]) ?? [1, 1, 1, 1]
+  }
+
+  if (node.type === 'color/mix') {
+    const a = upstreamColor('colorA', 'colorA')
+    const b = upstreamColor('colorB', 'colorB')
+    const t = Math.min(1, Math.max(0, (props.t as number) ?? 0.5))
+    return [
+      a[0] + (b[0] - a[0]) * t,
+      a[1] + (b[1] - a[1]) * t,
+      a[2] + (b[2] - a[2]) * t,
+      a[3] + (b[3] - a[3]) * t,
+    ]
+  }
+
+  if (node.type === 'color/hsl') {
+    const base = upstreamColor('color', 'color')
+    const hueShift = (props.hue as number) ?? 0
+    const satShift = (props.saturation as number) ?? 0
+    const lightShift = (props.lightness as number) ?? 0
+    const [h, s, l] = rgbToHsl(base[0], base[1], base[2])
+    const newH = ((h + hueShift) % 360 + 360) % 360
+    const newS = Math.min(100, Math.max(0, s + satShift))
+    const newL = Math.min(100, Math.max(0, l + lightShift))
+    const [r, g, b] = hslToRgb(newH, newS, newL)
+    return [r, g, b, base[3]]
+  }
+
+  return undefined
 }
 
 /**

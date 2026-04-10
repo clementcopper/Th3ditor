@@ -19,8 +19,8 @@ function initDefaultGraph() {
     { id: 'n2', type: 'material', position: { x: 0, y: 200 }, data: {} },
     { id: 'n3', type: 'object/mesh', position: { x: 300, y: 80 }, data: {} },
     { id: 'n4', type: 'scene/output', position: { x: 700, y: 80 }, data: {} },
-    { id: 'n5', type: 'light', position: { x: 0, y: 380 }, data: { mode: 1 } },   // Directional
-    { id: 'n6', type: 'camera', position: { x: 0, y: 560 }, data: {} },
+    { id: 'n5', type: 'light', position: { x: 0, y: 380 }, data: { mode: 1, positionX: 3, positionY: 3, positionZ: 3 } },
+    { id: 'n6', type: 'camera', position: { x: 0, y: 560 }, data: { positionX: 0, positionY: 0, positionZ: 5 } },
   ])
 
   setEdges([

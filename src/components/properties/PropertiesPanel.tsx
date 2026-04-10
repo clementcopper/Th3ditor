@@ -57,6 +57,7 @@ export function PropertiesPanel() {
   const connectedInputPorts = new Set(connectedEdges.map((e) => e.targetHandle))
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const evalValues = useEvaluatorStore((s) => s.values)
+  const colorValues = useEvaluatorStore((s) => s.colorValues)
 
   if (!node) {
     return (
@@ -103,6 +104,33 @@ export function PropertiesPanel() {
 
       {/* Properties */}
       <div className="p-4 flex flex-col gap-3">
+
+        {/* Mix node: show connected input colors as read-only swatches */}
+        {node.type === 'color/mix' && (() => {
+          const toRgb = (c: [number,number,number,number]) =>
+            `rgb(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)})`
+          const aEdge = connectedEdges.find((e) => e.targetHandle === 'colorA')
+          const bEdge = connectedEdges.find((e) => e.targetHandle === 'colorB')
+          if (!aEdge && !bEdge) return null
+          const colorA = aEdge ? colorValues.get(`${aEdge.source}:${aEdge.sourceHandle}`) : undefined
+          const colorB = bEdge ? colorValues.get(`${bEdge.source}:${bEdge.sourceHandle}`) : undefined
+          return (
+            <div className="flex flex-col gap-1.5">
+              {colorA && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text-secondary">A</span>
+                  <div className="h-7 border border-border-default" style={{ background: toRgb(colorA) }} />
+                </div>
+              )}
+              {colorB && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text-secondary">B</span>
+                  <div className="h-7 border border-border-default" style={{ background: toRgb(colorB) }} />
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {Array.from(groups.entries()).map(([group, props]) => (
           <div key={group}>

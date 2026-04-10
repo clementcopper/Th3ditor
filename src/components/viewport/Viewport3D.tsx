@@ -366,7 +366,7 @@ export function Viewport3D() {
       <PlaybackOverlay />
 
       {/* 3D Canvas */}
-      <Canvas>
+      <Canvas shadows="soft">
         <EditorBackground />
 
         {projectionMode === 'perspective'
@@ -376,7 +376,13 @@ export function Viewport3D() {
 
         {/* Editor ambient lights */}
         <ambientLight intensity={0.7} />
-        <directionalLight position={[5, 5, 5]} intensity={1.2} />
+        <directionalLight
+          position={[5, 5, 5]} intensity={1.2} castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-near={0.1} shadow-camera-far={50}
+          shadow-camera-left={-12} shadow-camera-right={12}
+          shadow-camera-top={12} shadow-camera-bottom={-12}
+        />
 
         <Grid
           args={[20, 20]}

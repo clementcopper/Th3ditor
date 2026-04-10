@@ -70,6 +70,9 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - `EnvironmentLoader` background: use `showEnvBgRef` (ref, not closure) to avoid stale value in cleanup.
 - Circle path `t=0` starts at +Z axis (π/2 offset in `evaluatePathPosition`).
 - Node port value display: `w-10 tabular-nums` fixed width prevents node width jumping during animation.
+- Noise CanvasTexture: set `wrapS = wrapT = RepeatWrapping` + tile at integer scale to eliminate UV seams.
+- ReactFlow `visibleWhen` ports: handle only registers when rendered — set mode first, then connect cable.
+- Texture Normal mode: input port named `source` (not `texture`) to avoid same-name collision with output port.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -132,11 +135,19 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-10)
+## Current Status (2026-04-11)
 - Phase 1 + 2 + 3 + 4 complete ✅
 - Phase 5a complete ✅: Path Nodes, Camera/Light path constraints, Look-Ahead
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control, Timeline Scrubber + Scroll, Smooth Shading, Camera Background Color, HDR Environment Map (IBL), FileControl redesign, ViewCube orbit fix
 - Phase 5c complete ✅: Area Light (RectAreaLight, Width/Height/Rotation/Target, custom editor visual)
+- Phase 5d in progress 🔄: Texture Nodes complete (Image/Noise/Normal modes, PBR Material, Shadow support, tileable noise, RepeatWrapping seam fix)
+- Next in 5d: Custom GLSL Shader-Node (TextAreaControl, ShaderMaterial)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Phase 5d — Color-Node → Color-Ops → Custom GLSL Shader-Node
+
+## Planned: Quad-Mesh Primitives (Phase 6+)
+- Three.js built-in geometries (Sphere, Cylinder, Capsule) have UV seams at poles and cap-rims that break displacement mapping
+- Plan: Daniel provides Blender-authored quad meshes (.glb) per primitive → bundled as `src/assets/geometry/`
+- Requirements for meshes: single UV island per mesh, no pole singularities, ≥32×32 quads for displacement, caps and sides share UV space
+- Cylinder/Capsule seams currently not fixable via tiling — openEnded option deferred pending quad-mesh solution
+- Sphere poles (SphereGeometry) not fixable via UV tiling — use Icosphere or quad-sphere

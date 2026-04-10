@@ -65,6 +65,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - HDR IBL: `RGBELoader` + `PMREMGenerator.fromEquirectangular()` → `scene.environment`; `scene.environmentIntensity` (r163+).
 - Color node defaults must be RGBA arrays `[r,g,b,a]` (0–1), never hex strings — compiler converts via `rgbaToHex6`.
 - `FileControl`: `param.accept?.includes('gltf')` controls folder button visibility.
+- `RectAreaLight` needs `RectAreaLightUniformsLib.init()` once at module level; no shadow support.
+- Area Light editor visual: custom LineSegments + Line (no RectAreaLightHelper — has unwanted BackSide mesh).
+- `EnvironmentLoader` background: use `showEnvBgRef` (ref, not closure) to avoid stale value in cleanup.
+- Circle path `t=0` starts at +Z axis (π/2 offset in `evaluatePathPosition`).
+- Node port value display: `w-10 tabular-nums` fixed width prevents node width jumping during animation.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -132,5 +137,6 @@ src/
 - Phase 5a complete ✅: Path Nodes, Camera/Light path constraints, Look-Ahead
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control, Timeline Scrubber + Scroll, Smooth Shading, Camera Background Color, HDR Environment Map (IBL), FileControl redesign, ViewCube orbit fix
+- Phase 5c complete ✅: Area Light (RectAreaLight, Width/Height/Rotation/Target, custom editor visual)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Next: Phase 5c — Color-Node → Color-Ops → Custom GLSL Shader-Node
+- Next: Phase 5d — Color-Node → Color-Ops → Custom GLSL Shader-Node

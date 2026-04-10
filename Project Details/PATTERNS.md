@@ -135,3 +135,23 @@ Der `scene/output`-Node ist der einzige Ort für **szenen-weite Render-Einstellu
 - ❌ `computeVertexNormals()` für Smooth Shading — zerstört UV-Seams; nur `flatShading = false` verwenden
 - ❌ Color-Defaults als Hex-String in NodeDefinition — RGBA-Array `[r,g,b,a]` verwenden
 - ❌ OrbitControls top/bottom mit custom `camera.up` ([0,0,-1]) — swapped axes; epsilon-Offset + `up:[0,1,0]` verwenden
+- ❌ `RectAreaLightHelper` aus three-stdlib für Area Light Visual — enthält unerwünschtes BackSide-Mesh, keinen Bogen; custom LineSegments + Line verwenden
+- ❌ `EnvironmentLoader` `threeScene.background = null` unconditional — nur löschen wenn `showEnvBgRef.current` true; sonst überschreibt es die `<color>`-Komponente
+
+---
+
+## Pattern F — Area Light
+
+`RectAreaLight` benötigt `RectAreaLightUniformsLib.init()` einmalig am Module-Level.
+
+**Editor-Visual (imperativ, kein JSX-Mesh):**
+```
+Rect-Outline (LineSegments):  4 Kanten + 2 Diagonalen (X-Muster)
+Richtungslinie (Line):        (0,0,0) → (0,0,-0.6), feste Länge
+Farbe:                        #ffdd44 / #ff8800 (selected) — per useFrame
+depthTest: false, renderOrder: 999
+```
+
+**Target-Support:** `targetNodeId` NodeRef → `Matrix4.lookAt` Orientierung in `useFrame`. Rotation-Props/Ports mit `visibleWhen: [{ uniform: 'mode', equal: 3 }, { uniformFalsy: 'targetNodeId' }]` ausgeblendet wenn Target gesetzt.
+
+**Einschränkungen:** Kein Shadow-Casting. Wirkt nur auf `MeshStandardMaterial` / `MeshPhysicalMaterial`.

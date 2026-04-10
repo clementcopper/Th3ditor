@@ -1,6 +1,6 @@
 import {
   Cube, Shapes, PaintBucket, ArrowsOutCardinal,
-  Sun, ArrowUpRight, Lightbulb, Camera,
+  Sun, ArrowUpRight, Lightbulb, Rectangle, Camera,
   MathOperations, Clock, CursorClick, Stack, Image, Palette, Code, BezierCurve,
 } from '@phosphor-icons/react'
 import type { NodeDefinition } from '../types/node-graph'
@@ -35,6 +35,7 @@ export function getNodeIcon(
     if (mode === 0) return Sun
     if (mode === 1) return ArrowUpRight
     if (mode === 2) return Lightbulb
+    if (mode === 3) return Rectangle
   }
   return CATEGORY_ICON_MAP[category] ?? Cube
 }

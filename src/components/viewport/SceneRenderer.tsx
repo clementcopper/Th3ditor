@@ -4,6 +4,10 @@ import { TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
+
+// Required once before any RectAreaLight renders
+RectAreaLightUniformsLib.init()
 import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
@@ -264,6 +268,8 @@ function LightObject({
   const groupRef = useRef<THREE.Group>(null)
   const iconRef = useRef<THREE.Mesh>(null)
   const dirLightRef = useRef<THREE.DirectionalLight>(null)
+  const areaLightRef = useRef<THREE.RectAreaLight | null>(null)
+  const areaVisualRef = useRef<{ rect: THREE.LineSegments; arc: THREE.Line; mat: THREE.LineBasicMaterial } | null>(null)
   const isDragging = useRef(false)
 
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -275,6 +281,28 @@ function LightObject({
   useFrame(() => {
     if (hasPosition && !isDragging.current && groupRef.current) {
       groupRef.current.position.set(pos[0], pos[1], pos[2])
+    }
+    // Apply area light orientation + update visual color (selection state)
+    if (isArea && groupRef.current) {
+      if (light.targetNodeId && targetMesh) {
+        // Target mode: orient -Z toward target position
+        const lp2 = groupRef.current.position
+        const dir = new THREE.Vector3(
+          targetPos[0] - lp2.x,
+          targetPos[1] - lp2.y,
+          targetPos[2] - lp2.z,
+        )
+        if (dir.length() > 0.001) {
+          // Area light emits in -Z; use lookAt then flip 180° around Y
+          const mat4 = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir.normalize(), new THREE.Vector3(0, 1, 0))
+          groupRef.current.quaternion.setFromRotationMatrix(mat4)
+        }
+      } else {
+        groupRef.current.rotation.set(areaRotX, areaRotY, areaRotZ)
+      }
+      if (areaVisualRef.current) {
+        areaVisualRef.current.mat.color.set(isSelected ? '#ff8800' : '#ffdd44')
+      }
     }
     // Update directional light target position imperatively
     if (dirLightRef.current) {
@@ -298,6 +326,92 @@ function LightObject({
       }
     }
   })
+
+  // Area light: create RectAreaLight + helper imperatively
+  const isArea = light.lightType === 'area'
+  const areaW = (lp.width as number) ?? 2
+  const areaH = (lp.height as number) ?? 1
+  const areaIntensity = (lp.intensity as number) ?? 5
+  const areaRotX = ((lp.rotationX as number) ?? 0) * (Math.PI / 180)
+  const areaRotY = ((lp.rotationY as number) ?? 0) * (Math.PI / 180)
+  const areaRotZ = ((lp.rotationZ as number) ?? 0) * (Math.PI / 180)
+
+  useEffect(() => {
+    if (!isArea) return
+    const group = groupRef.current
+    if (!group) return
+
+    // Actual light (both views)
+    const al = new THREE.RectAreaLight(color, areaIntensity, areaW, areaH)
+    areaLightRef.current = al
+    group.add(al)
+
+    // Editor-only visual: rect outline + emission arc (pure lines, no mesh)
+    if (isEditorView) {
+      const mat = new THREE.LineBasicMaterial({ color: '#ffdd44', depthTest: false })
+
+      // Rectangle outline
+      const hw = areaW / 2, hh = areaH / 2
+      const rectGeo = new THREE.BufferGeometry()
+      rectGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        -hw, -hh, 0,  hw, -hh, 0,   // bottom
+         hw, -hh, 0,  hw,  hh, 0,   // right
+         hw,  hh, 0, -hw,  hh, 0,   // top
+        -hw,  hh, 0, -hw, -hh, 0,   // left
+        -hw, -hh, 0,  hw,  hh, 0,   // diagonal ↗
+         hw, -hh, 0, -hw,  hh, 0,   // diagonal ↖
+      ], 3))
+      const rect = new THREE.LineSegments(rectGeo, mat)
+      rect.renderOrder = 999
+      group.add(rect)
+
+      // Emission direction line: fixed length pointing -Z (not scaled with dimensions)
+      const arcGeo = new THREE.BufferGeometry()
+      arcGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -0.6], 3))
+      const arc = new THREE.Line(arcGeo, mat)
+      arc.renderOrder = 999
+      group.add(arc)
+
+      areaVisualRef.current = { rect, arc, mat }
+    }
+
+    return () => {
+      if (areaLightRef.current) { group.remove(areaLightRef.current); areaLightRef.current = null }
+      if (areaVisualRef.current) {
+        const { rect, arc, mat } = areaVisualRef.current
+        group.remove(rect); rect.geometry.dispose()
+        group.remove(arc); arc.geometry.dispose()
+        mat.dispose()
+        areaVisualRef.current = null
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isArea, isEditorView])
+
+  // Sync area light properties + update visual geometry on dimension change
+  useEffect(() => {
+    const al = areaLightRef.current
+    if (!al) return
+    al.color.set(color)
+    al.intensity = areaIntensity
+    al.width = areaW
+    al.height = areaH
+
+    const vis = areaVisualRef.current
+    if (!vis) return
+    const hw = areaW / 2, hh = areaH / 2
+
+    // Update rect geometry
+    const rp = vis.rect.geometry.attributes.position as THREE.BufferAttribute
+    const rectPts = [
+      -hw,-hh,0, hw,-hh,0, hw,-hh,0, hw,hh,0, hw,hh,0, -hw,hh,0, -hw,hh,0, -hw,-hh,0,
+      -hw,-hh,0, hw,hh,0, hw,-hh,0, -hw,hh,0,
+    ]
+    for (let i = 0; i < rectPts.length; i++) (rp.array as Float32Array)[i] = rectPts[i]
+    rp.needsUpdate = true
+
+    // Arc is a fixed-length line — no geometry update needed
+  }, [color, areaIntensity, areaW, areaH])
 
   function handleDragStart() {
     isDragging.current = true
@@ -342,7 +456,8 @@ function LightObject({
         {!isEditorView && light.lightType === 'point' && (
           <pointLight color={color} intensity={intensity} distance={(lp.distance as number) ?? 0} />
         )}
-        {isEditorView && (
+        {/* Area light: RectAreaLight + RectAreaLightHelper added imperatively via useEffect */}
+        {isEditorView && !isArea && (
           <mesh
             ref={iconRef}
             scale={iconScale}
@@ -359,6 +474,15 @@ function LightObject({
               <coneGeometry args={[0.15, 0.35, 16]} />
             )}
             <meshBasicMaterial color={iconColor} wireframe depthTest={false} />
+          </mesh>
+        )}
+        {/* Area light: invisible click target — visual (rect + arc) built imperatively */}
+        {isArea && isEditorView && (
+          <mesh
+            onClick={(e) => { e.stopPropagation(); setSelectedNode(isSelected ? null : light.id) }}
+          >
+            <planeGeometry args={[areaW, areaH]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           </mesh>
         )}
       </group>
@@ -861,12 +985,18 @@ function EnvironmentLoader() {
   const showEnvBackground = useSceneStore((s) => s.scene.showEnvBackground)
   const { gl, scene: threeScene } = useThree()
   const envMapRef = useRef<THREE.Texture | null>(null)
+  // Ref so cleanup/async callbacks always read the latest value (not stale closure)
+  const showEnvBgRef = useRef(showEnvBackground)
+  useEffect(() => { showEnvBgRef.current = showEnvBackground }, [showEnvBackground])
 
   // Load / reload when file changes
   useEffect(() => {
     if (envMapRef.current) { envMapRef.current.dispose(); envMapRef.current = null }
     threeScene.environment = null
-    threeScene.background = null
+    // Only clear background when EnvironmentLoader owns it (showEnvBackground active).
+    // When showEnvBackground is off, the declarative <color> element in CameraBackground /
+    // EditorBackground owns the background — don't interfere.
+    if (showEnvBgRef.current) threeScene.background = null
     gl.toneMapping = THREE.NoToneMapping
     gl.toneMappingExposure = 1
     if (!envMapDataUrl) return
@@ -881,7 +1011,7 @@ function EnvironmentLoader() {
       envMapRef.current = rt.texture
       threeScene.environment = rt.texture
       threeScene.environmentIntensity = envIntensity
-      if (showEnvBackground) threeScene.background = rt.texture
+      if (showEnvBgRef.current) threeScene.background = rt.texture
       gl.toneMapping = THREE.ACESFilmicToneMapping
       gl.toneMappingExposure = 1
       texture.dispose()
@@ -891,7 +1021,7 @@ function EnvironmentLoader() {
       cancelled = true
       if (envMapRef.current) { envMapRef.current.dispose(); envMapRef.current = null }
       threeScene.environment = null
-      threeScene.background = null
+      if (showEnvBgRef.current) threeScene.background = null
       gl.toneMapping = THREE.NoToneMapping
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

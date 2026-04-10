@@ -6,7 +6,7 @@ import { rgbaToHex6 } from '../utils/color'
 const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 'icosphere'] as const
 
 /** Maps light mode number to a subtype string */
-const LIGHT_SUBTYPES = ['ambient', 'directional', 'point'] as const
+const LIGHT_SUBTYPES = ['ambient', 'directional', 'point', 'area'] as const
 
 /** Maps path mode number to a subtype string */
 const PATH_SUBTYPES = ['line', 'circle', 'arc'] as const
@@ -155,7 +155,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const props = getProps(n)
     const mode = (props.mode as number) ?? 0
     const lightType = LIGHT_SUBTYPES[mode] ?? 'directional'
-    const targetNodeId = lightType === 'directional' && props.targetNodeId
+    const targetNodeId = (lightType === 'directional' || lightType === 'area') && props.targetNodeId
       ? (props.targetNodeId as string)
       : undefined
 
@@ -257,6 +257,8 @@ function normalizeLightProps(type: string, props: Record<string, unknown>): Reco
       return { color: props.color, intensity: props.dirIntensity, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
     case 'point':
       return { color: props.color, intensity: props.ptIntensity, distance: props.distance, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ }
+    case 'area':
+      return { color: props.color, intensity: props.areaIntensity ?? 5, width: props.areaWidth ?? 2, height: props.areaHeight ?? 1, positionX: props.positionX, positionY: props.positionY, positionZ: props.positionZ, rotationX: props.areaRotX ?? 0, rotationY: props.areaRotY ?? 0, rotationZ: props.areaRotZ ?? 0 }
     default:
       return props
   }

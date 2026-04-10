@@ -78,7 +78,7 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
                 />
                 <span className="text-[10px] text-text-muted ml-2 leading-none">{port.label ?? port.name}</span>
                 {portValue !== undefined && (
-                  <span className="text-[10px] font-mono leading-none text-accent">{portValue.toFixed(2)}</span>
+                  <span className="text-[10px] font-mono leading-none text-accent inline-block w-10 text-left tabular-nums">{portValue.toFixed(2)}</span>
                 )}
               </div>
             )
@@ -92,7 +92,7 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
             return (
               <div key={port.name} className="relative flex items-center gap-1">
                 {portValue !== undefined && (
-                  <span className="font-mono" style={{ fontSize: 10, color: 'var(--color-accent)' }}>{portValue.toFixed(2)}</span>
+                  <span className="text-[10px] font-mono text-accent inline-block w-10 text-right tabular-nums">{portValue.toFixed(2)}</span>
                 )}
                 <span className="text-[10px] text-text-muted mr-2 leading-none">{port.label ?? port.name}</span>
                 <Handle

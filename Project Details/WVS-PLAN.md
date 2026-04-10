@@ -207,7 +207,7 @@ src/
 | Material | Standard, Physical, Unlit |
 | Object | Mesh, Group |
 | Transform | Translate, Rotate, Scale |
-| Light | Ambient, Directional, Point, Spot |
+| Light | Ambient, Directional, Point, ~~Spot~~ → Area ✅ |
 | Camera | Perspective, Orthographic |
 | Time | Time, Sin(Time), Delta |
 | Math | Add, Subtract, Multiply, Divide, Sin, Cos, Lerp, Clamp, Remap, Abs, Floor, Fract |
@@ -376,8 +376,23 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
   - `showEnvBackground`: HDR als sichtbarer Hintergrund — überschreibt Solid-Background in beiden Viewports
 - [x] **FileControl Redesign** — eine Zeile (Filename-Anzeige + Action-Buttons), konsistentes Design-System
 - [x] **ViewCube Top/Bottom Orbit Bug Fix** — `up:[0,1,0]` + epsilon Offset für alle Snap-Views
+- [x] **EnvironmentLoader Background Fix** — `threeScene.background` nur löschen wenn `showEnvBackground` aktiv; `showEnvBgRef` für stale-closure-safe Cleanup
+- [x] **Circle Path Start** — t=0 auf +Z-Achse (π/2 Offset)
+- [x] **Node Port Value Width** — feste Breite (`w-10 tabular-nums`) verhindert Node-Breiten-Springen bei Animation
 
-#### 5c: Custom Shaders + Texturen
+### Phase 5c: Area Light ✅ DONE
+- [x] Neuer Light-Typ `Area` (mode 3) auf bestehendem Light-Node
+- [x] `THREE.RectAreaLight` — `RectAreaLightUniformsLib.init()` einmalig am Module-Level
+- [x] Properties: Intensity, Width, Height, Rotation X/Y/Z (default RotX=-90° → zeigt nach unten)
+- [x] Input-Ports: positionX/Y/Z, areaWidth, areaHeight, areaRotX/Y/Z, path, pathProgress
+- [x] Target-Support: `targetNodeId` NodeRef → LookAt-Orientierung, überschreibt manuelle Rotation; Rotation-Props/Ports ausgeblendet wenn Target gesetzt
+- [x] Custom Editor-Visual (imperativ): Rect-Outline (LineSegments) + X-Diagonalen + Richtungslinie (-Z, 0.6 Einheiten); kein Mesh/Material sichtbar
+- [x] Farbe: `#ffdd44` / `#ff8800` (selected) — identisch mit anderen Light-Icons
+- [x] Icon: `Rectangle` (Phosphor) in Node-Header + Scene Explorer
+- [x] Compiler: `'area'` in `LIGHT_SUBTYPES`, `normalizeLightProps` für area
+- [x] Prop-Reihenfolge: Type → Target → Color → Intensity → Width/Height → Distance → Position → Rotation → Progress
+
+#### 5d: Custom Shaders + Texturen
 - [ ] Color-Node — Color-Picker + `color` Output-Port; optional `r`/`g`/`b` Float-Input-Ports für Kanal-Animation via Math/Time
 - [ ] Color-Ops-Nodes (Mix, HSL Shift, Ramp)
 - [ ] Custom GLSL Shader-Node (Vertex + Fragment, Uniform-Ports)

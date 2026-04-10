@@ -102,24 +102,6 @@ export function PropertiesPanel() {
 
       {/* Properties */}
       <div className="p-4 flex flex-col gap-3">
-        {connectedInputPorts.has('path') && (
-          <div className="flex flex-col gap-1.5 pb-1">
-            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Path Position</div>
-            {(['positionX', 'positionY', 'positionZ'] as const).map((key, i) => {
-              const val = evalValues.get(`${selectedId}:${key}`)
-              return (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="text-[10px] text-text-muted w-4">{['X', 'Y', 'Z'][i]}</span>
-                  <div className="flex-1 h-6 flex items-center px-2 border border-border-default bg-accent/10">
-                    <span className="text-xs font-mono text-text-secondary">
-                      {val !== undefined ? val.toFixed(3) : '—'}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
 
         {Array.from(groups.entries()).map(([group, props]) => (
           <div key={group}>
@@ -144,6 +126,21 @@ export function PropertiesPanel() {
                       <div className="h-7 flex items-center justify-center border border-border-default bg-accent/15">
                         <span className="text-xs font-mono text-accent">
                           {connectedValue !== undefined ? connectedValue.toFixed(2) : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                }
+
+                // If linkedPath and path port is connected, show path-computed value as display
+                if (prop.linkedPath && connectedInputPorts.has('path')) {
+                  const pathValue = evalValues.get(`${selectedId}:${prop.uniform}`)
+                  return (
+                    <div key={prop.uniform} className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold text-text-secondary">{prop.label}</span>
+                      <div className="h-7 flex items-center justify-center border border-border-default bg-accent/15">
+                        <span className="text-xs font-mono text-accent">
+                          {pathValue !== undefined ? pathValue.toFixed(2) : '—'}
                         </span>
                       </div>
                     </div>
@@ -179,15 +176,23 @@ export function PropertiesPanel() {
                         onChange={(v) => handleChange(prop.uniform, v)}
                       />
                     )
-                  case 'select':
+                  case 'select': {
+                    // Filter options where visibleWhenPortDisconnected points to a connected port
+                    const filteredOptions = prop.options?.filter(
+                      (o) => !o.visibleWhenPortDisconnected || !connectedInputPorts.has(o.visibleWhenPortDisconnected)
+                    )
+                    const filteredProp = filteredOptions !== prop.options
+                      ? { ...prop, options: filteredOptions }
+                      : prop
                     return (
                       <SelectControl
                         key={prop.uniform}
-                        param={prop}
+                        param={filteredProp}
                         value={getValue(prop) as number}
                         onChange={(v) => handleChange(prop.uniform, v)}
                       />
                     )
+                  }
                   case 'noderef':
                     return (
                       <NodeRefControl

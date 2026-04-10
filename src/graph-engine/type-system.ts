@@ -51,6 +51,12 @@ export function isVisible(
     if ('portDisconnected' in cond) {
       return !connectedPorts?.has(cond.portDisconnected)
     }
+    if ('portConnected' in cond) {
+      return connectedPorts?.has(cond.portConnected) ?? false
+    }
+    if ('uniformFalsy' in cond) {
+      return !getData(cond.uniformFalsy)
+    }
     const depVal = getData(cond.uniform)
     if (cond.equal !== undefined) {
       const eq = cond.equal

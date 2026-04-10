@@ -43,18 +43,38 @@ const resizeHandle = (orientation: 'horizontal' | 'vertical') => (
 )
 
 export function EditorLayout() {
-  const nodes = useGraphStore((s) => s.nodes)
-  const edges = useGraphStore((s) => s.edges)
   const setScene = useSceneStore((s) => s.setScene)
 
   useEffect(() => {
     initDefaultGraph()
   }, [])
 
+  // Compile only on structural changes — ignore node position updates (graph canvas drag)
   useEffect(() => {
-    const compiled = compileGraph(nodes, edges)
-    setScene(compiled)
-  }, [nodes, edges, setScene])
+    const compile = (nodes: import('../../types/node-graph').GraphNode[], edges: import('../../types/node-graph').GraphEdge[]) => {
+      setScene(compileGraph(nodes, edges))
+    }
+
+    // Initial compile
+    const { nodes, edges } = useGraphStore.getState()
+    compile(nodes, edges)
+
+    let prevNodes = nodes
+    let prevEdges = edges
+
+    return useGraphStore.subscribe((state) => {
+      const { nodes, edges } = state
+      const edgesChanged = edges !== prevEdges
+      const structuralChange = edgesChanged ||
+        nodes.length !== prevNodes.length ||
+        nodes.some((n, i) => n.id !== prevNodes[i]?.id || n.type !== prevNodes[i]?.type || n.data !== prevNodes[i]?.data)
+
+      prevNodes = nodes
+      prevEdges = edges
+
+      if (structuralChange) compile(nodes, edges)
+    })
+  }, [setScene])
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base">

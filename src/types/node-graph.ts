@@ -88,6 +88,7 @@ export interface CompiledPath {
   pathType: 'line' | 'circle' | 'arc'
   pathProps: Record<string, unknown>
   position: [number, number, number]
+  transformNodeIds: string[]  // Transform nodes downstream from this path (in order)
 }
 
 export interface CompiledScene {

@@ -1,5 +1,8 @@
-## Zentrales Planungsdokument
-`Project Details/WVS-PLAN.md` — Architektur, Layout, UI Style, Node-Roadmap, Phasen-Plan. Immer aktuell halten.
+## Kontext-Dokumente
+- `Project Details/WVS-PLAN.md` — Architektur, Layout, UI Style, Node-Roadmap, Phasen-Plan. Immer aktuell halten.
+- `Project Details/PATTERNS.md` — UI/UX Interaktionsmuster (Gizmo, Live-Anzeige, Port-Verbindung). Vor neuen Features lesen.
+- `Project Details/` — weitere Planungs- und Referenz-Dokumente zum Projekt
+- `Sessions/` — Session-Summaries (YYYY-MM-DD.md), erstellt durch `/pre-compact`. Nur die **neueste** Datei lesen — ältere sind bereits in WVS-PLAN.md/CLAUDE.md eingeflossen.
 
 ## Workflow Notes
 - Use `pnpm`, not `npm`
@@ -47,6 +50,9 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - CameraView uses raw THREE.PerspectiveCamera (no drei) — all state set imperatively in useFrame.
 - Look-ahead only in Free mode (mode=0) — Target mode always uses lookAt to target mesh.
 - Three.js cam.quaternion._onChangeCallback corrupts multi-step quaternion ops — use scratch quaternion + copy.
+- Path position/rotation via Transform chain — Path node has NO ports/props for position. See PATTERNS.md.
+- `linkedPath: true` on PropertyDef → shows live evaluator value when `path` input port connected.
+- Path gizmo drag without downstream edge: fallback silently (no Transform auto-create). Connect path first.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -111,8 +117,8 @@ src/
 
 ## Current Status (2026-04-09)
 - Phase 1 + 2 + 3 + 4 complete ✅
-- Phase 5a complete ✅: Path Nodes (Line/Circle/Arc), Camera/Light path ports, Path gizmos, SceneExplorer paths, EditorView fixed lighting, Wireframe flat shading
-- **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths (XZ works). 10+ fix attempts failed — see WVS-PLAN.md Phase 5a. Tangent values themselves bounce — issue is in `evaluatePathTangent` or `applyEulerXYZ`.
+- Phase 5a complete ✅: Path Nodes follow Mesh pattern — `[Path] → [Transform] → [Camera/Light]`. Transform has path in/out ports. Path gizmo auto-creates Transform on drag. `PATTERNS.md` documents both patterns.
+- **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 - Next: Phase 5b — glTF Import Node; danach Phase 5c — Custom GLSL Shader-Node

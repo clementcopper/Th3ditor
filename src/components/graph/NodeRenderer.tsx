@@ -64,6 +64,8 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
             if (port.type === 'float') {
               const edge = edges.find((e) => e.target === id && e.targetHandle === port.name)
               if (edge) portValue = values.get(`${edge.source}:${edge.sourceHandle}`)
+              // Fallback: path-computed values are stored under own node id (e.g. camera on path)
+              if (portValue === undefined) portValue = values.get(`${id}:${port.name}`)
             }
             return (
               <div key={port.name} className="relative flex items-center gap-1">

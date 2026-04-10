@@ -7,18 +7,22 @@ const transform: NodeDefinition = {
   category: 'transform',
   inputs: [
     { name: 'mesh', type: 'mesh', label: 'Mesh' },
+    { name: 'path', type: 'path', label: 'Path' },
     { name: 'x', type: 'float', label: 'X' },
     { name: 'y', type: 'float', label: 'Y' },
     { name: 'z', type: 'float', label: 'Z' },
   ],
-  outputs: [{ name: 'mesh', type: 'mesh', label: 'Mesh' }],
+  outputs: [
+    { name: 'mesh', type: 'mesh', label: 'Mesh' },
+    { name: 'path', type: 'path', label: 'Path' },
+  ],
   properties: [
     {
       type: 'select', uniform: 'mode', label: 'Type', default: 0,
       options: [
         { label: 'Translate', value: '0' },
         { label: 'Rotate', value: '1' },
-        { label: 'Scale', value: '2' },
+        { label: 'Scale', value: '2', visibleWhenPortDisconnected: 'path' },
       ],
     },
     // Translate (0)

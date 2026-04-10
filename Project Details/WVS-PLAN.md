@@ -304,16 +304,18 @@ src/
 
 ### Phase 5a: Path Nodes + Path Constraints ✅ DONE
 - [x] Path-Node-Typen: Line, Circle, Arc
-- [x] Path-Ports an Camera und Light Nodes (`path` + `pathProgress` Inputs)
-- [x] Path-Constraints via Port-Kabel (nicht Noderef-Dropdown)
-- [x] Compiler: `CompiledPath`-Typ, `pathNodeId`/`pathProgress`/`pathLookAhead` an CompiledCamera
-- [x] LiveEvaluator: Position-Update per Frame entlang Path
+- [x] Path-Constraints via Port-Kabel: `[Path] → [Transform] → [Camera/Light]`
+- [x] Transform-Node: `path` Input + Output Ports (zusätzlich zu `mesh`)
+- [x] Path-Node: keine Input-Ports, keine Position/Rotation-Props — Transform übernimmt das
+- [x] Compiler: `CompiledPath` mit `transformNodeIds`, `resolvePathNodeId` für Camera/Light
+- [x] LiveEvaluator: Transform-Kette für Path-Position + Rotation per Frame
+- [x] Path-Gizmo: Auto-Create Transform bei Drag (wie Mesh-Muster) — `PATTERNS.md`
+- [x] Camera/Light Position: `linkedPath: true` → zeigt Live-Wert wenn Path verbunden
 - [x] Camera Look Ahead: `pathLookAhead` Bool-Property, Tangenten-basierte Orientierung
 - [x] Path-Gizmos im EditorView (Linie/Kreis visualisiert)
 - [x] SceneExplorer: Paths anzeigen
 - [x] EditorView: feste Viewport-Beleuchtung (Ambient + Directional), keine Szenen-Lichter
 - [x] Wireframe: flat shading via `meshBasicMaterial`
-- [x] Circle Path Properties: Radius, Plane (XY/XZ/YZ), Center Offset
 - [x] Geometry Nodes erweitert: Capsule, Icosphere (alle mit Segment-Properties)
 
 **⚠️ Deferred Bug: Camera Look-Ahead Bounce auf rotierten Circle Paths**

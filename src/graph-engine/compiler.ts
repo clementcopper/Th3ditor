@@ -71,15 +71,27 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
   const paths: CompiledPath[] = pathNodes.map((n) => {
     const props = getProps(n)
     const mode = (props.mode as number) ?? 0
+
+    // Walk downstream through Transform nodes (via 'path' handle)
+    const transformNodeIds: string[] = []
+    let currentId = n.id
+    const visited = new Set<string>()
+    while (!visited.has(currentId)) {
+      visited.add(currentId)
+      const outEdge = edges.find((e) => e.source === currentId && e.sourceHandle === 'path')
+      if (!outEdge) break
+      const next = nodeMap.get(outEdge.target)
+      if (!next || next.type !== 'transform') break
+      transformNodeIds.push(next.id)
+      currentId = next.id
+    }
+
     return {
       id: n.id,
       pathType: PATH_SUBTYPES[mode] ?? 'line',
       pathProps: props,
-      position: [
-        (props.positionX as number) ?? 0,
-        (props.positionY as number) ?? 0,
-        (props.positionZ as number) ?? 0,
-      ],
+      position: [0, 0, 0],   // Set at runtime by LiveEvaluator from Transform chain
+      transformNodeIds,
     }
   })
 
@@ -103,11 +115,11 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       ? (props.targetNodeId as string)
       : undefined
 
-    // Path via port connection
+    // Path via port connection (may go through Transform nodes)
     const pathEdge = lightType !== 'ambient'
       ? edges.find((e) => e.target === n.id && e.targetHandle === 'path')
       : undefined
-    const pathNodeId = pathEdge?.source
+    const pathNodeId = pathEdge ? resolvePathNodeId(pathEdge.source, edges, nodeMap) : undefined
 
     return {
       id: n.id,
@@ -143,8 +155,11 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       fov: (props.fov as number) ?? 50,
       mode: camMode,
       targetNodeId: camMode === 1 && props.targetNodeId ? (props.targetNodeId as string) : undefined,
-      // Path via port connection
-      pathNodeId: edges.find((e) => e.target === camNode.id && e.targetHandle === 'path')?.source,
+      // Path via port connection (may go through Transform nodes)
+      pathNodeId: (() => {
+        const e = edges.find((e) => e.target === camNode.id && e.targetHandle === 'path')
+        return e ? resolvePathNodeId(e.source, edges, nodeMap) : undefined
+      })(),
       pathProgress: (props.pathProgress as number) ?? 0,
       pathLookAhead: (props.pathLookAhead as boolean) ?? true,
     }
@@ -188,6 +203,33 @@ function normalizeLightProps(type: string, props: Record<string, unknown>): Reco
     default:
       return props
   }
+}
+
+/**
+ * Walk upstream from a node through 'path' inputs until we reach the actual Path node.
+ * Used by Camera/Light to find the real path when a Transform is in between.
+ */
+function resolvePathNodeId(
+  sourceId: string,
+  edges: GraphEdge[],
+  nodeMap: Map<string, GraphNode>,
+): string | undefined {
+  let currentId = sourceId
+  const visited = new Set<string>()
+  while (!visited.has(currentId)) {
+    visited.add(currentId)
+    const node = nodeMap.get(currentId)
+    if (!node) return undefined
+    if (node.type === 'path') return currentId
+    if (node.type === 'transform') {
+      const pathEdge = edges.find((e) => e.target === currentId && e.targetHandle === 'path')
+      if (!pathEdge) return undefined
+      currentId = pathEdge.source
+    } else {
+      return undefined
+    }
+  }
+  return undefined
 }
 
 /**

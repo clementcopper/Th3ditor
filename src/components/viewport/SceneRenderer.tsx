@@ -608,10 +608,13 @@ function LiveEvaluator() {
             updatedLight = { ...updatedLight, props: { ...updatedLight.props, positionX: pos[0], positionY: pos[1], positionZ: pos[2] }, pathProgress }
             lightChanged = true
           }
-          // Push live position into evaluator store for PropertiesPanel display
+          // Push real world position + path rotation into evaluator store for PropertiesPanel/port display
           cache.set(`${light.id}:positionX`, pos[0])
           cache.set(`${light.id}:positionY`, pos[1])
           cache.set(`${light.id}:positionZ`, pos[2])
+          cache.set(`${light.id}:rotationX`, (lightPath.pathProps.rotationX as number) ?? 0)
+          cache.set(`${light.id}:rotationY`, (lightPath.pathProps.rotationY as number) ?? 0)
+          cache.set(`${light.id}:rotationZ`, (lightPath.pathProps.rotationZ as number) ?? 0)
         }
       }
 
@@ -681,16 +684,79 @@ function LiveEvaluator() {
             changed = true
             newCamera = { ...newCamera, position: pos, rotation: pathRot }
           }
-          // Push live position into evaluator store for PropertiesPanel display
+          // Push real world position + path rotation into evaluator store for PropertiesPanel/port display
           cache.set(`${scene.camera!.nodeId}:positionX`, pos[0])
           cache.set(`${scene.camera!.nodeId}:positionY`, pos[1])
           cache.set(`${scene.camera!.nodeId}:positionZ`, pos[2])
+          cache.set(`${scene.camera!.nodeId}:rotationX`, (camPath.pathProps.rotationX as number) ?? 0)
+          cache.set(`${scene.camera!.nodeId}:rotationY`, (camPath.pathProps.rotationY as number) ?? 0)
+          cache.set(`${scene.camera!.nodeId}:rotationZ`, (camPath.pathProps.rotationZ as number) ?? 0)
         }
       }
     }
 
+    // Evaluate Transform chains for path nodes — applies position + rotation from Transform nodes
+    const newPaths = scene.paths.map((path) => {
+      const transformIds = path.transformNodeIds ?? []
+      if (transformIds.length === 0) return path
+
+      const pos: [number, number, number] = [0, 0, 0]
+      const rot = { x: 0, y: 0, z: 0 }
+
+      for (const transformId of transformIds) {
+        const tNode = nodes.find((n) => n.id === transformId)
+        if (!tNode) continue
+        const tMode = (tNode.data.mode as number) ?? 0
+
+        if (tMode === 0) {
+          // Translate — read tx/ty/tz, possibly overridden by connected float ports
+          let tx = (tNode.data.tx as number) ?? 0
+          let ty = (tNode.data.ty as number) ?? 0
+          let tz = (tNode.data.tz as number) ?? 0
+          for (const edge of edges) {
+            if (edge.target !== transformId) continue
+            const src = nodes.find((n) => n.id === edge.source)
+            if (!src || (src.type !== 'time' && src.type !== 'math' && src.type !== 'input')) continue
+            const val = evaluateFloatPort(src.id, edge.sourceHandle, nodes, edges, ctx, cache)
+            if (val === undefined) continue
+            if (edge.targetHandle === 'x') tx = val
+            if (edge.targetHandle === 'y') ty = val
+            if (edge.targetHandle === 'z') tz = val
+          }
+          pos[0] += tx; pos[1] += ty; pos[2] += tz
+        } else if (tMode === 1) {
+          // Rotate — read rx/ry/rz (degrees), possibly overridden by connected float ports
+          let rx = (tNode.data.rx as number) ?? 0
+          let ry = (tNode.data.ry as number) ?? 0
+          let rz = (tNode.data.rz as number) ?? 0
+          for (const edge of edges) {
+            if (edge.target !== transformId) continue
+            const src = nodes.find((n) => n.id === edge.source)
+            if (!src || (src.type !== 'time' && src.type !== 'math' && src.type !== 'input')) continue
+            const val = evaluateFloatPort(src.id, edge.sourceHandle, nodes, edges, ctx, cache)
+            if (val === undefined) continue
+            if (edge.targetHandle === 'x') rx = val
+            if (edge.targetHandle === 'y') ry = val
+            if (edge.targetHandle === 'z') rz = val
+          }
+          rot.x += rx; rot.y += ry; rot.z += rz
+        }
+      }
+
+      const posChanged = pos[0] !== path.position[0] || pos[1] !== path.position[1] || pos[2] !== path.position[2]
+      const rotChanged = rot.x !== ((path.pathProps.rotationX as number) ?? 0)
+        || rot.y !== ((path.pathProps.rotationY as number) ?? 0)
+        || rot.z !== ((path.pathProps.rotationZ as number) ?? 0)
+
+      if (posChanged || rotChanged) changed = true
+
+      return (posChanged || rotChanged)
+        ? { ...path, position: pos, pathProps: { ...path.pathProps, rotationX: rot.x, rotationY: rot.y, rotationZ: rot.z } }
+        : path
+    })
+
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, paths: scene.paths, lights: newLights, camera: newCamera })
+      useSceneStore.getState().setScene({ meshes: newMeshes, paths: newPaths, lights: newLights, camera: newCamera })
     }
 
     // Throttled update of evaluator store for edge labels + path positions (~10fps)
@@ -713,7 +779,6 @@ function PathObject({ path }: { path: CompiledPath }) {
 
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
-  const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const gizmoMode = useEditorStore((s) => s.gizmoMode)
   const isSelected = selectedNodeId === path.id
 
@@ -739,18 +804,52 @@ function PathObject({ path }: { path: CompiledPath }) {
   function handleDragEnd() {
     if (controls) (controls as unknown as { enabled: boolean }).enabled = true
     if (!groupRef.current) return
-    const p = groupRef.current.position
-    const r = groupRef.current.rotation
 
-    if (gizmoMode === 'translate') {
-      updateNodeData(path.id, { positionX: p.x, positionY: p.y, positionZ: p.z })
-    } else if (gizmoMode === 'rotate') {
-      updateNodeData(path.id, {
-        rotationX: r.x * RAD2DEG,
-        rotationY: r.y * RAD2DEG,
-        rotationZ: r.z * RAD2DEG,
+    const gs = useGraphStore.getState()
+    const pos = groupRef.current.position
+    const rot = groupRef.current.rotation
+    const modeIndex = gizmoMode === 'translate' ? 0 : gizmoMode === 'rotate' ? 1 : 0
+
+    // Find existing Transform node for this mode in the path's transform chain
+    const transformNode = (path.transformNodeIds ?? [])
+      .map((id) => gs.nodes.find((n) => n.id === id))
+      .find((n) => n?.type === 'transform' && ((n.data.mode as number) ?? 0) === modeIndex)
+
+    if (transformNode) {
+      if (gizmoMode === 'translate') {
+        gs.updateNodeData(transformNode.id, { tx: pos.x, ty: pos.y, tz: pos.z })
+      } else if (gizmoMode === 'rotate') {
+        gs.updateNodeData(transformNode.id, { rx: rot.x * RAD2DEG, ry: rot.y * RAD2DEG, rz: rot.z * RAD2DEG })
+      }
+    } else {
+      // Auto-create and insert a new Transform node into the path chain
+      const baseData = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, sx: 1, sy: 1, sz: 1 }
+      const modeData =
+        gizmoMode === 'translate' ? { mode: 0, tx: pos.x, ty: pos.y, tz: pos.z } :
+        gizmoMode === 'rotate' ? { mode: 1, rx: rot.x * RAD2DEG, ry: rot.y * RAD2DEG, rz: rot.z * RAD2DEG } :
+        { mode: 0, tx: pos.x, ty: pos.y, tz: pos.z }
+
+      // Insert after the last node in the transform chain (or after the path itself)
+      const lastId = (path.transformNodeIds ?? []).length > 0
+        ? path.transformNodeIds[path.transformNodeIds.length - 1]
+        : path.id
+      const outEdge = gs.edges.find((e) => e.source === lastId && e.sourceHandle === 'path')
+      const pathGraphNode = gs.nodes.find((n) => n.id === path.id)
+      const newId = `transform-${Date.now()}`
+
+      if (outEdge) gs.removeEdge(outEdge.id)
+      gs.addNode({
+        id: newId,
+        type: 'transform',
+        position: { x: (pathGraphNode?.position.x ?? 0) + 220, y: pathGraphNode?.position.y ?? 0 },
+        data: { ...baseData, ...modeData },
       })
+      gs.addEdge({ id: `e-${lastId}-${newId}`, source: lastId, sourceHandle: 'path', target: newId, targetHandle: 'path' })
+      if (outEdge) {
+        gs.addEdge({ id: `e-${newId}-${outEdge.target}`, source: newId, sourceHandle: 'path', target: outEdge.target, targetHandle: outEdge.targetHandle })
+      }
     }
+
     requestAnimationFrame(() => requestAnimationFrame(() => { isDragging.current = false }))
   }
 

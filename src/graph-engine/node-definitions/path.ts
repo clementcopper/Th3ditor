@@ -29,20 +29,12 @@ const path: NodeDefinition = {
     { type: 'float',  uniform: 'sweepAngle',  label: 'Sweep°',   min: 1, max: 360, step: 1, default: 180, visibleWhen: { uniform: 'mode', equal: 2 } },
     // Common
     { type: 'int',    uniform: 'segments',    label: 'Segments', min: 4, max: 256, step: 1, default: 64 },
-    { type: 'float',  uniform: 'positionX',   label: 'X',        min: -50, max: 50, step: 0.1, hardMin: -1000, hardMax: 1000, default: 0 },
-    { type: 'float',  uniform: 'positionY',   label: 'Y',        min: -50, max: 50, step: 0.1, hardMin: -1000, hardMax: 1000, default: 0 },
-    { type: 'float',  uniform: 'positionZ',   label: 'Z',        min: -50, max: 50, step: 0.1, hardMin: -1000, hardMax: 1000, default: 0 },
-    { type: 'float',  uniform: 'rotationX',   label: 'Rot X',    min: -180, max: 180, step: 1, hardMin: -360, hardMax: 360, default: 0 },
-    { type: 'float',  uniform: 'rotationY',   label: 'Rot Y',    min: -180, max: 180, step: 1, hardMin: -360, hardMax: 360, default: 0 },
-    { type: 'float',  uniform: 'rotationZ',   label: 'Rot Z',    min: -180, max: 180, step: 1, hardMin: -360, hardMax: 360, default: 0 },
   ],
   defaults: {
     mode: 0,
     length: 4, lineAxis: 0,
     radius: 2, sweepAngle: 180,
     segments: 64,
-    positionX: 0, positionY: 0, positionZ: 0,
-    rotationX: 0, rotationY: 0, rotationZ: 0,
   },
 }
 

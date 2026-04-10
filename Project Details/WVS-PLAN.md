@@ -221,7 +221,7 @@ src/
 | Texture | Image, Noise (Simplex/Voronoi), Gradient, Checkerboard |
 | Color Ops | Mix, HSL Shift, Color Ramp, Invert |
 | Post-Processing | Bloom, Vignette, DOF, SSAO, Color Grading — als Node-Chain im Graph |
-| Environment | HDRI / Environment Map, Procedural Sky, Fog |
+| Environment | ~~HDRI / Environment Map~~ ✅ (IBL done), Procedural Sky, Fog |
 
 ### Längerfristig (Phase 6+)
 | Kategorie | Nodes |
@@ -352,7 +352,7 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 
 **Nächster Ansatz (wenn wieder aufgegriffen):** `applyEulerXYZ` debuggen — Rückgabewert `[x3, y3, z2]` prüfen (z-Komponente nach Rz-Rotation nicht aktualisiert?). Alternativ: `evaluatePathTangent` analytisch statt per finite difference berechnen.
 
-### Phase 5b: glTF Import Node ✅ DONE
+### Phase 5b: glTF Import Node + Scene Output Settings ✅ DONE
 - [x] Node-Typ `object/gltf` — Kategorie `object`, Output-Port `mesh`
 - [x] Property: File-Picker (GLB single file + glTF folder via `webkitdirectory`), Dateiname-Anzeige
 - [x] Lädt via `THREE.GLTFLoader` + `LoadingManager` (multi-file .gltf mit bin/textures)
@@ -364,8 +364,18 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
   - Raw bbox vor `groupRef.add()` berechnen (world-matrix-safe)
   - Origin-Punkt: fixer Screen-Space Cross (14px, sizeAttenuation=false), immer sichtbar
 - [x] Camera Target auf glTF-Objekte möglich (CameraView + LiveEvaluator lookup)
-- [x] Timeline Scrubber — imperative DOM-Updates via Zustand-Subscribe (keine Re-Renders)
+- [x] Timeline Scrubber — imperative DOM-Updates via Zustand-Subscribe (keine Re-Renders) + Scroll-Support
 - [x] Viewport Ambient/Directional Light erhöht für bessere Modell-Sichtbarkeit
+- [x] **Scene Output: Smooth Shading** — `flatShading = false/true` auf allen glTF-Materialien (default ON)
+- [x] **Scene Output: Background Color** — Color-Picker für Camera Viewport Hintergrund
+- [x] **Scene Output: HDR Environment Map (IBL)**
+  - `envMap` File-Property (.hdr), `envIntensity` Slider (0–5), `showEnvBackground` Toggle
+  - `EnvironmentLoader` Component in `SceneRenderer` (wirkt auf beide Viewports)
+  - `RGBELoader` + `PMREMGenerator.fromEquirectangular()` → `scene.environment` + `scene.environmentIntensity`
+  - ACESFilmic Tone Mapping auto-aktiviert wenn HDR geladen
+  - `showEnvBackground`: HDR als sichtbarer Hintergrund — überschreibt Solid-Background in beiden Viewports
+- [x] **FileControl Redesign** — eine Zeile (Filename-Anzeige + Action-Buttons), konsistentes Design-System
+- [x] **ViewCube Top/Bottom Orbit Bug Fix** — `up:[0,1,0]` + epsilon Offset für alle Snap-Views
 
 #### 5c: Custom Shaders + Texturen
 - [ ] Color-Node — Color-Picker + `color` Output-Port; optional `r`/`g`/`b` Float-Input-Ports für Kanal-Animation via Math/Time

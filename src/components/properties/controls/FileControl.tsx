@@ -37,17 +37,14 @@ export function FileControl({ param, value, onChange }: FileControlProps) {
       return
     }
 
-    // Build extraFiles with both relative path and bare filename as keys
-    // so LoadingManager can resolve references like 'textures/color.png' or 'color.png'
     const extraFiles: { name: string; dataUrl: string }[] = []
     for (const f of otherFiles) {
       const dataUrl = await readAsDataUrl(f)
-      // webkitRelativePath = 'folderName/sub/file.ext' → strip top folder
       const relPath = (f as File & { webkitRelativePath?: string }).webkitRelativePath
       const parts = relPath ? relPath.split('/').slice(1) : [f.name]
-      extraFiles.push({ name: parts.join('/'), dataUrl })   // 'textures/color.png'
+      extraFiles.push({ name: parts.join('/'), dataUrl })
       if (parts.length > 1) {
-        extraFiles.push({ name: parts[parts.length - 1], dataUrl }) // 'color.png'
+        extraFiles.push({ name: parts[parts.length - 1], dataUrl })
       }
     }
 
@@ -74,25 +71,31 @@ export function FileControl({ param, value, onChange }: FileControlProps) {
     input.click()
   }
 
+  const isGltf = param.accept?.includes('gltf') ?? false
+
+  const actionBtn = 'shrink-0 px-2.5 h-full text-xs font-medium bg-surface-base hover:bg-surface-panel text-text-secondary hover:text-text-primary transition-colors cursor-pointer border-l border-border-default'
+
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex gap-1">
-        <button
-          onClick={handleFileClick}
-          className="flex-1 px-2 py-1 text-xs text-left bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
-        >
-          GLB File
+      <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
+      <div className="flex h-7 border border-border-default overflow-hidden">
+        {/* Filename display */}
+        <div className="flex-1 flex items-center px-2 bg-surface-base overflow-hidden min-w-0">
+          <span className="text-[10px] font-mono text-text-muted truncate">
+            {fileName ?? (isGltf ? 'No model loaded' : 'No file loaded')}
+          </span>
+        </div>
+        {/* File button */}
+        <button onClick={handleFileClick} className={actionBtn}>
+          {isGltf ? 'GLB' : 'Open'}
         </button>
-        <button
-          onClick={handleFolderClick}
-          className="flex-1 px-2 py-1 text-xs text-left bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
-        >
-          glTF Folder
-        </button>
+        {/* Folder button — gltf only */}
+        {isGltf && (
+          <button onClick={handleFolderClick} className={actionBtn}>
+            Folder
+          </button>
+        )}
       </div>
-      <span className="text-[10px] text-[var(--text-muted)] truncate pl-1">
-        {fileName ?? 'No model loaded'}
-      </span>
     </div>
   )
 }

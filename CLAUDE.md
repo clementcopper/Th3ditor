@@ -60,6 +60,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Scale on Transform hidden when path port connected (`visibleWhenPortDisconnected: 'path'` on option).
 - glTF bbox centering: compute raw bbox BEFORE `groupRef.current.add(scene)` — world matrices include parent transform otherwise.
 - All UI text in the app must be in English (labels, options, buttons, placeholders).
+- `computeVertexNormals()` destroys UV seams on glTF — only toggle `flatShading = false/true` + `needsUpdate`.
+- OrbitControls top/bottom: custom `camera.up` swaps orbit axes — use `up:[0,1,0]` + `[eps,±dist,0]` epsilon.
+- HDR IBL: `RGBELoader` + `PMREMGenerator.fromEquirectangular()` → `scene.environment`; `scene.environmentIntensity` (r163+).
+- Color node defaults must be RGBA arrays `[r,g,b,a]` (0–1), never hex strings — compiler converts via `rgbaToHex6`.
+- `FileControl`: `param.accept?.includes('gltf')` controls folder button visibility.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -122,11 +127,10 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-09)
+## Current Status (2026-04-10)
 - Phase 1 + 2 + 3 + 4 complete ✅
-- Phase 5a complete ✅: Path Nodes follow Mesh pattern — `[Path] → [Transform] → [Camera/Light]`. Transform has path in/out ports. Path gizmo auto-creates Transform on drag. `PATTERNS.md` documents both patterns.
+- Phase 5a complete ✅: Path Nodes, Camera/Light path constraints, Look-Ahead
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
-- Geometry Nodes: Box, Sphere, Plane, Torus, Cylinder, Capsule, Icosphere (alle mit vollständigen Segment-Properties)
+- Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control, Timeline Scrubber + Scroll, Smooth Shading, Camera Background Color, HDR Environment Map (IBL), FileControl redesign, ViewCube orbit fix
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-- Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control (Off/BBox Center/BBox Bottom/Manual), Timeline Scrubber
 - Next: Phase 5c — Color-Node → Color-Ops → Custom GLSL Shader-Node

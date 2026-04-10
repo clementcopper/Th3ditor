@@ -91,9 +91,47 @@ Verfügbare `VisibleWhenCondition`-Typen:
 
 ---
 
+## Pattern D — Scene Output: Szenen-weite Einstellungen
+
+Der `scene/output`-Node ist der einzige Ort für **szenen-weite Render-Einstellungen**:
+
+| Property | Typ | Beschreibung |
+|---|---|---|
+| `smoothShading` | bool | `flatShading = false` auf allen glTF-Materialien (default ON) |
+| `bgColor` | color | Hintergrundfarbe im Camera Viewport |
+| `envMap` | file (.hdr) | HDR Environment Map für IBL + Reflexionen |
+| `envIntensity` | float | `scene.environmentIntensity` — live, kein Reload |
+| `showEnvBackground` | bool | HDR als sichtbarer Hintergrund in beiden Viewports |
+
+**Implementierung:** `EnvironmentLoader` Component in `SceneRenderer` — läuft in beiden Canvas-Instanzen (Editor + Camera) automatisch.
+
+**Color-Properties:** immer als RGBA-Array `[r,g,b,a]` (0–1) in node defaults speichern — nie als Hex-String. Konvertierung zu Hex in `compiler.ts` via `rgbaToHex6()`.
+
+---
+
+## Pattern E — File Property Controls
+
+`FileControl` — eine Zeile, konsistent mit Slider/Toggle:
+
+```
+[Label]
+[ filename.ext oder placeholder    ] [ Open ]      ← single file (HDR etc.)
+[ filename.glb oder placeholder    ] [ GLB ] [ Folder ]  ← glTF (detect via accept.includes('gltf'))
+```
+
+- `h-7`, `border-border-default`, `bg-surface-base` — wie alle anderen Controls
+- Filename-Anzeige inline (read-only, truncated)
+- Action-Buttons rechts mit `border-l border-border-default` Trennlinie
+- `isGltf = param.accept?.includes('gltf')` → steuert ob Folder-Button erscheint
+
+---
+
 ## Anti-Patterns (nicht verwenden)
 
 - ❌ Direkte positionX/Y/Z-Props auf Path-Nodes — Transform-Chain verwenden
 - ❌ Sonderblöcke im PropertiesPanel für spezifische Node-Kombos — `linkedPath: true` verwenden
 - ❌ Hardcodierte Plane-Dropdown (XY/XZ/YZ) — stattdessen rotationX/Y/Z via Transform verwenden
 - ❌ Scale-Transform auf Path-Ketten — Scale ist nur für Mesh sinnvoll
+- ❌ `computeVertexNormals()` für Smooth Shading — zerstört UV-Seams; nur `flatShading = false` verwenden
+- ❌ Color-Defaults als Hex-String in NodeDefinition — RGBA-Array `[r,g,b,a]` verwenden
+- ❌ OrbitControls top/bottom mit custom `camera.up` ([0,0,-1]) — swapped axes; epsilon-Offset + `up:[0,1,0]` verwenden

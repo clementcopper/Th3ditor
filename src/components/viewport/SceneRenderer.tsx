@@ -1,8 +1,9 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
@@ -838,7 +839,7 @@ function LiveEvaluator() {
     })
 
     if (changed) {
-      useSceneStore.getState().setScene({ meshes: newMeshes, gltfObjects: newGltfObjects, paths: newPaths, lights: newLights, camera: newCamera })
+      useSceneStore.getState().setScene({ ...scene, meshes: newMeshes, gltfObjects: newGltfObjects, paths: newPaths, lights: newLights, camera: newCamera })
     }
 
     // Throttled update of evaluator store for edge labels + path positions (~10fps)
@@ -854,14 +855,72 @@ function LiveEvaluator() {
 
 export { LiveEvaluator }
 
+function EnvironmentLoader() {
+  const envMapDataUrl = useSceneStore((s) => s.scene.envMapDataUrl)
+  const envIntensity = useSceneStore((s) => s.scene.envIntensity)
+  const showEnvBackground = useSceneStore((s) => s.scene.showEnvBackground)
+  const { gl, scene: threeScene } = useThree()
+  const envMapRef = useRef<THREE.Texture | null>(null)
+
+  // Load / reload when file changes
+  useEffect(() => {
+    if (envMapRef.current) { envMapRef.current.dispose(); envMapRef.current = null }
+    threeScene.environment = null
+    threeScene.background = null
+    gl.toneMapping = THREE.NoToneMapping
+    gl.toneMappingExposure = 1
+    if (!envMapDataUrl) return
+
+    let cancelled = false
+    const pmremGen = new THREE.PMREMGenerator(gl)
+    pmremGen.compileEquirectangularShader()
+    const loader = new RGBELoader()
+    loader.load(envMapDataUrl, (texture) => {
+      if (cancelled) { texture.dispose(); pmremGen.dispose(); return }
+      const rt = pmremGen.fromEquirectangular(texture)
+      envMapRef.current = rt.texture
+      threeScene.environment = rt.texture
+      threeScene.environmentIntensity = envIntensity
+      if (showEnvBackground) threeScene.background = rt.texture
+      gl.toneMapping = THREE.ACESFilmicToneMapping
+      gl.toneMappingExposure = 1
+      texture.dispose()
+      pmremGen.dispose()
+    })
+    return () => {
+      cancelled = true
+      if (envMapRef.current) { envMapRef.current.dispose(); envMapRef.current = null }
+      threeScene.environment = null
+      threeScene.background = null
+      gl.toneMapping = THREE.NoToneMapping
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envMapDataUrl])
+
+  // Update intensity live without reload
+  useEffect(() => {
+    if (threeScene.environment) threeScene.environmentIntensity = envIntensity
+  }, [envIntensity, threeScene])
+
+  // Toggle background without reload
+  useEffect(() => {
+    if (!threeScene.environment) return
+    threeScene.background = showEnvBackground ? threeScene.environment : null
+  }, [showEnvBackground, threeScene])
+
+  return null
+}
+
 function GltfObject({
   gltf,
   editorShading,
   isEditorView,
+  smoothShading,
 }: {
   gltf: CompiledGLTF
   editorShading: boolean
   isEditorView: boolean
+  smoothShading: boolean
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const pivotRef = useRef<THREE.Group>(null)
@@ -869,6 +928,8 @@ function GltfObject({
   const isDragging = useRef(false)
   const rawBboxCenter = useRef<THREE.Vector3 | null>(null)
   const rawBboxMin = useRef<THREE.Vector3 | null>(null)
+  // Incremented after each successful load to trigger the shading effect
+  const [smoothVersion, setSmoothVersion] = useState(0)
   const t = gltf.transform
 
   // Cross-shaped canvas texture for origin indicator (created once)
@@ -968,6 +1029,7 @@ function GltfObject({
       groupRef.current.add(result.scene)
       applyCenterToScene(result.scene)
       applyWireframeToScene(result.scene, wireframeOverrideRef.current)
+      setSmoothVersion((v) => v + 1)
     })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -979,6 +1041,21 @@ function GltfObject({
     applyCenterToScene(loadedRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gltf.centerMode, gltf.originX, gltf.originY, gltf.originZ])
+
+  // Apply smooth shading after load or when toggle changes
+  useEffect(() => {
+    if (!loadedRef.current) return
+    loadedRef.current.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      mats.forEach((m) => {
+        (m as THREE.MeshStandardMaterial).flatShading = !smoothShading
+        m.needsUpdate = true
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smoothShading, smoothVersion])
 
   // Apply wireframe override only when shadingMode changes
   useEffect(() => {
@@ -1246,6 +1323,7 @@ export function SceneRenderer({
 
   return (
     <>
+      <EnvironmentLoader />
       {isEditorView && scene.paths.map((p) => (
         <PathObject key={p.id} path={p} />
       ))}
@@ -1256,7 +1334,7 @@ export function SceneRenderer({
         <MeshObject key={mesh.id} mesh={mesh} editorShading={editorShading} isEditorView={isEditorView} />
       ))}
       {scene.gltfObjects.map((gltf) => (
-        <GltfObject key={gltf.id} gltf={gltf} editorShading={editorShading} isEditorView={isEditorView} />
+        <GltfObject key={gltf.id} gltf={gltf} editorShading={editorShading} isEditorView={isEditorView} smoothShading={scene.smoothShading} />
       ))}
       {isEditorView && scene.camera && (
         <CameraIcon camera={scene.camera} />

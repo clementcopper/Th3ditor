@@ -154,6 +154,13 @@ function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | nu
   return null
 }
 
+function CameraBackground() {
+  const bgColor = useSceneStore((s) => s.scene.bgColor ?? '#191614')
+  const hdrBgActive = useSceneStore((s) => !!s.scene.envMapDataUrl && s.scene.showEnvBackground)
+  if (hdrBgActive) return null
+  return <color attach="background" args={[bgColor]} />
+}
+
 function CameraViewContents({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | null> }) {
   return (
     <>
@@ -184,7 +191,7 @@ export function CameraView() {
         }}
       />
       <Canvas>
-        <color attach="background" args={['#191614']} />
+        <CameraBackground />
         <CameraViewContents debugRef={debugRef} />
       </Canvas>
     </div>

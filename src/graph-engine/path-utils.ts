@@ -48,7 +48,8 @@ export function evaluatePathPosition(
     // Wrap: t can be any value — camera orbits continuously
     const tw = ((t % 1) + 1) % 1
     const r = (p.radius as number) ?? 2
-    const angle = tw * Math.PI * 2
+    // Offset by π/2 so t=0 starts at +Z axis (forward direction)
+    const angle = tw * Math.PI * 2 + Math.PI / 2
     // Always in XZ plane — rotation props handle arbitrary orientation
     local = [r * Math.cos(angle), 0, r * Math.sin(angle)]
   } else if (path.pathType === 'arc') {

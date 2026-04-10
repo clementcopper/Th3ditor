@@ -1,5 +1,6 @@
 import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
+import { rgbaToHex6 } from '../utils/color'
 
 /** Maps geometry mode number to a subtype string for the renderer */
 const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 'icosphere'] as const
@@ -209,7 +210,20 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     break
   }
 
-  return { meshes, gltfObjects, paths, lights, camera }
+  const sceneOutputNode = sceneOutputNodes[0]
+  const sceneOutputProps = sceneOutputNode ? getProps(sceneOutputNode) : {}
+  const smoothShading = Boolean(sceneOutputProps.smoothShading)
+  const bgColorRaw = sceneOutputProps.bgColor
+  const bgColor = Array.isArray(bgColorRaw) && bgColorRaw.length >= 3
+    ? rgbaToHex6([bgColorRaw[0] as number, bgColorRaw[1] as number, bgColorRaw[2] as number, (bgColorRaw[3] as number) ?? 1])
+    : '#191614'
+
+  const envMapFile = sceneOutputProps.envMap as { name: string; dataUrl: string } | '' | undefined
+  const envMapDataUrl = typeof envMapFile === 'object' && envMapFile ? envMapFile.dataUrl : undefined
+  const envIntensity = (sceneOutputProps.envIntensity as number) ?? 1
+  const showEnvBackground = Boolean(sceneOutputProps.showEnvBackground)
+
+  return { meshes, gltfObjects, paths, lights, camera, smoothShading, bgColor, envMapDataUrl, envIntensity, showEnvBackground }
 }
 
 /** Normalize geometry props to a renderer-friendly format */

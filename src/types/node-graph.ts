@@ -112,4 +112,9 @@ export interface CompiledScene {
   paths: CompiledPath[]
   lights: CompiledLight[]
   camera?: CompiledCamera
+  smoothShading: boolean
+  bgColor: string
+  envMapDataUrl?: string
+  envIntensity: number
+  showEnvBackground: boolean
 }

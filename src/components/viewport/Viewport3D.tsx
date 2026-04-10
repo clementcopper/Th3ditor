@@ -6,6 +6,7 @@ import { SceneRenderer, LiveEvaluator } from './SceneRenderer'
 import { SceneExplorer } from './SceneExplorer'
 import { useEditorStore } from '../../store/editor-store'
 import { useAnimationStore } from '../../store/animation-store'
+import { useSceneStore } from '../../store/scene-store'
 
 // Module-level refs shared between HTML overlays and Canvas components
 const viewCubeInnerRef: { current: HTMLDivElement | null } = { current: null }
@@ -66,6 +67,15 @@ function PlaybackOverlay() {
     setElapsed(val)
   }
 
+  function handleWheel(e: React.WheelEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const current = useAnimationStore.getState().elapsed % SCRUBBER_DURATION
+    const delta = e.deltaY > 0 ? 0.1 : -0.1
+    const next = Math.min(SCRUBBER_DURATION, Math.max(0, current + delta))
+    pause()
+    setElapsed(next)
+  }
+
   const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
 
   return (
@@ -99,6 +109,7 @@ function PlaybackOverlay() {
           onPointerDown={handleScrubStart}
           onPointerUp={handleScrubEnd}
           onChange={handleScrub}
+          onWheel={handleWheel}
           className="timeline-scrubber w-40"
           style={{
             background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-border-default) 0%)`,
@@ -314,13 +325,14 @@ function CameraSnapper() {
   useEffect(() => {
     if (!snapToView || !controls) return
     const dist = 10
+    const eps = 0.001
     const configs = {
-      top:    { pos: [0, dist, 0]   as [number, number, number], up: [0, 0, -1] as [number, number, number] },
-      bottom: { pos: [0, -dist, 0]  as [number, number, number], up: [0, 0, 1]  as [number, number, number] },
-      right:  { pos: [dist, 0, 0]   as [number, number, number], up: [0, 1, 0]  as [number, number, number] },
-      left:   { pos: [-dist, 0, 0]  as [number, number, number], up: [0, 1, 0]  as [number, number, number] },
-      front:  { pos: [0, 0, dist]   as [number, number, number], up: [0, 1, 0]  as [number, number, number] },
-      back:   { pos: [0, 0, -dist]  as [number, number, number], up: [0, 1, 0]  as [number, number, number] },
+      top:    { pos: [eps, dist, 0]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      bottom: { pos: [eps, -dist, 0]  as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      right:  { pos: [dist, 0, 0]    as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      left:   { pos: [-dist, 0, 0]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      front:  { pos: [0, 0, dist]    as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      back:   { pos: [0, 0, -dist]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
     }
     const { pos, up } = configs[snapToView]
     camera.position.set(...pos)
@@ -336,6 +348,12 @@ function CameraSnapper() {
   return null
 }
 
+function EditorBackground() {
+  const hdrBgActive = useSceneStore((s) => !!s.scene.envMapDataUrl && s.scene.showEnvBackground)
+  if (hdrBgActive) return null
+  return <color attach="background" args={['#1e1b18']} />
+}
+
 export function Viewport3D() {
   const projectionMode = useEditorStore((s) => s.projectionMode)
 
@@ -349,7 +367,7 @@ export function Viewport3D() {
 
       {/* 3D Canvas */}
       <Canvas>
-        <color attach="background" args={['#1e1b18']} />
+        <EditorBackground />
 
         {projectionMode === 'perspective'
           ? <PerspectiveCamera makeDefault position={[3, 2, 3]} fov={50} />

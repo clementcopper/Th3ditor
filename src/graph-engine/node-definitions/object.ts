@@ -54,8 +54,9 @@ const gltfImport: NodeDefinition = {
 
 const gltfMeshGeometry: NodeDefinition = {
   type: 'geometry/gltf-mesh',
-  label: 'glTF Mesh',
+  label: 'glTF Geometry',
   category: 'geometry',
+  hidden: true,
   inputs: [],
   outputs: [{ name: 'geometry', type: 'geometry', label: 'Geometry' }],
   properties: [],

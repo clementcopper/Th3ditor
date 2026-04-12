@@ -67,6 +67,9 @@ export async function expandGLTFToNodes(
     loader.load(fileDataUrl, resolve, undefined, reject)
   })
 
+  // Ensure world matrices are up-to-date before reading them
+  gltf.scene.updateMatrixWorld(true)
+
   // Collect all meshes from the scene hierarchy
   const meshObjects: THREE.Mesh[] = []
   gltf.scene.traverse((child) => {
@@ -92,6 +95,9 @@ export async function expandGLTFToNodes(
     const meshName = threeMesh.name || `Mesh_${i}`
     const mat = Array.isArray(threeMesh.material) ? threeMesh.material[0] : threeMesh.material
     const stdMat = mat instanceof THREE.MeshStandardMaterial ? mat : null
+    const physMat = mat instanceof THREE.MeshPhysicalMaterial ? mat : null
+    // Capture world transform so expanded mesh parts appear at their correct positions
+    const matrixWorld = Array.from(threeMesh.matrixWorld.elements) as number[]
 
     const groupX = originX + i * 800
     const groupY = originY
@@ -142,6 +148,11 @@ export async function expandGLTFToNodes(
     const matColor: [number, number, number, number] = stdMat
       ? [stdMat.color.r, stdMat.color.g, stdMat.color.b, 1]
       : [1, 1, 1, 1]
+    // Transmission (KHR_materials_transmission) → approximate as opacity-based transparency
+    const transmission = physMat?.transmission ?? 0
+    const isTransparent = (stdMat?.transparent ?? false) || transmission > 0
+    const opacity = transmission > 0 ? 1 - transmission : (stdMat?.opacity ?? 1)
+    const side = stdMat?.side === 2 ? 2 : stdMat?.side === 1 ? 1 : 0
     nodesToAdd.push({
       id: matNodeId,
       type: 'material',
@@ -151,6 +162,8 @@ export async function expandGLTFToNodes(
         color: matColor,
         metalness: stdMat?.metalness ?? 0.1,
         roughness: stdMat?.roughness ?? 0.5,
+        ...(isTransparent && { transparent: true, opacity }),
+        ...(side !== 0 && { side }),
       },
     })
 
@@ -175,6 +188,8 @@ export async function expandGLTFToNodes(
         label: meshName,
         fileDataUrl,
         meshIndex: i,
+        matrixWorld,
+        ...(extraFiles && extraFiles.length > 0 && { extraFiles }),
       },
     })
 

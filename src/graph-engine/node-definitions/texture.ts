@@ -11,8 +11,8 @@ const textureNode: NodeDefinition = {
     { name: 'detail', type: 'float', label: 'Detail', visibleWhen: { uniform: 'mode', equal: 1 } },
     { name: 'roughness', type: 'float', label: 'Roughness', visibleWhen: { uniform: 'mode', equal: 1 } },
     { name: 'resolution', type: 'float', label: 'Resolution', visibleWhen: { uniform: 'mode', equal: 1 } },
-    // Normal mode input
-    { name: 'source', type: 'texture', label: '→ Texture', visibleWhen: { uniform: 'mode', equal: 2 } },
+    // Normal mode input — always visible so it can be connected before switching mode
+    { name: 'source', type: 'texture', label: 'Source' },
   ],
   outputs: [{ name: 'texture', type: 'texture', label: 'Texture →' }],
   properties: [

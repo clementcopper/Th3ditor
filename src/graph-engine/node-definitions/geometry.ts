@@ -27,10 +27,9 @@ const geometry: NodeDefinition = {
     { type: 'int', uniform: 'boxWidthSegs', label: 'W Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
     { type: 'int', uniform: 'boxHeightSegs', label: 'H Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
     { type: 'int', uniform: 'boxDepthSegs', label: 'D Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
-    // Sphere (1)
+    // Sphere (1) — Quad Sphere (Box inflated to sphere, mergeVertices for seamless edges)
     { type: 'float', uniform: 'radius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'int', uniform: 'widthSegments', label: 'W Segments', min: 3, max: 128, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'int', uniform: 'heightSegments', label: 'H Segments', min: 2, max: 64, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'int', uniform: 'sphereSegments', label: 'Segments', min: 1, max: 64, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 1 } },
     // Plane (2)
     { type: 'float', uniform: 'planeWidth', label: 'Width', min: 0.01, max: 50, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
     { type: 'float', uniform: 'planeHeight', label: 'Height', min: 0.01, max: 50, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
@@ -58,7 +57,7 @@ const geometry: NodeDefinition = {
   defaults: {
     mode: 0,
     width: 1, height: 1, depth: 1, boxWidthSegs: 1, boxHeightSegs: 1, boxDepthSegs: 1,
-    radius: 0.5, widthSegments: 32, heightSegments: 16,
+    radius: 0.5, sphereSegments: 32,
     planeWidth: 1, planeHeight: 1, planeWidthSegs: 1, planeHeightSegs: 1,
     torusRadius: 0.5, tube: 0.2, torusRadialSegs: 16, torusTubularSegs: 48,
     radiusTop: 0.5, radiusBottom: 0.5, cylHeight: 1, radialSegments: 32,

@@ -132,6 +132,7 @@ export function NodeEditor() {
   const setNodes = useGraphStore((s) => s.setNodes)
   const setEdges = useGraphStore((s) => s.setEdges)
   const addEdge = useGraphStore((s) => s.addEdge)
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -187,6 +188,11 @@ export function NodeEditor() {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!isValidConnection(connection)) return
+      // Auto-switch texture node to Normal mode when connecting to its 'source' port
+      if (connection.targetHandle === 'source') {
+        const targetNode = nodes.find((n) => n.id === connection.target)
+        if (targetNode?.type === 'texture') updateNodeData(connection.target!, { mode: 2 })
+      }
       addEdge({
         id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
         source: connection.source!,
@@ -195,7 +201,7 @@ export function NodeEditor() {
         targetHandle: connection.targetHandle!,
       })
     },
-    [addEdge, isValidConnection],
+    [addEdge, isValidConnection, nodes, updateNodeData],
   )
 
   const onNodeClick = useCallback(

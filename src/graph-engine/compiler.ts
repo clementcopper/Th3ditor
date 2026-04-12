@@ -77,7 +77,9 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       const fileDataUrl = geoNode.data.fileDataUrl as string | undefined
       const meshIndex = (geoNode.data.meshIndex as number) ?? 0
       if (fileDataUrl) {
-        geometrySource = { type: 'gltf', dataUrl: fileDataUrl, meshIndex }
+        const matrixWorld = geoNode.data.matrixWorld as number[] | undefined
+        const extraFiles = geoNode.data.extraFiles as { name: string; dataUrl: string }[] | undefined
+        geometrySource = { type: 'gltf', dataUrl: fileDataUrl, meshIndex, matrixWorld, extraFiles }
       }
     } else {
       const geoMode = (geoProps.mode as number) ?? 0
@@ -264,7 +266,7 @@ function normalizeGeoProps(type: string, props: Record<string, unknown>): Record
     case 'box':
       return { width: props.width, height: props.height, depth: props.depth, widthSegs: props.boxWidthSegs, heightSegs: props.boxHeightSegs, depthSegs: props.boxDepthSegs }
     case 'sphere':
-      return { radius: props.radius, widthSegments: props.widthSegments, heightSegments: props.heightSegments }
+      return { radius: props.radius, segments: props.sphereSegments }
     case 'plane':
       return { width: props.planeWidth, height: props.planeHeight, widthSegs: props.planeWidthSegs, heightSegs: props.planeHeightSegs }
     case 'torus':

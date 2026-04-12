@@ -22,7 +22,7 @@ export function NodePalette({ contextMenu, onClose }: Props) {
   const addEdge = useGraphStore((s) => s.addEdge)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const allDefs = useMemo(() => getAllNodeDefs(), [])
+  const allDefs = useMemo(() => getAllNodeDefs().filter((d) => !d.hidden), [])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allDefs

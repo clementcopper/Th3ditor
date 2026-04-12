@@ -77,6 +77,13 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - `geometry/gltf-mesh` index: `gltf-expand.ts` and `loadGltfGeometries` both use `scene.traverse()` depth-first — indices match.
 - gltfGeometryCache: module-level Map (not component state) with in-flight Promise dedup via `gltfGeometryLoading` Map.
 - MeshObject clones BufferGeometry from cache (so multiple nodes sharing same file are independent); disposes clone on cleanup.
+- Quad Sphere: BoxGeometry → toNonIndexed() → inflate → lat/lon UV + seam fix. No mergeVertices (breaks UVs). Normals = normalize(pos).
+- Sphere pole UV fix attempt (set pole vertex u = avg neighbors) creates holes — non-indexed geometry displaces pole differently per triangle.
+- Texture Normal `source` port: always visible + auto-switch to mode=2 in onConnect — user doesn't need to set mode first.
+- `NodeDefinition.hidden = true` hides node from palette (filter in NodePalette.tsx `getAllNodeDefs().filter(d => !d.hidden)`).
+- glTF Expand: store `matrixWorld` (16-element array) in gltf-mesh node data → apply `geo.applyMatrix4()` on clone in SceneRenderer.
+- glTF Expand transparency: `MeshPhysicalMaterial.transmission > 0` → `transparent: true, opacity: 1 - transmission`.
+- Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.

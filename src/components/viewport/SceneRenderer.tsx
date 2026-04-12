@@ -9,17 +9,72 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 // Required once before any RectAreaLight renders
 RectAreaLightUniformsLib.init()
 
+/** Quad Sphere: BoxGeometry inflated to sphere with spherical (lat/lon) UV remapping.
+ *  toNonIndexed() gives each triangle its own vertices, so the longitude seam can be
+ *  corrected per-triangle without conflicting with other faces.
+ *  Result: 1 seam (back of sphere, u=0/1) instead of 12 cube-edge seams; no pole singularity. */
+function createQuadSphere(radius: number, segments: number): THREE.BufferGeometry {
+  const box = new THREE.BoxGeometry(1, 1, 1, segments, segments, segments)
+  const geo = box.toNonIndexed()
+  box.dispose()
+
+  const pos = geo.attributes.position as THREE.BufferAttribute
+  const norm = geo.attributes.normal as THREE.BufferAttribute
+
+  // Inflate vertices to sphere, set normals = normalize(position) — exact for a sphere
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
+    const len = Math.sqrt(x * x + y * y + z * z)
+    const nx = x / len, ny = y / len, nz = z / len
+    pos.setXYZ(i, nx * radius, ny * radius, nz * radius)
+    norm.setXYZ(i, nx, ny, nz)
+  }
+  pos.needsUpdate = true
+  norm.needsUpdate = true
+
+  // Spherical UV: atan2(z,x) → u ∈ [0,1],  asin(y/r) → v ∈ [0,1]
+  const uvData = new Float32Array(pos.count * 2)
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
+    const r = Math.sqrt(x * x + y * y + z * z)
+    uvData[i * 2]     = Math.atan2(z, x) / (Math.PI * 2) + 0.5
+    uvData[i * 2 + 1] = Math.asin(Math.max(-1, Math.min(1, y / r))) / Math.PI + 0.5
+  }
+
+  // Seam fix: if a triangle's u-values span > 0.5 it straddles the longitude seam.
+  // Bump the low-u vertices by +1 so GPU interpolation stays continuous across the triangle.
+  for (let f = 0; f < pos.count / 3; f++) {
+    const i0 = f * 3, i1 = f * 3 + 1, i2 = f * 3 + 2
+    const u0 = uvData[i0 * 2], u1 = uvData[i1 * 2], u2 = uvData[i2 * 2]
+    const uMax = Math.max(u0, u1, u2)
+    if (uMax - u0 > 0.5) uvData[i0 * 2] += 1
+    if (uMax - u1 > 0.5) uvData[i1 * 2] += 1
+    if (uMax - u2 > 0.5) uvData[i2 * 2] += 1
+  }
+
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvData, 2))
+  return geo
+}
+
 // Cache: dataUrl → loaded BufferGeometry array (one per mesh index in the glTF)
 // Keeps the same geometries alive so multiple gltf-mesh nodes sharing the same file don't reload it.
 const gltfGeometryCache = new Map<string, THREE.BufferGeometry[]>()
 const gltfGeometryLoading = new Map<string, Promise<THREE.BufferGeometry[]>>()
 
-function loadGltfGeometries(dataUrl: string): Promise<THREE.BufferGeometry[]> {
+function loadGltfGeometries(dataUrl: string, extraFiles?: { name: string; dataUrl: string }[]): Promise<THREE.BufferGeometry[]> {
   if (gltfGeometryCache.has(dataUrl)) return Promise.resolve(gltfGeometryCache.get(dataUrl)!)
   if (gltfGeometryLoading.has(dataUrl)) return gltfGeometryLoading.get(dataUrl)!
 
   const loading = new Promise<THREE.BufferGeometry[]>((resolve) => {
-    const loader = new GLTFLoader()
+    const manager = new THREE.LoadingManager()
+    if (extraFiles && extraFiles.length > 0) {
+      const urlMap = new Map(extraFiles.map((f) => [f.name, f.dataUrl]))
+      manager.setURLModifier((url) => {
+        const filename = url.split('/').pop()?.split('?')[0] ?? ''
+        return urlMap.get(filename) ?? url
+      })
+    }
+    const loader = new GLTFLoader(manager)
     loader.load(dataUrl, (gltf) => {
       const geos: THREE.BufferGeometry[] = []
       gltf.scene.traverse((child) => {
@@ -246,13 +301,18 @@ function MeshObject({
   const [gltfGeometry, setGltfGeometry] = useState<THREE.BufferGeometry | null>(null)
   useEffect(() => {
     if (mesh.geometryType !== 'gltf-mesh' || !mesh.geometrySource) return
-    const { dataUrl, meshIndex } = mesh.geometrySource
+    const { dataUrl, meshIndex, matrixWorld, extraFiles } = mesh.geometrySource
     let cancelled = false
     let cloned: THREE.BufferGeometry | null = null
-    loadGltfGeometries(dataUrl).then((geos) => {
+    loadGltfGeometries(dataUrl, extraFiles).then((geos) => {
       if (cancelled) return
       const src = geos[meshIndex]
-      if (src) { cloned = src.clone(); setGltfGeometry(cloned) }
+      if (src) {
+        cloned = src.clone()
+        // Apply the mesh's original world transform so parts appear at their correct positions
+        if (matrixWorld) cloned.applyMatrix4(new THREE.Matrix4().fromArray(matrixWorld))
+        setGltfGeometry(cloned)
+      }
     })
     return () => {
       cancelled = true
@@ -260,6 +320,14 @@ function MeshObject({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mesh.geometryType, mesh.geometrySource?.dataUrl, mesh.geometrySource?.meshIndex])
+
+  // Quad sphere geometry: built imperatively, memoized on radius+segments changes
+  const quadSphereGeo = useMemo(() => {
+    if (mesh.geometryType !== 'sphere') return null
+    return createQuadSphere((gp.radius as number) ?? 0.5, (gp.segments as number) ?? 32)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, gp.radius, gp.segments])
+  useEffect(() => () => { quadSphereGeo?.dispose() }, [quadSphereGeo])
 
   const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -392,8 +460,8 @@ function MeshObject({
           {mesh.geometryType === 'box' && (
             <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
           )}
-          {mesh.geometryType === 'sphere' && (
-            <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
+          {mesh.geometryType === 'sphere' && quadSphereGeo && (
+            <primitive attach="geometry" object={quadSphereGeo} />
           )}
           {mesh.geometryType === 'plane' && (
             <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
@@ -443,14 +511,14 @@ function MeshObject({
             />
           )}
         </mesh>
-        {/* Selection highlight overlay (not supported for gltf-mesh geometry) */}
-        {isEditorView && isSelected && mesh.geometryType !== 'gltf-mesh' && (
+        {/* Selection highlight overlay */}
+        {isEditorView && isSelected && (mesh.geometryType !== 'gltf-mesh' || gltfGeometry) && (
           <mesh renderOrder={10}>
             {mesh.geometryType === 'box' && (
               <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
             )}
-            {mesh.geometryType === 'sphere' && (
-              <sphereGeometry args={[gp.radius as number, gp.widthSegments as number, gp.heightSegments as number]} />
+            {mesh.geometryType === 'sphere' && quadSphereGeo && (
+              <primitive attach="geometry" object={quadSphereGeo} />
             )}
             {mesh.geometryType === 'plane' && (
               <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
@@ -466,6 +534,9 @@ function MeshObject({
             )}
             {mesh.geometryType === 'icosphere' && (
               <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
+            )}
+            {mesh.geometryType === 'gltf-mesh' && gltfGeometry && (
+              <primitive attach="geometry" object={gltfGeometry} />
             )}
             <meshBasicMaterial color="#ff8800" wireframe depthTest={false} />
           </mesh>

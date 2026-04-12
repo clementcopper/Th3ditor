@@ -90,6 +90,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - PBR displacement: finite-diff normals eps=0.1, gradient clamp ±1.5 — lower eps causes extreme normals at sharp noise (Voronoi) boundaries.
 - Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
 - Vertex displacement needs geo density ≥ noise feature size ×5 — 256 sphere segs is practical max (512 laggy); icosphere detail 200 equivalent.
+- `shader/colorramp` stops: all positions + colors as uniforms → live update without recompile; recompile only on stop-count change.
+- NodeRenderer fallback label: if no `mode` select prop, first select prop appends to label ("Shader Math: Fract").
+- Domain warp IQ offsets: `(0,0,0)`, `(5.2,1.3,2.8)`, `(3.7,9.2,8.1)` for x/y/z fbm samples.
+- Scan-line center: `radius − fract(t) × (radius×2)` top→bottom. Use Multiply(−radius×2) + Add(radius) — Add is commutative, avoids A/B confusion.
+- `shader/math` Lerp (op=7) needs T input port; Fract (op=8) is unary — goes in the `else` branch of the binary/unary split.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.

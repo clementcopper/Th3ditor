@@ -1,4 +1,9 @@
-export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'textarea' | 'curve' | 'noderef' | 'file'
+export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'textarea' | 'curve' | 'noderef' | 'file' | 'colorramp'
+
+export interface ColorRampStop {
+  pos: number
+  color: [number, number, number, number]
+}
 
 export interface PropertyDef {
   type: PropertyType
@@ -10,7 +15,7 @@ export interface PropertyDef {
   step?: number
   hardMin?: number
   hardMax?: number
-  default: number | boolean | [number, number] | [number, number, number] | [number, number, number, number] | string | string[]
+  default: number | boolean | [number, number] | [number, number, number] | [number, number, number, number] | string | string[] | ColorRampStop[]
   options?: { label: string; value: string; visibleWhenPortDisconnected?: string }[]
   /** For type='noderef': which node categories to list in the dropdown */
   categories?: string[]

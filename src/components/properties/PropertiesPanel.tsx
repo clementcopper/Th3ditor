@@ -11,8 +11,9 @@ import { ToggleControl } from './controls/ToggleControl'
 import { SelectControl } from './controls/SelectControl'
 import { FileControl } from './controls/FileControl'
 import { TextAreaControl } from './controls/TextAreaControl'
+import { ColorRampControl } from './controls/ColorRampControl'
 import { expandGLTFToNodes } from '../../graph-engine/gltf-expand'
-import type { PropertyDef } from '../../types/properties'
+import type { PropertyDef, ColorRampStop } from '../../types/properties'
 
 function NodeRefControl({
   prop,
@@ -287,6 +288,15 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={(getValue(prop) as string) ?? ''}
+                        onChange={(v) => handleChange(prop.uniform, v)}
+                      />
+                    )
+                  case 'colorramp':
+                    return (
+                      <ColorRampControl
+                        key={prop.uniform}
+                        param={prop}
+                        value={(getValue(prop) as ColorRampStop[]) ?? []}
                         onChange={(v) => handleChange(prop.uniform, v)}
                       />
                     )

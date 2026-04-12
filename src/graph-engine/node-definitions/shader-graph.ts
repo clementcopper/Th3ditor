@@ -60,9 +60,11 @@ const shaderNoise: NodeDefinition = {
       { label: 'fBm', value: '0' },
       { label: 'Ridged', value: '1' },
       { label: 'Voronoi', value: '2' },
+      { label: 'Worley', value: '3' },
+      { label: 'Curl', value: '4' },
     ], default: 0 },
     { type: 'float', uniform: 'scale',     label: 'Scale',      min: 0.1, max: 20,  step: 0.1,  default: 3.0, visibleWhen: { portDisconnected: 'scale' } },
-    { type: 'float', uniform: 'detail',    label: 'Detail',     min: 1,   max: 8,   step: 1,    default: 4.0, visibleWhen: { uniform: 'noiseType', notEqual: 2 } },
+    { type: 'float', uniform: 'detail',    label: 'Detail',     min: 1,   max: 8,   step: 1,    default: 4.0, visibleWhen: { uniform: 'noiseType', equal: [0, 1, 4] } },
     { type: 'float', uniform: 'timeSpeed', label: 'Time Speed', min: 0,   max: 5,   step: 0.01, default: 1.0, visibleWhen: { portDisconnected: 'time' } },
     { type: 'float', uniform: 'seed',      label: 'Seed (Pan)', min: -100, max: 100, step: 0.01, default: 0.0, visibleWhen: { portDisconnected: 'seed' } },
   ],
@@ -109,7 +111,8 @@ const shaderMath: NodeDefinition = {
   category: 'shader',
   inputs: [
     { name: 'a', type: 'sfloat', label: 'A' },
-    { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'op', equal: [0, 1, 2] } },
+    { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'op', equal: [0, 1, 2, 7] } },
+    { name: 't', type: 'sfloat', label: 'T',  visibleWhen: { uniform: 'op', equal: 7 } },
   ],
   outputs: [{ name: 'result', type: 'sfloat', label: 'Result' }],
   properties: [
@@ -121,13 +124,17 @@ const shaderMath: NodeDefinition = {
       { label: 'Cos',      value: '4' },
       { label: 'Abs',      value: '5' },
       { label: 'Clamp',    value: '6' },
+      { label: 'Lerp',     value: '7' },
+      { label: 'Fract',    value: '8' },
     ], default: 0 },
     { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.01, hardMin: -1e6, hardMax: 1e6, default: 1.0,
       visibleWhen: { portDisconnected: 'a' } },
     { type: 'float', uniform: 'b', label: 'B', min: -100, max: 100, step: 0.01, hardMin: -1e6, hardMax: 1e6, default: 1.0,
-      visibleWhen: [{ uniform: 'op', equal: [0, 1, 2] }, { portDisconnected: 'b' }] },
+      visibleWhen: [{ uniform: 'op', equal: [0, 1, 2, 7] }, { portDisconnected: 'b' }] },
+    { type: 'float', uniform: 'lerpT', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5,
+      visibleWhen: [{ uniform: 'op', equal: 7 }, { portDisconnected: 't' }] },
   ],
-  defaults: { op: 0, a: 1.0, b: 1.0 },
+  defaults: { op: 0, a: 1.0, b: 1.0, lerpT: 0.5 },
 }
 
 const shaderColor: NodeDefinition = {
@@ -175,6 +182,88 @@ const shaderOutput: NodeDefinition = {
   defaults: { defaultColor: [0, 0, 0, 1], defaultAlpha: 1.0, displacementScale: 0.2 },
 }
 
+const shaderBand: NodeDefinition = {
+  type: 'shader/band',
+  label: 'Shader Band',
+  category: 'shader',
+  inputs: [
+    { name: 't',      type: 'sfloat', label: 'T (Position)' },
+    { name: 'center', type: 'sfloat', label: 'Center' },
+    { name: 'width',  type: 'sfloat', label: 'Width' },
+  ],
+  outputs: [{ name: 'value', type: 'sfloat', label: 'Value' }],
+  properties: [
+    { type: 'float', uniform: 'center', label: 'Center',   min: -2, max: 2,  step: 0.01, default: 0.0,  visibleWhen: { portDisconnected: 'center' } },
+    { type: 'float', uniform: 'width',  label: 'Width',    min: 0,  max: 2,  step: 0.01, default: 0.15, visibleWhen: { portDisconnected: 'width' } },
+    { type: 'float', uniform: 'sharp',  label: 'Sharpness', min: 0,  max: 1,  step: 0.01, default: 0.5 },
+  ],
+  defaults: { center: 0.0, width: 0.15, sharp: 0.5 },
+}
+
+const shaderComponent: NodeDefinition = {
+  type: 'shader/component',
+  label: 'Shader Component',
+  category: 'shader',
+  inputs: [
+    { name: 'vec', type: 'svec3', label: 'Vector' },
+  ],
+  outputs: [{ name: 'value', type: 'sfloat', label: 'Value' }],
+  properties: [
+    { type: 'select', uniform: 'component', label: 'Component', options: [
+      { label: 'X', value: '0' },
+      { label: 'Y', value: '1' },
+      { label: 'Z', value: '2' },
+    ], default: 1 },
+  ],
+  defaults: { component: 1 },
+}
+
+const shaderColorRamp: NodeDefinition = {
+  type: 'shader/colorramp',
+  label: 'Shader Color Ramp',
+  category: 'shader',
+  inputs: [
+    { name: 't', type: 'sfloat', label: 'T' },
+  ],
+  outputs: [{ name: 'color', type: 'svec3', label: 'Color' }],
+  properties: [
+    { type: 'colorramp', uniform: 'stops', label: 'Ramp', default: [
+      { pos: 0.0, color: [0, 0, 0, 1] },
+      { pos: 1.0, color: [1, 1, 1, 1] },
+    ]},
+    { type: 'float', uniform: 't', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5,
+      visibleWhen: { portDisconnected: 't' } },
+  ],
+  defaults: {
+    stops: [
+      { pos: 0.0, color: [0, 0, 0, 1] },
+      { pos: 1.0, color: [1, 1, 1, 1] },
+    ],
+    t: 0.5,
+  },
+}
+
+const shaderDomainWarp: NodeDefinition = {
+  type: 'shader/domainwarp',
+  label: 'Shader Domain Warp',
+  category: 'shader',
+  inputs: [
+    { name: 'position', type: 'svec3', label: 'Position' },
+    { name: 'strength', type: 'sfloat', label: 'Strength' },
+    { name: 'time', type: 'sfloat', label: 'Time' },
+  ],
+  outputs: [{ name: 'warped', type: 'svec3', label: 'Warped' }],
+  properties: [
+    { type: 'float', uniform: 'strength', label: 'Strength', min: 0, max: 5, step: 0.01, default: 0.5,
+      visibleWhen: { portDisconnected: 'strength' } },
+    { type: 'float', uniform: 'scale', label: 'Scale', min: 0.1, max: 20, step: 0.1, default: 2.0 },
+    { type: 'int', uniform: 'octaves', label: 'Octaves', min: 1, max: 8, step: 1, default: 4 },
+    { type: 'float', uniform: 'timeSpeed', label: 'Time Speed', min: 0, max: 5, step: 0.01, default: 0.3,
+      visibleWhen: { portDisconnected: 'time' } },
+  ],
+  defaults: { strength: 0.5, scale: 2.0, octaves: 4, timeSpeed: 0.3 },
+}
+
 export function registerShaderGraphNodes() {
   registerNode(shaderUV)
   registerNode(shaderTime)
@@ -186,5 +275,9 @@ export function registerShaderGraphNodes() {
   registerNode(shaderMath)
   registerNode(shaderColor)
   registerNode(shaderNumber)
+  registerNode(shaderBand)
+  registerNode(shaderComponent)
+  registerNode(shaderColorRamp)
+  registerNode(shaderDomainWarp)
   registerNode(shaderOutput)
 }

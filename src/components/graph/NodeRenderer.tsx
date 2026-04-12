@@ -25,12 +25,17 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
   const visibleOutputs = def.outputs.filter((p) => isVisible(p.visibleWhen, getData))
   const categoryColor = CATEGORY_COLORS[def.category] ?? '#9ca3af'
 
-  // Header shows subtype name (e.g. "Add") instead of category (e.g. "Math")
-  const modeValue = getData('mode') as number | undefined
+  // Header: mode prop replaces label entirely (e.g. geometry → "Box")
+  // Other select props append to label (e.g. shader/math → "Shader Math: Fract")
   const modeProp = def.properties.find((p) => p.uniform === 'mode' && p.type === 'select')
-  const baseLabel = (modeProp?.options && modeValue !== undefined)
+  const modeValue = modeProp ? Number(getData('mode') ?? 0) : undefined
+  const fallbackSelectProp = !modeProp ? def.properties.find((p) => p.type === 'select') : undefined
+  const fallbackValue = fallbackSelectProp ? Number(getData(fallbackSelectProp.uniform) ?? 0) : undefined
+  const baseLabel = modeProp?.options && modeValue !== undefined
     ? (modeProp.options[modeValue]?.label ?? def.label)
-    : def.label
+    : fallbackSelectProp?.options && fallbackValue !== undefined
+      ? `${def.label}: ${fallbackSelectProp.options[fallbackValue]?.label ?? ''}`
+      : def.label
 
   // For mesh and light nodes, prepend type prefix and append custom label
   const customLabel = nodeData.label as string | undefined

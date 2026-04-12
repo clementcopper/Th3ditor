@@ -73,6 +73,10 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Noise CanvasTexture: set `wrapS = wrapT = RepeatWrapping` + tile at integer scale to eliminate UV seams.
 - ReactFlow `visibleWhen` ports: handle only registers when rendered — set mode first, then connect cable.
 - Texture Normal mode: input port named `source` (not `texture`) to avoid same-name collision with output port.
+- glTF texture UV fix: store `flipY: false` in node data, propagate through compiler, apply in SceneRenderer — don't pre-flip canvas.
+- `geometry/gltf-mesh` index: `gltf-expand.ts` and `loadGltfGeometries` both use `scene.traverse()` depth-first — indices match.
+- gltfGeometryCache: module-level Map (not component state) with in-flight Promise dedup via `gltfGeometryLoading` Map.
+- MeshObject clones BufferGeometry from cache (so multiple nodes sharing same file are independent); disposes clone on cleanup.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -135,14 +139,15 @@ src/
 - `border-radius: 0` everywhere
 - OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
 
-## Current Status (2026-04-11)
+## Current Status (2026-04-12)
 - Phase 1 + 2 + 3 + 4 complete ✅
 - Phase 5a complete ✅: Path Nodes, Camera/Light path constraints, Look-Ahead
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - Phase 5b complete ✅: glTF Import Node, Null Object, Origin Control, Timeline Scrubber + Scroll, Smooth Shading, Camera Background Color, HDR Environment Map (IBL), FileControl redesign, ViewCube orbit fix
 - Phase 5c complete ✅: Area Light (RectAreaLight, Width/Height/Rotation/Target, custom editor visual)
-- Phase 5d in progress 🔄: Texture Nodes complete (Image/Noise/Normal modes, PBR Material, Shadow support, tileable noise, RepeatWrapping seam fix)
-- Next in 5d: Custom GLSL Shader-Node (TextAreaControl, ShaderMaterial)
+- Phase 5d complete ✅: Texture Nodes (Image/Noise/Normal modes, PBR Material, Shadow support, tileable noise), Color Nodes, glTF Expand to Graph (geometry/gltf-mesh + texture preview + UV fix)
+- Phase 5e in progress 🔄: glTF Expand implemented; FBX/OBJ/STEP formats pending
+- Next: Custom GLSL Shader-Node (TextAreaControl, ShaderMaterial)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 
 ## Planned: Quad-Mesh Primitives (Phase 6+)

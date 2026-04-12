@@ -416,6 +416,9 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 ### Phase 6: Quad-Mesh Primitives + Export + Post-Processing
 
 #### Quad-Mesh Primitives (Langfrist-Fix für Displacement-Seams)
+
+Update Quad-Sphere: Man kann eine Quad-Sphere auf basis eine BoxGeometry erstellen:
+Siehe: https://stackoverflow.com/questions/33202131/transform-a-boxgeometry-into-a-sphere
 - [ ] Daniel liefert Blender-authored Quad-Meshes als `.glb` pro Primitive
 - [ ] Assets bundlen in `src/assets/geometry/` (Sphere, Cylinder, Capsule, Torus)
 - [ ] SceneRenderer: `.glb` laden → `BufferGeometry` extrahieren, ersetzt procedural `SphereGeometry` etc.

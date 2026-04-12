@@ -419,6 +419,64 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 
 Update Quad-Sphere: Man kann eine Quad-Sphere auf basis einer BoxGeometry erstellen:
 Siehe: https://stackoverflow.com/questions/33202131/transform-a-boxgeometry-into-a-sphere
+
+Und:
+
+`// Szene
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 2000);
+camera.position.z = 1000;
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Deine ursprüngliche Idee: Box → "aufblasen" zur Kugel
+const geometry = new THREE.BoxGeometry(300, 300, 300, 7, 7, 7);
+
+// Zugriff auf Vertex-Daten
+const pos = geometry.attributes.position;
+
+for (let i = 0; i < pos.count; i++) {
+
+  const vertex = new THREE.Vector3();
+  vertex.fromBufferAttribute(pos, i);
+
+  // entspricht: normalize().multiplyScalar(550)
+  vertex.normalize().multiplyScalar(550);
+
+  pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
+}
+
+// Wichtig!
+pos.needsUpdate = true;
+
+// Optional: Normals neu berechnen (für Licht)
+geometry.computeVertexNormals();
+
+// Mesh
+const material = new THREE.MeshNormalMaterial({ wireframe: true });
+const mesh = new THREE.Mesh(geometry, material);
+scene.add(mesh);
+
+// Animation
+function animate(){
+  requestAnimationFrame(animate);
+  mesh.rotation.y += 0.01;
+  mesh.rotation.x += 0.005;
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Resize
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});`
+
+
 - [ ] Daniel liefert Blender-authored Quad-Meshes als `.glb` pro Primitive
 - [ ] Assets bundlen in `src/assets/geometry/` (Sphere, Cylinder, Capsule, Torus)
 - [ ] SceneRenderer: `.glb` laden → `BufferGeometry` extrahieren, ersetzt procedural `SphereGeometry` etc.

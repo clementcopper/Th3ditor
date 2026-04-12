@@ -55,6 +55,8 @@ export interface CompiledMesh {
   geometryNodeId: string       // source geometry node
   geometryType: string
   geometryProps: Record<string, unknown>
+  /** Set when geometryType === 'gltf-mesh' — points to the source file + mesh index */
+  geometrySource?: { type: 'gltf'; dataUrl: string; meshIndex: number }
   materialNodeId: string       // source material node
   materialType: string
   materialProps: Record<string, unknown>

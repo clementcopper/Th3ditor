@@ -227,12 +227,13 @@ src/
 | Kategorie | Nodes |
 |---|---|
 | Instancing | Scatter (Geometrie auf Fläche verteilen), Instance Grid, Instance Along Curve |
-| Import | GLTF Import (Modell als Node), Texture Import |
+| Import | ~~glTF Import~~ ✅ done — FBX, OBJ, STEP (Multi-Format Expand-to-Graph) |
 | Procedural Geometry | Noise Displacement, Subdivision, Boolean (CSG) |
 | Event / Logic | On Click, On Hover, Timer, If/Switch — für interaktive Szenen |
 | Particles | GPU Particle System (WebGPU-basiert) |
 | Physics | Rigid Body, Constraint (Cannon.js / Rapier) |
 | UI / Widget | HTML Overlay Node, Billboard Text |
+| Node System | Compound Nodes (Subgraphs) — Nodes gruppieren, Doppelklick navigiert rein |
 
 ---
 
@@ -408,6 +409,18 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 - [ ] **Custom GLSL Shader-Node** (Vertex + Fragment, Uniform-Ports)
 - [ ] **GLSL-Code Editor** (TextAreaControl mit Monospace-Font)
 
+### Phase 5e: Import Node — Expand to Graph + Multi-Format
+- [ ] "Expand to Graph" auf glTF Import Node — Button in Properties Panel mit Confirmation Dialog
+- [x] `geometry/gltf-mesh` Node-Typ: speichert `{fileDataUrl, meshIndex}` in node.data, Output-Port `geometry`
+- [x] Expansion erzeugt pro Mesh im glTF: Geometry-Node + Material-Node + Image-Texture-Nodes + Mesh-Node → Scene Output
+- [x] Textur-Extraktion: embedded Texturen (HTMLImageElement/ImageBitmap) → Canvas → DataURL → Image Texture Nodes
+- [x] SceneRenderer: `gltfGeometryCache` (dataUrl → BufferGeometry[]), verhindert N-faches Laden bei mehreren Nodes
+- [ ] FBX-Format (THREE FBXLoader) — selbe Expand-Architektur
+- [ ] OBJ-Format (THREE OBJLoader + MTLLoader)
+- [ ] STEP-Format (opencascade.js WASM — deferred, aufwendig)
+
+**Hintergrund:** Quick 3D Model Viewer — Import beliebiges 3D-Modell → sofort Materialien + Texturen als editierbare Nodes sehen, ohne Desktop-3D-Software.
+
 **⚠️ Bekannte Geometry-Limitations (Displacement):**
 - `SphereGeometry` Pole: Vertices an identischer 3D-Position mit unterschiedlichen U-Werten → Stern-Artefakt. Fix: Icosphere verwenden.
 - `CylinderGeometry` / `CapsuleGeometry` Cap-Rim: Seite und Kappen haben getrennte UV-Islands → Spalt am Rand. Fix: Quad-Meshes (siehe Phase 6).
@@ -491,6 +504,16 @@ window.addEventListener('resize', ()=>{
 - [ ] Post-Processing: Bloom, Vignette, DOF via `@react-three/postprocessing`
 - [ ] Projekt Save/Load (JSON)
 - [ ] Undo/Redo
+
+### Phase 7: Compound Node System (Nested Subgraphs)
+- [ ] Node-Selektion → "Group" → erzeugt Compound-Node mit auto-generierten In/Out-Ports
+- [ ] Doppelklick navigiert in Sub-Graph (eigener ReactFlow-Context)
+- [ ] Breadcrumb-Navigation oben links (Root > GroupA > ...)
+- [ ] Interface-Nodes innen: Input/Output die äußeren Ports repräsentieren
+- [ ] Compiler: Sub-Graphs inlinen (flatten vor Compile-Schritt)
+- [ ] Graph-Store: wird zum Baum (`Map<subgraphId, {nodes, edges}>`)
+
+**Abhängigkeiten:** Erfordert grundlegenden Umbau von Graph-Store + Compiler; frühestens nach Phase 6.
 
 ---
 

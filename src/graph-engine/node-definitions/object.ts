@@ -52,8 +52,19 @@ const gltfImport: NodeDefinition = {
   defaults: { glbFile: '', centerMode: 0, originX: 0, originY: 0, originZ: 0 },
 }
 
+const gltfMeshGeometry: NodeDefinition = {
+  type: 'geometry/gltf-mesh',
+  label: 'glTF Mesh',
+  category: 'geometry',
+  inputs: [],
+  outputs: [{ name: 'geometry', type: 'geometry', label: 'Geometry' }],
+  properties: [],
+  defaults: {},
+}
+
 export function registerObjectNodes() {
   registerNode(mesh)
   registerNode(nullObject)
   registerNode(gltfImport)
+  registerNode(gltfMeshGeometry)
 }

@@ -8,6 +8,36 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 
 // Required once before any RectAreaLight renders
 RectAreaLightUniformsLib.init()
+
+// Cache: dataUrl → loaded BufferGeometry array (one per mesh index in the glTF)
+// Keeps the same geometries alive so multiple gltf-mesh nodes sharing the same file don't reload it.
+const gltfGeometryCache = new Map<string, THREE.BufferGeometry[]>()
+const gltfGeometryLoading = new Map<string, Promise<THREE.BufferGeometry[]>>()
+
+function loadGltfGeometries(dataUrl: string): Promise<THREE.BufferGeometry[]> {
+  if (gltfGeometryCache.has(dataUrl)) return Promise.resolve(gltfGeometryCache.get(dataUrl)!)
+  if (gltfGeometryLoading.has(dataUrl)) return gltfGeometryLoading.get(dataUrl)!
+
+  const loading = new Promise<THREE.BufferGeometry[]>((resolve) => {
+    const loader = new GLTFLoader()
+    loader.load(dataUrl, (gltf) => {
+      const geos: THREE.BufferGeometry[] = []
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) geos.push((child as THREE.Mesh).geometry)
+      })
+      gltfGeometryCache.set(dataUrl, geos)
+      gltfGeometryLoading.delete(dataUrl)
+      resolve(geos)
+    }, undefined, () => {
+      gltfGeometryLoading.delete(dataUrl)
+      resolve([])
+    })
+  })
+
+  gltfGeometryLoading.set(dataUrl, loading)
+  return loading
+}
+
 import { useSceneStore } from '../../store/scene-store'
 import { useGraphStore } from '../../store/graph-store'
 import { useAnimationStore } from '../../store/animation-store'
@@ -27,6 +57,7 @@ function toThreeColor(color?: unknown): string {
 type TextureSlot = {
   nodeId: string
   dataUrl?: string
+  flipY?: boolean
   noiseProps?: Record<string, unknown>
   normalFrom?: { dataUrl?: string; noiseProps?: Record<string, unknown> }
   normalStrength?: number
@@ -182,6 +213,9 @@ function MeshObject({
       } else if (data.dataUrl) {
         imageLoads.push(new Promise<void>((resolve) => {
           new THREE.TextureLoader().load(data.dataUrl!, (tex) => {
+            // glTF-extracted textures have flipY:false — their UV coords are top-left
+            // origin and the raw image data doesn't need flipping.
+            if (data.flipY === false) tex.flipY = false
             tex.colorSpace = COLOR_SLOTS.has(slot) ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping
             result[slot] = tex
@@ -207,6 +241,25 @@ function MeshObject({
 
   const matRef = useRef<THREE.MeshStandardMaterial>(null)
   useEffect(() => { if (matRef.current) matRef.current.needsUpdate = true }, [loadedTextures])
+
+  // gltf-mesh geometry: load asynchronously via cache, clone per instance
+  const [gltfGeometry, setGltfGeometry] = useState<THREE.BufferGeometry | null>(null)
+  useEffect(() => {
+    if (mesh.geometryType !== 'gltf-mesh' || !mesh.geometrySource) return
+    const { dataUrl, meshIndex } = mesh.geometrySource
+    let cancelled = false
+    let cloned: THREE.BufferGeometry | null = null
+    loadGltfGeometries(dataUrl).then((geos) => {
+      if (cancelled) return
+      const src = geos[meshIndex]
+      if (src) { cloned = src.clone(); setGltfGeometry(cloned) }
+    })
+    return () => {
+      cancelled = true
+      cloned?.dispose()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, mesh.geometrySource?.dataUrl, mesh.geometrySource?.meshIndex])
 
   const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -357,6 +410,11 @@ function MeshObject({
           {mesh.geometryType === 'icosphere' && (
             <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
           )}
+          {mesh.geometryType === 'gltf-mesh' && (
+            gltfGeometry
+              ? <primitive attach="geometry" object={gltfGeometry} />
+              : <boxGeometry args={[0.01, 0.01, 0.01]} />
+          )}
           {wireframeOverride ? (
             <meshBasicMaterial color={toThreeColor(mp.color)} wireframe />
           ) : (
@@ -385,8 +443,8 @@ function MeshObject({
             />
           )}
         </mesh>
-        {/* Selection highlight overlay */}
-        {isEditorView && isSelected && (
+        {/* Selection highlight overlay (not supported for gltf-mesh geometry) */}
+        {isEditorView && isSelected && mesh.geometryType !== 'gltf-mesh' && (
           <mesh renderOrder={10}>
             {mesh.geometryType === 'box' && (
               <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />

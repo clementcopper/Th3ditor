@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore } from '../../store/editor-store'
 import { useGraphStore } from '../../store/graph-store'
@@ -9,6 +10,7 @@ import { ColorControl } from './controls/ColorControl'
 import { ToggleControl } from './controls/ToggleControl'
 import { SelectControl } from './controls/SelectControl'
 import { FileControl } from './controls/FileControl'
+import { expandGLTFToNodes } from '../../graph-engine/gltf-expand'
 import type { PropertyDef } from '../../types/properties'
 
 function NodeRefControl({
@@ -58,6 +60,8 @@ export function PropertiesPanel() {
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const evalValues = useEvaluatorStore((s) => s.values)
   const colorValues = useEvaluatorStore((s) => s.colorValues)
+  const [isExpanding, setIsExpanding] = useState(false)
+  const [expandError, setExpandError] = useState<string | null>(null)
 
   if (!node) {
     return (
@@ -104,6 +108,42 @@ export function PropertiesPanel() {
 
       {/* Properties */}
       <div className="p-4 flex flex-col gap-3">
+
+        {/* glTF Import: Expand to Graph action */}
+        {node.type === 'object/gltf' && typeof node.data.glbFile === 'object' && node.data.glbFile && (
+          <div className="flex flex-col gap-1.5">
+            <button
+              disabled={isExpanding}
+              onClick={async () => {
+                if (!window.confirm('Expand to Graph replaces this node with individual mesh/material/texture nodes. This cannot be undone. Continue?')) return
+                setIsExpanding(true)
+                setExpandError(null)
+                try {
+                  const gs = useGraphStore.getState()
+                  const result = await expandGLTFToNodes(node, gs.nodes)
+                  gs.setNodes([
+                    ...gs.nodes.filter((n) => n.id !== result.nodeToRemove),
+                    ...result.nodesToAdd,
+                  ])
+                  gs.setEdges([
+                    ...gs.edges.filter((e) => e.source !== result.nodeToRemove && e.target !== result.nodeToRemove),
+                    ...result.edgesToAdd,
+                  ])
+                } catch (err) {
+                  setExpandError(err instanceof Error ? err.message : 'Expand failed')
+                } finally {
+                  setIsExpanding(false)
+                }
+              }}
+              className="w-full h-7 text-xs font-semibold bg-accent/20 hover:bg-accent/30 text-accent border border-accent/40 hover:border-accent/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isExpanding ? 'Expanding…' : 'Expand to Graph'}
+            </button>
+            {expandError && (
+              <span className="text-[10px] text-red-400">{expandError}</span>
+            )}
+          </div>
+        )}
 
         {/* Mix node: show connected input colors as read-only swatches */}
         {node.type === 'color/mix' && (() => {

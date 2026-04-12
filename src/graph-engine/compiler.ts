@@ -66,18 +66,31 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     }
     if (Object.keys(textureSlots).length > 0) matProps.textureSlots = textureSlots
 
-    // Resolve geometry subtype from mode
-    const geoMode = (geoProps.mode as number) ?? 0
-    const geometryType = GEO_SUBTYPES[geoMode] ?? 'box'
+    // Resolve geometry subtype and props
+    let geometryType: string
+    let normalizedGeoProps: Record<string, unknown>
+    let geometrySource: CompiledMesh['geometrySource'] | undefined
 
-    // Normalize geometry props for the renderer
-    const normalizedGeoProps = normalizeGeoProps(geometryType, geoProps)
+    if (geoNode.type === 'geometry/gltf-mesh') {
+      geometryType = 'gltf-mesh'
+      normalizedGeoProps = {}
+      const fileDataUrl = geoNode.data.fileDataUrl as string | undefined
+      const meshIndex = (geoNode.data.meshIndex as number) ?? 0
+      if (fileDataUrl) {
+        geometrySource = { type: 'gltf', dataUrl: fileDataUrl, meshIndex }
+      }
+    } else {
+      const geoMode = (geoProps.mode as number) ?? 0
+      geometryType = GEO_SUBTYPES[geoMode] ?? 'box'
+      normalizedGeoProps = normalizeGeoProps(geometryType, geoProps)
+    }
 
     meshes.push({
       id: meshNode.id,
       geometryNodeId: geoNode.id,
       geometryType,
       geometryProps: normalizedGeoProps,
+      geometrySource,
       materialNodeId: matNode.id,
       materialType: matNode.type,
       materialProps: matProps,
@@ -292,7 +305,7 @@ function resolveTextureSlot(
   targetNodeId: string,
   edges: GraphEdge[],
   nodeMap: Map<string, GraphNode>,
-): { nodeId: string; dataUrl?: string; noiseProps?: Record<string, unknown>; normalFrom?: { dataUrl?: string; noiseProps?: Record<string, unknown> }; normalStrength?: number; normalSourceNodeId?: string } | null {
+): { nodeId: string; dataUrl?: string; flipY?: boolean; noiseProps?: Record<string, unknown>; normalFrom?: { dataUrl?: string; noiseProps?: Record<string, unknown> }; normalStrength?: number; normalSourceNodeId?: string } | null {
   const edge = edges.find((e) => e.target === targetNodeId && e.targetHandle === portName)
   if (!edge) return null
   const node = nodeMap.get(edge.source)
@@ -307,7 +320,9 @@ function resolveTextureSlot(
     // Image mode
     const imageFile = texProps.imageFile as { name: string; dataUrl: string } | '' | undefined
     if (typeof imageFile !== 'object' || !imageFile) return null
-    return { nodeId: node.id, dataUrl: imageFile.dataUrl }
+    // flipY:false stored by glTF-expand to signal "do not flip" (glTF UV top-left convention)
+    const flipY = texProps.flipY === false ? false : undefined
+    return { nodeId: node.id, dataUrl: imageFile.dataUrl, ...(flipY === false && { flipY }) }
   }
 
   if (texMode === 1) {

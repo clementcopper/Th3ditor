@@ -39,11 +39,12 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
     ? `${baseLabel}: ${customLabel}`
     : baseLabel
 
-  // For texture/image nodes, show the loaded filename in the body
+  // For texture/image nodes, show filename + image preview in the body
   const imageFile = type === 'texture' && modeValue === 0
-    ? nodeData.imageFile as { name: string } | '' | undefined
+    ? nodeData.imageFile as { name: string; dataUrl?: string } | '' | undefined
     : undefined
   const imageFileName = typeof imageFile === 'object' && imageFile ? imageFile.name : undefined
+  const imageDataUrl = typeof imageFile === 'object' && imageFile ? imageFile.dataUrl : undefined
 
   const Icon = getNodeIcon(type ?? '', def.category, nodeData)
 
@@ -155,10 +156,22 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Filename display for image texture nodes */}
-      {imageFileName && (
-        <div className="px-2 pb-1.5">
-          <span className="text-[9px] text-text-muted font-mono truncate block leading-none">{imageFileName}</span>
+      {/* Image preview + filename for texture/image nodes */}
+      {(imageDataUrl || imageFileName) && (
+        <div className="pb-1.5">
+          {imageDataUrl && (
+            <img
+              src={imageDataUrl}
+              draggable={false}
+              className="w-full max-h-16 object-contain block"
+              alt=""
+            />
+          )}
+          {imageFileName && (
+            <div className="px-2 pt-0.5">
+              <span className="text-[9px] text-text-muted font-mono truncate block leading-none">{imageFileName}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

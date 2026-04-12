@@ -224,9 +224,9 @@ glTF Expand to Graph fertig. Multi-Format ausstehend:
 - True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise
 
 ### Shader Graph Erweiterungen 🔜 NEXT
-- [ ] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3
-- [ ] **Domain Warp** — `shader/domainwarp`: Noise-in-Noise (Ina Quilez Technik) → organische Blobs
-- [ ] Curl Noise, Worley Noise als weitere Noise-Typen
+- [x] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3
+- [x] **Domain Warp** — `shader/domainwarp`: Noise-in-Noise (Ina Quilez Technik) → organische Blobs
+- [x] Curl Noise, Worley Noise als weitere Noise-Typen
 
 ### Phase 6: Export + Polish
 - [ ] Export als React+R3F-Komponente

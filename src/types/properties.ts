@@ -1,4 +1,4 @@
-export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'curve' | 'noderef' | 'file'
+export type PropertyType = 'float' | 'int' | 'bool' | 'color' | 'vec2' | 'vec3' | 'select' | 'gradient' | 'text' | 'textarea' | 'curve' | 'noderef' | 'file'
 
 export interface PropertyDef {
   type: PropertyType

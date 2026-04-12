@@ -101,7 +101,7 @@ import { evaluateFloatPort, evaluateColorPort, type EvalContext } from '../../gr
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { useEvaluatorStore } from '../../store/evaluator-store'
 import { evaluatePathPosition } from '../../graph-engine/path-utils'
-import type { CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath } from '../../types/node-graph'
+import type { CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledBackgroundShader } from '../../types/node-graph'
 
 function toThreeColor(color?: unknown): string {
   const c = color as [number, number, number, number] | undefined
@@ -204,6 +204,390 @@ function canvasToNormalMap(src: HTMLCanvasElement, strength: number = 3): THREE.
   tex.colorSpace = THREE.LinearSRGBColorSpace
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   return tex
+}
+
+// Uniform declarations prepended to every custom shader so users can use them without boilerplate
+const UNIFORM_PREAMBLE = `\
+uniform float uTime;
+uniform vec2  uMouse;
+uniform vec2  uResolution;
+uniform float uFloat1;
+uniform float uFloat2;
+uniform float uFloat3;
+uniform float uFloat4;
+uniform sampler2D uTex1;
+uniform sampler2D uTex2;
+`
+
+const DEFAULT_VERT = `varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`
+
+const DEFAULT_FRAG = `varying vec2 vUv;
+void main() {
+  gl_FragColor = vec4(vUv, 0.5, 1.0);
+}`
+
+function ShaderMaterialObject({
+  mp,
+  loadedTextures,
+}: {
+  mp: Record<string, unknown>
+  loadedTextures: Record<string, THREE.Texture>
+}) {
+  // Stable uniforms object — values updated imperatively in useFrame
+  const uniforms = useMemo(() => ({
+    uTime:       { value: 0 },
+    uMouse:      { value: new THREE.Vector2() },
+    uResolution: { value: new THREE.Vector2() },
+    uFloat1:     { value: (mp.u1 as number) ?? 0 },
+    uFloat2:     { value: (mp.u2 as number) ?? 0 },
+    uFloat3:     { value: (mp.u3 as number) ?? 0 },
+    uFloat4:     { value: (mp.u4 as number) ?? 0 },
+    uTex1:       { value: null as THREE.Texture | null },
+    uTex2:       { value: null as THREE.Texture | null },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [])
+
+  // Recreate ShaderMaterial only when shader code changes; preamble injects all uniform declarations
+  const mat = useMemo(() => new THREE.ShaderMaterial({
+    vertexShader:   UNIFORM_PREAMBLE + ((mp.vertCode as string) || DEFAULT_VERT),
+    fragmentShader: UNIFORM_PREAMBLE + ((mp.fragCode as string) || DEFAULT_FRAG),
+    uniforms,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [mp.vertCode, mp.fragCode, uniforms])
+
+  // Track latest mp via ref so useFrame always reads current float values
+  // (avoids React render-cycle lag for per-frame animated uniforms)
+  const mpRef = useRef(mp)
+  mpRef.current = mp
+
+  // Update texture uniforms when textures load
+  useEffect(() => {
+    uniforms.uTex1.value = loadedTextures['t1'] ?? null
+    uniforms.uTex2.value = loadedTextures['t2'] ?? null
+    mat.needsUpdate = true
+  }, [loadedTextures, mat, uniforms])
+
+  // Per-frame: time, mouse, resolution, float inputs
+  useFrame(({ clock, mouse, viewport }) => {
+    uniforms.uTime.value = clock.getElapsedTime()
+    uniforms.uMouse.value.set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
+    uniforms.uResolution.value.set(viewport.width, viewport.height)
+    uniforms.uFloat1.value = (mpRef.current.u1 as number) ?? 0
+    uniforms.uFloat2.value = (mpRef.current.u2 as number) ?? 0
+    uniforms.uFloat3.value = (mpRef.current.u3 as number) ?? 0
+    uniforms.uFloat4.value = (mpRef.current.u4 as number) ?? 0
+  })
+
+  return <primitive attach="material" object={mat} />
+}
+
+// Full-screen triangle: covers clip space [-1,1]×[-1,1] with a single triangle.
+// Bypasses camera projection — position.xy maps directly to clip coordinates.
+const FULLSCREEN_VERT = `varying vec2 vUv;
+varying vec3 vPosition;
+void main() {
+  vUv = uv;
+  vPosition = position;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`
+
+// Standard mesh vertex shader — passes UV and object-space position through.
+const MESH_VERT = `varying vec2 vUv;
+varying vec3 vPosition;
+void main() {
+  vUv = uv;
+  vPosition = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`
+
+function MeshShaderGraphMaterial({ sg }: { sg: NonNullable<CompiledMesh['shaderGraph']> }) {
+  const mat = useMemo(() => {
+    const unis: Record<string, { value: unknown }> = {
+      uTime:       { value: 0 },
+      uMouse:      { value: new THREE.Vector2() },
+      uResolution: { value: new THREE.Vector2() },
+    }
+    for (const [key, entry] of Object.entries(sg.uniforms)) {
+      const v = entry.value
+      unis[key] = { value: Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v }
+    }
+    return new THREE.ShaderMaterial({
+      vertexShader: sg.vertexShader ?? MESH_VERT,
+      fragmentShader: sg.fragmentShader,
+      uniforms: unis,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sg.fragmentShader, sg.vertexShader])
+
+  useEffect(() => {
+    for (const [key, entry] of Object.entries(sg.uniforms)) {
+      if (!mat.uniforms[key]) continue
+      const v = entry.value
+      mat.uniforms[key].value = Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v
+    }
+  }, [sg.uniforms, mat])
+
+  const sgRef = useRef(sg)
+  sgRef.current = sg
+  const bridgeCache = useRef(new Map<string, number>())
+
+  useFrame(({ mouse, viewport }, delta) => {
+    const u = mat.uniforms
+    const animStore = useAnimationStore.getState()
+    u.uTime.value = animStore.elapsed
+    ;(u.uMouse.value as THREE.Vector2).set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
+    ;(u.uResolution.value as THREE.Vector2).set(viewport.width, viewport.height)
+    const bridges = sgRef.current.bridgeUniforms
+    if (bridges && Object.keys(bridges).length > 0) {
+      const { nodes, edges } = useGraphStore.getState()
+      const ctx: EvalContext = {
+        elapsed: animStore.elapsed,
+        delta: animStore.playing ? delta : 0,
+        mouseX: mouse.x,
+        mouseY: mouse.y,
+        screenW: viewport.width,
+        screenH: viewport.height,
+      }
+      bridgeCache.current.clear()
+      for (const [uniformKey, evalKey] of Object.entries(bridges)) {
+        if (!u[uniformKey]) continue
+        const [srcNodeId, srcHandle] = evalKey.split(':')
+        const val = evaluateFloatPort(srcNodeId, srcHandle, nodes, edges, ctx, bridgeCache.current)
+        if (val !== undefined) u[uniformKey].value = val
+      }
+    }
+  })
+
+  return <primitive attach="material" object={mat} />
+}
+
+// PBR mode: MeshStandardMaterial + onBeforeCompile displacement injection.
+// Keeps full Three.js PBR lighting, shadows, IBL — only vertex displacement is injected.
+function MeshPBRShaderGraphMaterial({
+  sg, mp, loadedTextures, matRef,
+}: {
+  sg: NonNullable<CompiledMesh['shaderGraph']>
+  mp: Record<string, unknown>
+  loadedTextures: Record<string, THREE.Texture>
+  matRef: React.RefObject<THREE.MeshStandardMaterial>
+}) {
+  const sgRef = useRef(sg)
+  sgRef.current = sg
+  const bridgeCache = useRef(new Map<string, number>())
+  // Ref to the shader object captured by onBeforeCompile for per-frame uniform updates
+  const compiledShaderRef = useRef<{ uniforms: Record<string, { value: unknown }> } | null>(null)
+
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({
+      color: toThreeColor(mp.color) as THREE.ColorRepresentation,
+      metalness: (mp.metalness as number) ?? 0.1,
+      roughness: (mp.roughness as number) ?? 0.5,
+      transparent: Boolean(mp.transparent),
+      opacity: (mp.opacity as number) ?? 1,
+      side: [THREE.FrontSide, THREE.BackSide, THREE.DoubleSide][(mp.side as number) ?? 0],
+    })
+    if (sg.vertexPreamble && sg.vertexBodyForPBR) {
+      m.onBeforeCompile = (shader) => {
+        // Prepend noise library + uniform declarations
+        shader.vertexShader = sgRef.current.vertexPreamble! + '\n' + shader.vertexShader
+        // Inject displacement after Three.js built-in displacement
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <displacementmap_vertex>',
+          `#include <displacementmap_vertex>\n${sgRef.current.vertexBodyForPBR!}`,
+        )
+        // Add initial uniform values
+        for (const [key, entry] of Object.entries(sgRef.current.uniforms)) {
+          const v = entry.value
+          shader.uniforms[key] = { value: Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v }
+        }
+        shader.uniforms.uTime       = { value: 0 }
+        shader.uniforms.uMouse      = { value: new THREE.Vector2() }
+        shader.uniforms.uResolution = { value: new THREE.Vector2() }
+        compiledShaderRef.current = shader
+      }
+      m.needsUpdate = true
+      m.customProgramCacheKey = () => (sg.vertexPreamble ?? '') + '|' + (sg.vertexBodyForPBR ?? '')
+    }
+    return m
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sg.vertexBodyForPBR, sg.vertexPreamble])
+
+  // Assign matRef so parent can call needsUpdate
+  useEffect(() => {
+    if (matRef && 'current' in matRef) (matRef as React.MutableRefObject<THREE.MeshStandardMaterial | null>).current = mat
+  }, [mat, matRef])
+
+  // Update non-shader material props imperatively
+  useEffect(() => {
+    mat.color.set(toThreeColor(mp.color) as THREE.ColorRepresentation)
+    mat.metalness = (mp.metalness as number) ?? 0.1
+    mat.roughness = (mp.roughness as number) ?? 0.5
+  }, [mat, mp.color, mp.metalness, mp.roughness])
+
+  // Update textures
+  useEffect(() => {
+    mat.map = loadedTextures.map ?? null
+    mat.normalMap = loadedTextures.normalMap ?? null
+    mat.roughnessMap = loadedTextures.roughnessMap ?? null
+    mat.metalnessMap = loadedTextures.metalnessMap ?? null
+    mat.aoMap = loadedTextures.aoMap ?? null
+    mat.emissiveMap = loadedTextures.emissiveMap ?? null
+    mat.displacementMap = loadedTextures.displacementMap ?? null
+    mat.needsUpdate = true
+  }, [mat, loadedTextures])
+
+  // Update shader uniforms each frame
+  useFrame(({ mouse, viewport }, delta) => {
+    const shader = compiledShaderRef.current
+    if (!shader) return
+    const u = shader.uniforms
+    const animStore = useAnimationStore.getState()
+    if (u.uTime) u.uTime.value = animStore.elapsed
+    if (u.uMouse) (u.uMouse.value as THREE.Vector2).set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
+    if (u.uResolution) (u.uResolution.value as THREE.Vector2).set(viewport.width, viewport.height)
+    // Live-update node uniform values
+    for (const [key, entry] of Object.entries(sgRef.current.uniforms)) {
+      if (!u[key]) continue
+      const v = entry.value
+      u[key].value = Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v
+    }
+    // Bridge uniforms
+    const bridges = sgRef.current.bridgeUniforms
+    if (bridges && Object.keys(bridges).length > 0) {
+      const { nodes, edges } = useGraphStore.getState()
+      const ctx: EvalContext = {
+        elapsed: animStore.elapsed, delta: animStore.playing ? delta : 0,
+        mouseX: mouse.x, mouseY: mouse.y, screenW: viewport.width, screenH: viewport.height,
+      }
+      bridgeCache.current.clear()
+      for (const [uniformKey, evalKey] of Object.entries(bridges)) {
+        if (!u[uniformKey]) continue
+        const [srcNodeId, srcHandle] = evalKey.split(':')
+        const val = evaluateFloatPort(srcNodeId, srcHandle, nodes, edges, ctx, bridgeCache.current)
+        if (val !== undefined) u[uniformKey].value = val
+      }
+    }
+  })
+
+  return <primitive attach="material" object={mat} />
+}
+
+function BackgroundShader({ bg }: { bg: CompiledBackgroundShader }) {
+  const isGenerated = !!bg.generatedFragmentShader
+
+  // Fragment shader: generated graph or raw GLSL
+  const fragCode = bg.generatedFragmentShader
+    ?? (UNIFORM_PREAMBLE + ((bg.materialProps.fragCode as string) || DEFAULT_FRAG))
+
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2))
+    return g
+  }, [])
+
+  // Recreate ShaderMaterial only when fragment shader code changes (topology change)
+  const mat = useMemo(() => {
+    const unis: Record<string, { value: unknown }> = {
+      uTime:       { value: 0 },
+      uMouse:      { value: new THREE.Vector2() },
+      uResolution: { value: new THREE.Vector2() },
+    }
+    if (!isGenerated) {
+      // Raw GLSL path: float and texture ports
+      const mp = bg.materialProps
+      unis.uFloat1 = { value: (mp.u1 as number) ?? 0 }
+      unis.uFloat2 = { value: (mp.u2 as number) ?? 0 }
+      unis.uFloat3 = { value: (mp.u3 as number) ?? 0 }
+      unis.uFloat4 = { value: (mp.u4 as number) ?? 0 }
+      unis.uTex1 = { value: null }
+      unis.uTex2 = { value: null }
+    }
+    // Generated shader graph path: add node-specific uniforms with initial values
+    if (bg.generatedUniforms) {
+      for (const [key, entry] of Object.entries(bg.generatedUniforms)) {
+        const v = entry.value
+        unis[key] = {
+          value: Array.isArray(v) && v.length === 3
+            ? new THREE.Vector3(v[0], v[1], v[2])
+            : v,
+        }
+      }
+    }
+    return new THREE.ShaderMaterial({
+      vertexShader:   FULLSCREEN_VERT,
+      fragmentShader: fragCode,
+      uniforms:       unis,
+      depthTest:      false,
+      depthWrite:     false,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fragCode])
+
+  // Live-update node uniform values when properties change (no shader recompile)
+  useEffect(() => {
+    if (!bg.generatedUniforms) return
+    for (const [key, entry] of Object.entries(bg.generatedUniforms)) {
+      if (!mat.uniforms[key]) continue
+      const v = entry.value
+      mat.uniforms[key].value = Array.isArray(v) && v.length === 3
+        ? new THREE.Vector3(v[0], v[1], v[2])
+        : v
+    }
+  }, [bg.generatedUniforms, mat])
+
+  const mpRef = useRef(bg.materialProps)
+  mpRef.current = bg.materialProps
+  const bgRef = useRef(bg)
+  bgRef.current = bg
+  // Per-frame eval cache for bridge uniforms (cleared each frame)
+  const bridgeCache = useRef(new Map<string, number>())
+
+  useFrame(({ mouse, viewport }, delta) => {
+    const u = mat.uniforms
+    const animStore = useAnimationStore.getState()
+    // Read elapsed from animation store — LiveEvaluator owns advancement
+    u.uTime.value = animStore.elapsed
+    ;(u.uMouse.value as THREE.Vector2).set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
+    ;(u.uResolution.value as THREE.Vector2).set(viewport.width, viewport.height)
+    if (!isGenerated && u.uFloat1) {
+      u.uFloat1.value = (mpRef.current.u1 as number) ?? 0
+      u.uFloat2.value = (mpRef.current.u2 as number) ?? 0
+      u.uFloat3.value = (mpRef.current.u3 as number) ?? 0
+      u.uFloat4.value = (mpRef.current.u4 as number) ?? 0
+    }
+    // Bridge: evaluate CPU float nodes (time, math, input) at 60fps
+    const bridges = bgRef.current.bridgeUniforms
+    if (bridges && Object.keys(bridges).length > 0) {
+      const { nodes, edges } = useGraphStore.getState()
+      const ctx: EvalContext = {
+        elapsed: animStore.elapsed,
+        delta: animStore.playing ? delta : 0,
+        mouseX: mouse.x,
+        mouseY: mouse.y,
+        screenW: viewport.width,
+        screenH: viewport.height,
+      }
+      bridgeCache.current.clear()
+      for (const [uniformKey, evalKey] of Object.entries(bridges)) {
+        if (!u[uniformKey]) continue
+        const [srcNodeId, srcHandle] = evalKey.split(':')
+        const val = evaluateFloatPort(srcNodeId, srcHandle, nodes, edges, ctx, bridgeCache.current)
+        if (val !== undefined) u[uniformKey].value = val
+      }
+    }
+  })
+
+  return (
+    <mesh renderOrder={-1000} frustumCulled={false}>
+      <primitive attach="geometry" object={geo} />
+      <primitive attach="material" object={mat} />
+    </mesh>
+  )
 }
 
 function MeshObject({
@@ -483,7 +867,13 @@ function MeshObject({
               ? <primitive attach="geometry" object={gltfGeometry} />
               : <boxGeometry args={[0.01, 0.01, 0.01]} />
           )}
-          {wireframeOverride ? (
+          {mesh.shaderGraph?.pbrMode && !wireframeOverride ? (
+            <MeshPBRShaderGraphMaterial sg={mesh.shaderGraph} mp={mp} loadedTextures={loadedTextures} matRef={matRef} />
+          ) : mesh.materialType === 'shader/output' && mesh.shaderGraph && !wireframeOverride ? (
+            <MeshShaderGraphMaterial sg={mesh.shaderGraph} />
+          ) : mesh.materialType === 'shader/glsl' && !wireframeOverride ? (
+            <ShaderMaterialObject mp={mp} loadedTextures={loadedTextures} />
+          ) : wireframeOverride ? (
             <meshBasicMaterial color={toThreeColor(mp.color)} wireframe />
           ) : (
             <meshStandardMaterial
@@ -1055,7 +1445,7 @@ function LiveEvaluator() {
               }
             }
           }
-        } else if (targetNode.type === 'material') {
+        } else if (targetNode.type === 'material' || targetNode.type === 'shader/glsl') {
           if (mesh.materialProps[edge.targetHandle] !== val) { matProps[edge.targetHandle] = val; meshChanged = true }
         } else if (targetNode.type === 'geometry') {
           if (mesh.geometryProps[edge.targetHandle] !== val) { geoProps[edge.targetHandle] = val; meshChanged = true }
@@ -1107,6 +1497,27 @@ function LiveEvaluator() {
       }
       return mesh
     })
+
+    // Evaluate float inputs on background shader (u1-u4 ports)
+    let newBgShader = scene.backgroundShader
+    if (newBgShader) {
+      const bgMatNodeId = newBgShader.materialNodeId
+      const bgProps = { ...newBgShader.materialProps }
+      let bgChanged = false
+      for (const edge of edges) {
+        if (edge.target !== bgMatNodeId) continue
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        if (sourceNode.type !== 'time' && sourceNode.type !== 'math' && sourceNode.type !== 'input') continue
+        const val = evaluateFloatPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
+        if (val === undefined) continue
+        if (bgProps[edge.targetHandle] !== val) { bgProps[edge.targetHandle] = val; bgChanged = true }
+      }
+      if (bgChanged) {
+        changed = true
+        newBgShader = { ...newBgShader, materialProps: bgProps }
+      }
+    }
 
     // Evaluate float inputs on gltf object transform nodes
     const newGltfObjects = scene.gltfObjects.map((gltf) => {
@@ -1339,7 +1750,7 @@ function LiveEvaluator() {
     })
 
     if (changed) {
-      useSceneStore.getState().setScene({ ...scene, meshes: newMeshes, gltfObjects: newGltfObjects, paths: newPaths, lights: newLights, camera: newCamera })
+      useSceneStore.getState().setScene({ ...scene, meshes: newMeshes, gltfObjects: newGltfObjects, paths: newPaths, lights: newLights, camera: newCamera, backgroundShader: newBgShader })
     }
 
     // Throttled update of evaluator store for edge labels + path positions (~10fps)
@@ -1830,6 +2241,9 @@ export function SceneRenderer({
   return (
     <>
       <EnvironmentLoader />
+      {scene.backgroundShader && !isEditorView && (
+        <BackgroundShader key={scene.backgroundShader.materialNodeId} bg={scene.backgroundShader} />
+      )}
       {isEditorView && scene.paths.map((p) => (
         <PathObject key={p.id} path={p} />
       ))}

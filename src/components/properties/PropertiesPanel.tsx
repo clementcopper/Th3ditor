@@ -10,6 +10,7 @@ import { ColorControl } from './controls/ColorControl'
 import { ToggleControl } from './controls/ToggleControl'
 import { SelectControl } from './controls/SelectControl'
 import { FileControl } from './controls/FileControl'
+import { TextAreaControl } from './controls/TextAreaControl'
 import { expandGLTFToNodes } from '../../graph-engine/gltf-expand'
 import type { PropertyDef } from '../../types/properties'
 
@@ -277,6 +278,15 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={getValue(prop)}
+                        onChange={(v) => handleChange(prop.uniform, v)}
+                      />
+                    )
+                  case 'textarea':
+                    return (
+                      <TextAreaControl
+                        key={prop.uniform}
+                        param={prop}
+                        value={(getValue(prop) as string) ?? ''}
                         onChange={(v) => handleChange(prop.uniform, v)}
                       />
                     )

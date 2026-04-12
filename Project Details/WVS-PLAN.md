@@ -410,7 +410,7 @@ Die Tangentenwerte selbst bouncen (sichtbar im Debug-HUD). Das Problem liegt ver
 - [ ] **GLSL-Code Editor** (TextAreaControl mit Monospace-Font)
 
 ### Phase 5e: Import Node — Expand to Graph + Multi-Format
-- [ ] "Expand to Graph" auf glTF Import Node — Button in Properties Panel mit Confirmation Dialog
+- [x] "Expand to Graph" auf glTF Import Node — Button in Properties Panel mit Confirmation Dialog
 - [x] `geometry/gltf-mesh` Node-Typ: speichert `{fileDataUrl, meshIndex}` in node.data, Output-Port `geometry`
 - [x] Expansion erzeugt pro Mesh im glTF: Geometry-Node + Material-Node + Image-Texture-Nodes + Mesh-Node → Scene Output
 - [x] Textur-Extraktion: embedded Texturen (HTMLImageElement/ImageBitmap) → Canvas → DataURL → Image Texture Nodes

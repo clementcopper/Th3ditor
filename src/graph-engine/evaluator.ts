@@ -163,7 +163,7 @@ function evalPort(
   switch (node.type) {
     // --- Time ---
     case 'time': {
-      const mode = (props.mode as number) ?? 0
+      const mode = Number(props.mode ?? 0)
       const speed = (props.speed as number) ?? 1
       if (mode === 0) {
         // Time
@@ -180,11 +180,11 @@ function evalPort(
 
     // --- Math ---
     case 'math': {
-      const mode = (props.mode as number) ?? 0
+      const mode = Number(props.mode ?? 0)
       switch (mode) {
         case 0: {
           // Number
-          const numType = (props.numType as number) ?? 0
+          const numType = Number(props.numType ?? 0)
           if (numType === 1) {
             result = Math.round((props.numInt as number) ?? 1)
           } else {
@@ -237,7 +237,7 @@ function evalPort(
 
     // --- Input ---
     case 'input': {
-      const mode = (props.mode as number) ?? 0
+      const mode = Number(props.mode ?? 0)
       if (mode === 0) {
         // Mouse
         if (portName === 'x') result = ctx.mouseX

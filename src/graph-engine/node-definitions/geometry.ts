@@ -24,12 +24,12 @@ const geometry: NodeDefinition = {
     { type: 'float', uniform: 'width', label: 'Width', min: 0.01, max: 20, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
     { type: 'float', uniform: 'height', label: 'Height', min: 0.01, max: 20, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
     { type: 'float', uniform: 'depth', label: 'Depth', min: 0.01, max: 20, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
-    { type: 'int', uniform: 'boxWidthSegs', label: 'W Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
-    { type: 'int', uniform: 'boxHeightSegs', label: 'H Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
-    { type: 'int', uniform: 'boxDepthSegs', label: 'D Segments', min: 1, max: 32, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
+    { type: 'int', uniform: 'boxWidthSegs', label: 'W Segments', min: 1, max: 256, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
+    { type: 'int', uniform: 'boxHeightSegs', label: 'H Segments', min: 1, max: 256, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
+    { type: 'int', uniform: 'boxDepthSegs', label: 'D Segments', min: 1, max: 256, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 0 } },
     // Sphere (1) — Quad Sphere (Box inflated to sphere, mergeVertices for seamless edges)
     { type: 'float', uniform: 'radius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 1 } },
-    { type: 'int', uniform: 'sphereSegments', label: 'Segments', min: 1, max: 64, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 1 } },
+    { type: 'int', uniform: 'sphereSegments', label: 'Segments', min: 1, max: 256, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 1 } },
     // Plane (2)
     { type: 'float', uniform: 'planeWidth', label: 'Width', min: 0.01, max: 50, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
     { type: 'float', uniform: 'planeHeight', label: 'Height', min: 0.01, max: 50, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 2 } },
@@ -52,7 +52,7 @@ const geometry: NodeDefinition = {
     { type: 'int', uniform: 'capsuleRadialSegments', label: 'Radial Segments', min: 3, max: 64, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 5 } },
     // Icosphere (6)
     { type: 'float', uniform: 'icoRadius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 6 } },
-    { type: 'int', uniform: 'icoDetail', label: 'Detail', min: 0, max: 12, step: 1, default: 2, visibleWhen: { uniform: 'mode', equal: 6 } },
+    { type: 'int', uniform: 'icoDetail', label: 'Detail', min: 0, max: 256, step: 1, default: 20, visibleWhen: { uniform: 'mode', equal: 6 } },
   ],
   defaults: {
     mode: 0,

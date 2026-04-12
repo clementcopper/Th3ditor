@@ -6,6 +6,7 @@ const material: NodeDefinition = {
   label: 'Material',
   category: 'material',
   inputs: [
+    { name: 'shaderGraph', type: 'material', label: 'Shader Graph' },
     { name: 'color', type: 'color', label: 'Color' },
     { name: 'map', type: 'texture', label: 'Map' },
     { name: 'normalMap', type: 'texture', label: 'Normal' },

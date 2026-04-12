@@ -2,7 +2,7 @@ import type { PropertyDef, VisibleWhenCondition } from './properties'
 
 // --- Port Types ---
 
-export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'camera' | 'scene' | 'float' | 'vec3' | 'color' | 'texture' | 'path'
+export type PortType = 'geometry' | 'material' | 'mesh' | 'light' | 'camera' | 'scene' | 'float' | 'vec3' | 'color' | 'texture' | 'path' | 'sfloat' | 'svec2' | 'svec3'
 
 export interface PortDef {
   name: string
@@ -62,6 +62,18 @@ export interface CompiledMesh {
   materialNodeId: string       // source material node
   materialType: string
   materialProps: Record<string, unknown>
+  /** Set when materialType === 'shader/output' or material node has shaderGraph port connected */
+  shaderGraph?: {
+    fragmentShader: string
+    vertexShader?: string       // full custom vertex shader (unlit mode: shader/output → mesh)
+    vertexPreamble?: string     // PBR mode: prepend to Three.js vertex shader
+    vertexBodyForPBR?: string   // PBR mode: inject after #include <displacementmap_vertex>
+    /** true = PBR mode (shader/output → material → mesh): uses MeshStandardMaterial + onBeforeCompile */
+    pbrMode?: boolean
+    uniforms: Record<string, { value: number | [number, number] | [number, number, number] }>
+    uniformNodeMap: Record<string, string>
+    bridgeUniforms: Record<string, string>
+  }
   transformNodeIds: string[]   // node IDs in the transform chain
   transform: CompiledTransform
 }
@@ -110,12 +122,24 @@ export interface CompiledGLTF {
   transformNodeIds: string[]
 }
 
+export interface CompiledBackgroundShader {
+  materialNodeId: string
+  materialProps: Record<string, unknown>
+  /** Set when connected node is shader/output (visual shader graph) */
+  generatedFragmentShader?: string
+  generatedUniforms?: Record<string, { value: number | [number, number] | [number, number, number] }>
+  uniformNodeMap?: Record<string, string>
+  /** Bridge: uniformKey → "sourceNodeId:sourceHandle" for CPU float nodes wired into shader inputs */
+  bridgeUniforms?: Record<string, string>
+}
+
 export interface CompiledScene {
   meshes: CompiledMesh[]
   gltfObjects: CompiledGLTF[]
   paths: CompiledPath[]
   lights: CompiledLight[]
   camera?: CompiledCamera
+  backgroundShader?: CompiledBackgroundShader
   smoothShading: boolean
   bgColor: string
   envMapDataUrl?: string

@@ -78,12 +78,18 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - gltfGeometryCache: module-level Map (not component state) with in-flight Promise dedup via `gltfGeometryLoading` Map.
 - MeshObject clones BufferGeometry from cache (so multiple nodes sharing same file are independent); disposes clone on cleanup.
 - Quad Sphere: BoxGeometry → toNonIndexed() → inflate → lat/lon UV + seam fix. No mergeVertices (breaks UVs). Normals = normalize(pos).
+- IcosahedronGeometry `detail` = linear grid subdivision: triangles = 20×(detail+1)². NOT exponential. detail=80 ≈ 256-seg sphere. Max 256 (500 laggy).
 - Sphere pole UV fix attempt (set pole vertex u = avg neighbors) creates holes — non-indexed geometry displaces pole differently per triangle.
 - Texture Normal `source` port: always visible + auto-switch to mode=2 in onConnect — user doesn't need to set mode first.
 - `NodeDefinition.hidden = true` hides node from palette (filter in NodePalette.tsx `getAllNodeDefs().filter(d => !d.hidden)`).
 - glTF Expand: store `matrixWorld` (16-element array) in gltf-mesh node data → apply `geo.applyMatrix4()` on clone in SceneRenderer.
 - glTF Expand transparency: `MeshPhysicalMaterial.transmission > 0` → `transparent: true, opacity: 1 - transmission`.
 - Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
+- SelectControl stores values as strings ('0','1','2') — always use `Number(props.X ?? 0)` not `(props.X as number) ?? 0` for select properties.
+- Three.js `customProgramCacheKey` must include `vertexPreamble` + `vertexBodyForPBR` — key on body alone causes stale shader reuse when only preamble changes (e.g. noise type switch).
+- PBR displacement: finite-diff normals eps=0.1, gradient clamp ±1.5 — lower eps causes extreme normals at sharp noise (Voronoi) boundaries.
+- Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
+- Vertex displacement needs geo density ≥ noise feature size ×5 — 256 sphere segs is practical max (512 laggy); icosphere detail 200 equivalent.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -154,7 +160,8 @@ src/
 - Phase 5c complete ✅: Area Light (RectAreaLight, Width/Height/Rotation/Target, custom editor visual)
 - Phase 5d complete ✅: Texture Nodes (Image/Noise/Normal modes, PBR Material, Shadow support, tileable noise), Color Nodes, glTF Expand to Graph (geometry/gltf-mesh + texture preview + UV fix)
 - Phase 5e in progress 🔄: glTF Expand implemented; FBX/OBJ/STEP formats pending
-- Next: Custom GLSL Shader-Node (TextAreaControl, ShaderMaterial)
+- **Visual Shader Graph complete ✅**: shader/uv/time/mouse/position/noise/gradient/mix/math/color/number/output nodes; unlit + PBR displacement modes
+- Next: FBX Import (Phase 5e) or Shader Graph color-output in PBR mode
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 
 ## Planned: Quad-Mesh Primitives (Phase 6+)

@@ -11,6 +11,8 @@ import { registerCameraNodes } from './node-definitions/camera'
 import { registerPathNodes } from './node-definitions/path'
 import { registerColorNodes } from './node-definitions/color'
 import { registerTextureNodes } from './node-definitions/texture'
+import { registerShaderNodes } from './node-definitions/shader'
+import { registerShaderGraphNodes } from './node-definitions/shader-graph'
 
 let registered = false
 
@@ -30,4 +32,6 @@ export function registerAllNodes() {
   registerPathNodes()
   registerColorNodes()
   registerTextureNodes()
+  registerShaderNodes()
+  registerShaderGraphNodes()
 }

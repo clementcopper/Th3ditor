@@ -1,6 +1,7 @@
-import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform } from '../types/node-graph'
+import type { GraphNode, GraphEdge, CompiledScene, CompiledMesh, CompiledGLTF, CompiledLight, CompiledCamera, CompiledPath, CompiledTransform, CompiledBackgroundShader } from '../types/node-graph'
 import { getNodeDef } from './node-registry'
 import { rgbaToHex6, rgbToHsl, hslToRgb } from '../utils/color'
+import { compileShaderGraph } from './shader-graph-compiler'
 
 /** Maps geometry mode number to a subtype string for the renderer */
 const GEO_SUBTYPES = ['box', 'sphere', 'plane', 'torus', 'cylinder', 'capsule', 'icosphere'] as const
@@ -64,6 +65,13 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       const slot = resolveTextureSlot(port, matNode.id, edges, nodeMap)
       if (slot) textureSlots[port] = slot
     }
+    // Shader-specific texture ports t1/t2
+    if (matNode.type === 'shader/glsl') {
+      for (const port of ['t1', 't2']) {
+        const slot = resolveTextureSlot(port, matNode.id, edges, nodeMap)
+        if (slot) textureSlots[port] = slot
+      }
+    }
     if (Object.keys(textureSlots).length > 0) matProps.textureSlots = textureSlots
 
     // Resolve geometry subtype and props
@@ -87,6 +95,20 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       normalizedGeoProps = normalizeGeoProps(geometryType, geoProps)
     }
 
+    // Compile shader graph — either direct (shader/output → mesh) or via material port (PBR mode)
+    let meshShaderGraph: CompiledMesh['shaderGraph'] | undefined
+    if (matNode.type === 'shader/output') {
+      meshShaderGraph = compileShaderGraph(matNode.id, nodes, edges)
+    } else if (matNode.type === 'material') {
+      const sgEdge = edges.find((e) => e.target === matNode.id && e.targetHandle === 'shaderGraph')
+      if (sgEdge) {
+        const sgNode = nodeMap.get(sgEdge.source)
+        if (sgNode?.type === 'shader/output') {
+          meshShaderGraph = { ...compileShaderGraph(sgNode.id, nodes, edges), pbrMode: true }
+        }
+      }
+    }
+
     meshes.push({
       id: meshNode.id,
       geometryNodeId: geoNode.id,
@@ -96,6 +118,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
       materialNodeId: matNode.id,
       materialType: matNode.type,
       materialProps: matProps,
+      shaderGraph: meshShaderGraph,
       transformNodeIds,
       transform,
     })
@@ -217,7 +240,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     const camNode = nodeMap.get(edge.source)
     if (!camNode || camNode.type !== 'camera') continue
     const props = getProps(camNode)
-    const camMode = (props.mode as number) ?? 0
+    const camMode = Number(props.mode ?? 0)
     camera = {
       nodeId: camNode.id,
       position: [
@@ -257,7 +280,34 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
   const envIntensity = (sceneOutputProps.envIntensity as number) ?? 1
   const showEnvBackground = Boolean(sceneOutputProps.showEnvBackground)
 
-  return { meshes, gltfObjects, paths, lights, camera, smoothShading, bgColor, envMapDataUrl, envIntensity, showEnvBackground }
+  // --- Background Shader (connected to Scene Output 'shader' port) ---
+  let backgroundShader: CompiledBackgroundShader | undefined
+  if (sceneOutputNode) {
+    const shaderEdge = edges.find((e) => e.target === sceneOutputNode.id && e.targetHandle === 'shader')
+    if (shaderEdge) {
+      const shaderNode = nodeMap.get(shaderEdge.source)
+      if (shaderNode) {
+        if (shaderNode.type === 'shader/output') {
+          // Visual shader graph path — compile to GLSL automatically
+          const compiled = compileShaderGraph(shaderNode.id, nodes, edges)
+          backgroundShader = {
+            materialNodeId: shaderNode.id,
+            materialProps: {},
+            generatedFragmentShader: compiled.fragmentShader,
+            generatedUniforms: compiled.uniforms,
+            uniformNodeMap: compiled.uniformNodeMap,
+            bridgeUniforms: compiled.bridgeUniforms,
+          }
+        } else {
+          // Raw GLSL shader node (shader/glsl)
+          const shaderProps = getProps(shaderNode)
+          backgroundShader = { materialNodeId: shaderNode.id, materialProps: shaderProps }
+        }
+      }
+    }
+  }
+
+  return { meshes, gltfObjects, paths, lights, camera, backgroundShader, smoothShading, bgColor, envMapDataUrl, envIntensity, showEnvBackground }
 }
 
 /** Normalize geometry props to a renderer-friendly format */
@@ -316,7 +366,7 @@ function resolveTextureSlot(
   if (node.type !== 'texture') return null
   const texDef = getNodeDef(node.type)
   const texProps = { ...(texDef?.defaults ?? {}), ...node.data } as Record<string, unknown>
-  const texMode = (texProps.mode as number) ?? 0
+  const texMode = Number(texProps.mode ?? 0)
 
   if (texMode === 0) {
     // Image mode
@@ -341,7 +391,7 @@ function resolveTextureSlot(
     if (srcNode?.type !== 'texture') return null
     const srcDef = getNodeDef(srcNode.type)
     const srcProps = { ...(srcDef?.defaults ?? {}), ...srcNode.data } as Record<string, unknown>
-    const srcMode = (srcProps.mode as number) ?? 0
+    const srcMode = Number(srcProps.mode ?? 0)
     let normalFrom: { dataUrl?: string; noiseProps?: Record<string, unknown> }
     if (srcMode === 0) {
       const imageFile = srcProps.imageFile as { name: string; dataUrl: string } | '' | undefined

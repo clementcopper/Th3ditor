@@ -13,6 +13,9 @@ export const PORT_COLORS: Record<PortType, string> = {
   color: '#FB923C',    // orange
   texture: '#22D3EE',  // fuchsia
   path: '#C084FC',     // purple
+  sfloat: '#2DD4BF',  // teal  (shader float)
+  svec2: '#E879F9',   // fuchsia (shader vec2)
+  svec3: '#F59E0B',   // amber  (shader vec3/color)
 }
 
 // Category header colors
@@ -23,7 +26,7 @@ export const CATEGORY_COLORS: Record<NodeDefinition['category'], string> = {
   transform: '#ff7300',
   light: '#ffcc00',
   camera: '#0ea5e9',
-  shader: '#000000',
+  shader: '#A3E635',  // lime green
   math: '#6600ff',
   color: '#FB923C',
   texture: '#22D3EE',

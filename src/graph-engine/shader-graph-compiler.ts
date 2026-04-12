@@ -1,0 +1,609 @@
+import type { GraphNode, GraphEdge } from '../types/node-graph'
+import { getNodeDef } from './node-registry'
+
+export interface CompiledShaderGraph {
+  fragmentShader: string
+  /** Full custom vertex shader — unlit mode (shader/output → mesh directly) */
+  vertexShader?: string
+  /** PBR injection: prepend to Three.js vertex shader in onBeforeCompile */
+  vertexPreamble?: string
+  /** PBR injection: inject after #include <displacementmap_vertex> in onBeforeCompile */
+  vertexBodyForPBR?: string
+  uniforms: Record<string, { value: number | [number, number] | [number, number, number] }>
+  uniformNodeMap: Record<string, string>  // "nodeId:propName" → uniformKey
+  /** CPU float nodes wired to sfloat inputs: uniformKey → "sourceNodeId:sourceHandle" */
+  bridgeUniforms: Record<string, string>
+}
+
+const SHADER_NODE_TYPES = new Set([
+  'shader/uv', 'shader/time', 'shader/mouse', 'shader/position',
+  'shader/noise', 'shader/gradient', 'shader/mix', 'shader/math',
+  'shader/color', 'shader/number', 'shader/output',
+])
+
+// Output GLSL type per node type (undefined for terminals like shader/output)
+const NODE_OUTPUT_GLSL_TYPE: Record<string, string> = {
+  'shader/uv':       'vec2',
+  'shader/time':     'float',
+  'shader/mouse':    'vec2',
+  'shader/position': 'vec3',
+  'shader/noise':    'float',
+  'shader/gradient': 'vec3',
+  'shader/mix':      'vec3',
+  'shader/math':     'float',
+  'shader/color':    'vec3',
+  'shader/number':   'float',
+}
+
+const NOISE_PREAMBLE = `
+// --- Shader Graph Noise Library ---
+// 2D helpers
+vec3 _sg_mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec2 _sg_mod289v2(vec2 x){return x-floor(x*(1./289.))*289.;}
+vec4 _sg_mod289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec3 _sg_permute(vec3 x){return _sg_mod289(((x*34.)+10.)*x);}
+vec4 _sg_permute4(vec4 x){return _sg_mod289v4(((x*34.)+10.)*x);}
+vec4 _sg_taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
+
+// 3D Simplex Noise (Ashima Arts)
+float _sg_snoise3(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);
+  const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));
+  vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);
+  vec3 l=1.-g;
+  vec3 i1=min(g.xyz,l.zxy);
+  vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;
+  vec3 x2=x0-i2+C.yyy;
+  vec3 x3=x0-D.yyy;
+  i=_sg_mod289(i);
+  vec4 p=_sg_permute4(_sg_permute4(_sg_permute4(
+    i.z+vec4(0.,i1.z,i2.z,1.))+
+    i.y+vec4(0.,i1.y,i2.y,1.))+
+    i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857;
+  vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z);
+  vec4 y_=floor(j-7.*x_);
+  vec4 xx=x_*ns.x+ns.yyyy;
+  vec4 yy=y_*ns.x+ns.yyyy;
+  vec4 h=1.-abs(xx)-abs(yy);
+  vec4 b0=vec4(xx.xy,yy.xy);
+  vec4 b1=vec4(xx.zw,yy.zw);
+  vec4 s0=floor(b0)*2.+1.;
+  vec4 s1=floor(b1)*2.+1.;
+  vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);
+  vec3 p1=vec3(a0.zw,h.y);
+  vec3 p2=vec3(a1.xy,h.z);
+  vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=_sg_taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+  m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}
+// 3D fBm — XY = space, Z = time
+float _sg_fbm3(vec3 p,int oct){
+  float v=0.,a=.5;
+  for(int i=0;i<8;i++){if(i>=oct)break; v+=a*_sg_snoise3(p); p*=2.; a*=.5;}
+  return v*.5+.5;
+}
+float _sg_ridged3(vec3 p,int oct){
+  float v=0.,a=.5;
+  for(int i=0;i<8;i++){if(i>=oct)break; v+=a*(1.-abs(_sg_snoise3(p))); p*=2.; a*=.5;}
+  return clamp(v,0.,1.);
+}
+// True 3D Voronoi — works seamlessly on any 3D surface
+float _sg_voronoi3(vec3 p){
+  vec3 ip=floor(p),fp=fract(p); float d=8.;
+  for(int z=-1;z<=1;z++)for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+    vec3 nb=vec3(float(x),float(y),float(z));
+    vec3 rnd=fract(sin(vec3(
+      dot(ip+nb,vec3(127.1,311.7,74.7)),
+      dot(ip+nb,vec3(269.5,183.3,246.1)),
+      dot(ip+nb,vec3(113.5,271.9,124.6))
+    ))*43758.5453);
+    vec3 diff=nb+rnd-fp;
+    d=min(d,dot(diff,diff));
+  }
+  return clamp(sqrt(d),0.,1.);
+}
+`
+
+// BFS backwards from outputNode through shader edges to collect all upstream shader nodes
+function collectShaderNodes(
+  outputNodeId: string,
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): Set<string> {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+  const visited = new Set<string>()
+  const queue = [outputNodeId]
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    for (const edge of edges) {
+      if (edge.target === id) {
+        const src = nodeMap.get(edge.source)
+        if (src && SHADER_NODE_TYPES.has(src.type)) {
+          queue.push(src.id)
+        }
+      }
+    }
+  }
+  return visited
+}
+
+// Kahn's algorithm topological sort
+function topoSort(nodeIds: string[], edges: GraphEdge[]): string[] {
+  const idSet = new Set(nodeIds)
+  const inDeg = new Map<string, number>()
+  const adj = new Map<string, string[]>()
+  for (const id of nodeIds) {
+    inDeg.set(id, 0)
+    adj.set(id, [])
+  }
+  for (const edge of edges) {
+    if (idSet.has(edge.source) && idSet.has(edge.target)) {
+      adj.get(edge.source)!.push(edge.target)
+      inDeg.set(edge.target, (inDeg.get(edge.target) ?? 0) + 1)
+    }
+  }
+  const queue = nodeIds.filter((id) => (inDeg.get(id) ?? 0) === 0)
+  const result: string[] = []
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    result.push(id)
+    for (const next of adj.get(id) ?? []) {
+      const deg = (inDeg.get(next) ?? 0) - 1
+      inDeg.set(next, deg)
+      if (deg === 0) queue.push(next)
+    }
+  }
+  return result
+}
+
+function getNodeProps(node: GraphNode): Record<string, unknown> {
+  const def = getNodeDef(node.type)
+  return { ...(def?.defaults ?? {}), ...node.data }
+}
+
+// Extract a vec3 value from a color property [r,g,b,a] or [r,g,b]
+function colorToVec3(val: unknown): [number, number, number] {
+  if (Array.isArray(val) && val.length >= 3) {
+    return [val[0] as number, val[1] as number, val[2] as number]
+  }
+  return [1, 1, 1]
+}
+
+// Format a float for GLSL (always has decimal point)
+function fmtFloat(v: number): string {
+  const s = v.toFixed(6).replace(/\.?0+$/, '')
+  return s.includes('.') ? s : s + '.0'
+}
+
+// Format a vec3 for GLSL
+function fmtVec3(v: [number, number, number]): string {
+  return `vec3(${fmtFloat(v[0])},${fmtFloat(v[1])},${fmtFloat(v[2])})`
+}
+
+export function compileShaderGraph(
+  outputNodeId: string,
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): CompiledShaderGraph {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+  const shaderNodeIds = collectShaderNodes(outputNodeId, nodes, edges)
+  const sorted = topoSort([...shaderNodeIds], edges)
+
+  // Map nodeId → topo index
+  const topoIdx = new Map<string, number>()
+  sorted.forEach((id, i) => topoIdx.set(id, i))
+
+  // Map nodeId → output variable name in GLSL
+  const nodeVar = new Map<string, string>()
+
+  // Accumulated shader sections
+  const uniformDecls: string[] = [
+    'uniform float uTime;',
+    'uniform vec2 uMouse;',
+    'uniform vec2 uResolution;',
+    'varying vec2 vUv;',
+    'varying vec3 vPosition;',
+  ]
+  const bodyLines: string[] = []
+  const uniforms: Record<string, { value: number | [number, number] | [number, number, number] }> = {}
+  const uniformNodeMap: Record<string, string> = {}
+  const bridgeUniforms: Record<string, string> = {}  // uniformKey → "srcNodeId:srcHandle"
+  let needsNoise = false
+
+  // Helper: create a uniform for a float property
+  function makeFloatUniform(node: GraphNode, propName: string, idx: number): string {
+    const key = `_u${idx}_${propName}`
+    const props = getNodeProps(node)
+    const val = (props[propName] as number) ?? 0
+    uniformDecls.push(`uniform float ${key};`)
+    uniforms[key] = { value: val }
+    uniformNodeMap[`${node.id}:${propName}`] = key
+    return key
+  }
+
+  // Helper: create a uniform for a vec3 color property
+  function makeVec3Uniform(node: GraphNode, propName: string, idx: number): string {
+    const key = `_u${idx}_${propName}`
+    const props = getNodeProps(node)
+    const val = colorToVec3(props[propName])
+    uniformDecls.push(`uniform vec3 ${key};`)
+    uniforms[key] = { value: val }
+    uniformNodeMap[`${node.id}:${propName}`] = key
+    return key
+  }
+
+  // Helper: get resolved input expression (connected shader var, bridge uniform, or null)
+  function resolvedInput(nodeId: string, portName: string): string | null {
+    const edge = edges.find((e) => e.target === nodeId && e.targetHandle === portName)
+    if (!edge) return null
+    // Shader graph node — use its GLSL variable
+    if (nodeVar.has(edge.source)) return nodeVar.get(edge.source)!
+    // CPU float node — create a bridge uniform (evaluated at 60fps in useFrame)
+    const srcNode = nodeMap.get(edge.source)
+    if (srcNode) {
+      const bridgeKey = `_br_${edge.source.replace(/[^a-zA-Z0-9]/g, '_')}`
+      if (!bridgeUniforms[bridgeKey]) {
+        uniformDecls.push(`uniform float ${bridgeKey};`)
+        uniforms[bridgeKey] = { value: 0 }
+        bridgeUniforms[bridgeKey] = `${edge.source}:${edge.sourceHandle}`
+      }
+      return bridgeKey
+    }
+    return null
+  }
+
+  for (const id of sorted) {
+    const node = nodeMap.get(id)
+    if (!node) continue
+    const i = topoIdx.get(id) ?? 0
+    const props = getNodeProps(node)
+    const outVar = `_n${i}`
+
+    switch (node.type) {
+      case 'shader/uv': {
+        bodyLines.push(`vec2 ${outVar} = vUv;`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/mouse': {
+        bodyLines.push(`vec2 ${outVar} = uMouse;`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/position': {
+        bodyLines.push(`vec3 ${outVar} = vPosition;`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/time': {
+        const speedU = makeFloatUniform(node, 'speed', i)
+        bodyLines.push(`float ${outVar} = uTime * ${speedU};`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/number': {
+        const valU = makeFloatUniform(node, 'value', i)
+        bodyLines.push(`float ${outVar} = ${valU};`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/color': {
+        const colorU = makeVec3Uniform(node, 'color', i)
+        bodyLines.push(`vec3 ${outVar} = ${colorU};`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/noise': {
+        needsNoise = true
+        const scaleIn = resolvedInput(id, 'scale')
+        const scaleExpr = scaleIn ?? makeFloatUniform(node, 'scale', i)
+        const timeIn = resolvedInput(id, 'time')
+        const timeExpr = timeIn ?? makeFloatUniform(node, 'timeSpeed', i)
+        const seedIn = resolvedInput(id, 'seed')
+        const seedExpr = seedIn ?? makeFloatUniform(node, 'seed', i)
+        const detailU = makeFloatUniform(node, 'detail', i)
+        const noiseType = Number(props.noiseType ?? 0)
+
+        // Position port takes priority over UV — avoids UV seam on meshes
+        const posIn = resolvedInput(id, 'position')
+        let p3: string
+        if (posIn) {
+          // 3D object-space position: scale + seed offset + time for animation
+          p3 = `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
+        } else {
+          // UV mode: XY = scaled UV + seed, Z = time for morphing
+          const uvIn = resolvedInput(id, 'uv') ?? 'vUv'
+          p3 = `vec3(${uvIn} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
+        }
+
+        let expr: string
+        if (noiseType === 2) {
+          expr = `_sg_voronoi3(${p3})`
+        } else if (noiseType === 1) {
+          expr = `_sg_ridged3(${p3}, int(${detailU}))`
+        } else {
+          expr = `_sg_fbm3(${p3}, int(${detailU}))`
+        }
+        bodyLines.push(`float ${outVar} = ${expr};`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/gradient': {
+        const tIn = resolvedInput(id, 't')
+        const tExpr = tIn ?? makeFloatUniform(node, 't', i)
+        const colorAU = makeVec3Uniform(node, 'colorA', i)
+        const colorBU = makeVec3Uniform(node, 'colorB', i)
+        bodyLines.push(`vec3 ${outVar} = mix(${colorAU}, ${colorBU}, clamp(${tExpr}, 0.0, 1.0));`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/mix': {
+        const aIn = resolvedInput(id, 'a')
+        const aExpr = aIn ?? makeVec3Uniform(node, 'a', i)
+        const bIn = resolvedInput(id, 'b')
+        const bExpr = bIn ?? makeVec3Uniform(node, 'b', i)
+        const tIn = resolvedInput(id, 't')
+        const tExpr = tIn ?? makeFloatUniform(node, 't', i)
+        bodyLines.push(`vec3 ${outVar} = mix(${aExpr}, ${bExpr}, clamp(${tExpr}, 0.0, 1.0));`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/math': {
+        const op = Number(props.op ?? 0)
+        const isBinary = op <= 2  // Multiply(0), Add(1), Subtract(2)
+        const aIn = resolvedInput(id, 'a')
+        const aExpr = aIn ?? makeFloatUniform(node, 'a', i)
+        let mathExpr: string
+        if (isBinary) {
+          const bIn = resolvedInput(id, 'b')
+          const bExpr = bIn ?? makeFloatUniform(node, 'b', i)
+          switch (op) {
+            case 1:  mathExpr = `${aExpr} + ${bExpr}`; break
+            case 2:  mathExpr = `${aExpr} - ${bExpr}`; break
+            default: mathExpr = `${aExpr} * ${bExpr}`; break  // Multiply
+          }
+        } else {
+          switch (op) {
+            case 4:  mathExpr = `cos(${aExpr})`; break
+            case 5:  mathExpr = `abs(${aExpr})`; break
+            case 6:  mathExpr = `clamp(${aExpr}, 0.0, 1.0)`; break
+            default: mathExpr = `sin(${aExpr})`; break  // Sin
+          }
+        }
+        bodyLines.push(`float ${outVar} = ${mathExpr};`)
+        nodeVar.set(id, outVar)
+        break
+      }
+
+      case 'shader/output': {
+        // Terminal node — generate gl_FragColor
+        const colorIn = resolvedInput(id, 'color')
+        const colorExpr = colorIn ?? makeVec3Uniform(node, 'defaultColor', i)
+        const alphaIn = resolvedInput(id, 'alpha')
+        const alphaExpr = alphaIn ?? makeFloatUniform(node, 'defaultAlpha', i)
+        bodyLines.push(`gl_FragColor = vec4(${colorExpr}, ${alphaExpr});`)
+        break
+      }
+
+      default:
+        break
+    }
+  }
+
+  // If no shader/output node found or gl_FragColor not set, add fallback
+  const hasOutput = sorted.some((id) => nodeMap.get(id)?.type === 'shader/output')
+  if (!hasOutput) {
+    bodyLines.push('gl_FragColor = vec4(vUv, 0.5, 1.0);')
+  }
+
+  // Assemble final fragment shader
+  const parts: string[] = []
+  if (needsNoise) parts.push(NOISE_PREAMBLE)
+  parts.push(uniformDecls.join('\n'))
+  parts.push('\nvoid main() {')
+  for (const line of bodyLines) {
+    parts.push(`  ${line}`)
+  }
+  parts.push('}')
+
+  const fragmentShader = parts.join('\n')
+
+  // === Displacement vertex shader ===
+  // Compile a custom vertex shader when the displacement input is connected.
+  // Nodes are recompiled in "vertex context": shader/uv → uv attribute, shader/position → position attribute.
+  let vertexShader: string | undefined
+  let vertexPreamble: string | undefined
+  let vertexBodyForPBR: string | undefined
+
+  const dispEdge = edges.find((e) => e.target === outputNodeId && e.targetHandle === 'displacement')
+  if (dispEdge) {
+    // BFS to collect displacement chain nodes
+    const dispChain = new Set<string>()
+    const dq = [dispEdge.source]
+    while (dq.length > 0) {
+      const did = dq.shift()!
+      if (dispChain.has(did)) continue
+      dispChain.add(did)
+      for (const e of edges) {
+        if (e.target === did) {
+          const src = nodeMap.get(e.source)
+          if (src && SHADER_NODE_TYPES.has(src.type)) dq.push(src.id)
+        }
+      }
+    }
+
+    // Use same topo order as fragment pass (consistent variable names)
+    const dispSorted = sorted.filter((id) => dispChain.has(id))
+    const vBody: string[] = []      // inline body (position attribute)
+    const vBodyFunc: string[] = []  // function body (_sg_p parameter — for finite differences)
+    const vVar = new Map<string, string>()
+    let positionNodeUsed = false
+
+    function vResolve(nodeId: string, portName: string): string | null {
+      const e = edges.find((e) => e.target === nodeId && e.targetHandle === portName)
+      if (!e) return null
+      if (vVar.has(e.source)) return vVar.get(e.source)!
+      const bk = `_br_${e.source.replace(/[^a-zA-Z0-9]/g, '_')}`
+      return uniforms[bk] ? bk : null
+    }
+
+    for (const id of dispSorted) {
+      const node = nodeMap.get(id)
+      if (!node) continue
+      const i = topoIdx.get(id) ?? 0
+      const props = getNodeProps(node)
+      const v = `_n${i}`
+
+      switch (node.type) {
+        case 'shader/uv': {
+          const line = `vec2 ${v} = uv;`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+        case 'shader/position': {
+          positionNodeUsed = true
+          vBody.push(`vec3 ${v} = position;`)
+          vBodyFunc.push(`vec3 ${v} = _sg_p;`)   // parameterised for finite differences
+          vVar.set(id, v); break
+        }
+        case 'shader/mouse': {
+          const line = `vec2 ${v} = uMouse;`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+        case 'shader/time': {
+          const line = `float ${v} = uTime * _u${i}_speed;`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+        case 'shader/number': {
+          const line = `float ${v} = _u${i}_value;`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+        case 'shader/noise': {
+          const scaleExpr = vResolve(id, 'scale') ?? `_u${i}_scale`
+          const timeExpr  = vResolve(id, 'time')  ?? `_u${i}_timeSpeed`
+          const seedExpr  = vResolve(id, 'seed')  ?? `_u${i}_seed`
+          const detailU   = `_u${i}_detail`
+          const noiseType = Number(props.noiseType ?? 0)
+          const posIn = vResolve(id, 'position')
+          const p3 = posIn
+            ? `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
+            : `vec3(${vResolve(id, 'uv') ?? 'uv'} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
+          const expr = noiseType === 2 ? `_sg_voronoi3(${p3})`
+            : noiseType === 1 ? `_sg_ridged3(${p3}, int(${detailU}))`
+            : `_sg_fbm3(${p3}, int(${detailU}))`
+          const line = `float ${v} = ${expr};`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+        case 'shader/math': {
+          const op = Number(props.op ?? 0)
+          const aExpr = vResolve(id, 'a') ?? `_u${i}_a`
+          let expr: string
+          if (op <= 2) {
+            const bExpr = vResolve(id, 'b') ?? `_u${i}_b`
+            expr = op === 1 ? `${aExpr} + ${bExpr}` : op === 2 ? `${aExpr} - ${bExpr}` : `${aExpr} * ${bExpr}`
+          } else {
+            expr = op === 4 ? `cos(${aExpr})` : op === 5 ? `abs(${aExpr})` : op === 6 ? `clamp(${aExpr}, 0.0, 1.0)` : `sin(${aExpr})`
+          }
+          const line = `float ${v} = ${expr};`
+          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+        }
+      }
+    }
+
+    const dispValueExpr = vVar.get(dispEdge.source) ?? '0.0'
+
+    // Displacement scale uniform (on shader/output node)
+    const outNode = nodeMap.get(outputNodeId)!
+    const outIdx = topoIdx.get(outputNodeId) ?? sorted.length
+    const outProps = getNodeProps(outNode)
+    const dscaleU = `_u${outIdx}_displacementScale`
+    if (!uniforms[dscaleU]) {
+      uniformDecls.push(`uniform float ${dscaleU};`)
+      uniforms[dscaleU] = { value: (outProps.displacementScale as number) ?? 0.2 }
+      uniformNodeMap[`${outputNodeId}:displacementScale`] = dscaleU
+    }
+
+    // Full custom vertex shader (unlit mode)
+    const vParts: string[] = []
+    if (needsNoise) vParts.push(NOISE_PREAMBLE)
+    vParts.push(uniformDecls.join('\n'))
+    vParts.push('\nvoid main() {')
+    vParts.push('  vUv = uv;')
+    vParts.push('  vPosition = position;')
+    for (const l of vBody) vParts.push(`  ${l}`)
+    vParts.push(`  vec3 dispPos = position + normal * ${dispValueExpr} * ${dscaleU};`)
+    vParts.push('  gl_Position = projectionMatrix * modelViewMatrix * vec4(dispPos, 1.0);')
+    vParts.push('}')
+    vertexShader = vParts.join('\n')
+
+    // PBR mode: preamble (exclude varyings already in Three.js) + injection body
+    const pbrDecls = uniformDecls.filter((d) => !d.startsWith('varying'))
+    const preambleParts: string[] = []
+    if (needsNoise) preambleParts.push(NOISE_PREAMBLE)
+    preambleParts.push(pbrDecls.join('\n'))
+
+    if (positionNodeUsed) {
+      // Generate _sg_disp(vec3 _sg_p) helper — enables finite difference normal computation
+      preambleParts.push([
+        `float _sg_disp(vec3 _sg_p) {`,
+        ...vBodyFunc.map((l) => `  ${l}`),
+        `  return ${dispValueExpr};`,
+        `}`,
+      ].join('\n'))
+    }
+    vertexPreamble = preambleParts.join('\n')
+
+    if (positionNodeUsed) {
+      // Finite difference normal computation — corrects PBR shading for displaced geometry.
+      // Samples _sg_disp at 3 points to compute displacement gradient → perturbed normal.
+      // Overrides vNormal (the last write in vertex main() wins for interpolation).
+      vertexBodyForPBR = [
+        `  float _sg_eps = 0.1;`,
+        `  vec3 _sg_t = abs(normal.y) < 0.99`,
+        `    ? normalize(cross(normal, vec3(0.0, 1.0, 0.0)))`,
+        `    : normalize(cross(normal, vec3(1.0, 0.0, 0.0)));`,
+        `  vec3 _sg_b = normalize(cross(normal, _sg_t));`,
+        `  float _sg_dC = _sg_disp(position);`,
+        `  float _sg_dT = _sg_disp(position + _sg_t * _sg_eps);`,
+        `  float _sg_dB = _sg_disp(position + _sg_b * _sg_eps);`,
+        `  float _sg_gT = clamp((_sg_dT - _sg_dC) * ${dscaleU} / _sg_eps, -1.5, 1.5);`,
+        `  float _sg_gB = clamp((_sg_dB - _sg_dC) * ${dscaleU} / _sg_eps, -1.5, 1.5);`,
+        `  vec3 _sg_norm = normalize(normal - _sg_t * _sg_gT - _sg_b * _sg_gB);`,
+        `  #ifndef FLAT_SHADED`,
+        `    vNormal = normalize(normalMatrix * _sg_norm);`,
+        `  #endif`,
+        `  transformed += normal * _sg_dC * ${dscaleU};`,
+      ].join('\n')
+    } else {
+      // UV-based or simple displacement — no normal correction
+      vertexBodyForPBR = [
+        ...vBody.map((l) => `  ${l}`),
+        `  transformed += normal * ${dispValueExpr} * ${dscaleU};`,
+      ].join('\n')
+    }
+  }
+
+  return { fragmentShader, vertexShader, vertexPreamble, vertexBodyForPBR, uniforms, uniformNodeMap, bridgeUniforms }
+}

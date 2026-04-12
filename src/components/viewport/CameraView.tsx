@@ -171,7 +171,7 @@ function CameraViewContents({ debugRef }: { debugRef: React.RefObject<HTMLPreEle
 }
 
 export function CameraView() {
-  const hasCamera = useSceneStore((s) => !!s.scene.camera)
+  const hasCamera = useSceneStore((s) => !!s.scene.camera || !!s.scene.backgroundShader)
   const debugRef = useRef<HTMLPreElement>(null)
 
   return (

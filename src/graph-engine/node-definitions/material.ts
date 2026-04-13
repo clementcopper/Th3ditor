@@ -30,7 +30,7 @@ const material: NodeDefinition = {
     { type: 'float', uniform: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1, linkedPort: 'opacity' },
     { type: 'bool', uniform: 'transparent', label: 'Transparent', default: false },
     {
-      type: 'select', uniform: 'side', label: 'Side', default: 0,
+      type: 'select', uniform: 'side', label: 'Side', default: 0, noHeader: true,
       options: [{ label: 'Front', value: '0' }, { label: 'Back', value: '1' }, { label: 'Double', value: '2' }],
     },
     { type: 'bool', uniform: 'wireframe', label: 'Wireframe', default: false },

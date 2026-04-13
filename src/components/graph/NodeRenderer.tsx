@@ -29,12 +29,12 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
   // Other select props append to label (e.g. shader/math → "Shader Math: Fract")
   const modeProp = def.properties.find((p) => p.uniform === 'mode' && p.type === 'select')
   const modeValue = modeProp ? Number(getData('mode') ?? 0) : undefined
-  const fallbackSelectProp = !modeProp ? def.properties.find((p) => p.type === 'select') : undefined
+  const fallbackSelectProp = !modeProp ? def.properties.find((p) => p.type === 'select' && !p.noHeader) : undefined
   const fallbackValue = fallbackSelectProp ? Number(getData(fallbackSelectProp.uniform) ?? 0) : undefined
   const baseLabel = modeProp?.options && modeValue !== undefined
-    ? (modeProp.options[modeValue]?.label ?? def.label)
+    ? (modeProp.options.find((o) => Number(o.value) === modeValue)?.label ?? def.label)
     : fallbackSelectProp?.options && fallbackValue !== undefined
-      ? `${def.label}: ${fallbackSelectProp.options[fallbackValue]?.label ?? ''}`
+      ? `${def.label}: ${fallbackSelectProp.options.find((o) => Number(o.value) === fallbackValue)?.label ?? ''}`
       : def.label
 
   // For mesh and light nodes, prepend type prefix and append custom label

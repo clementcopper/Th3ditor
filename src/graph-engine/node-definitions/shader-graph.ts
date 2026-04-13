@@ -110,16 +110,17 @@ const shaderMath: NodeDefinition = {
   label: 'Shader Math',
   category: 'shader',
   inputs: [
-    { name: 'a', type: 'sfloat', label: 'A' },
+    { name: 'a', type: 'sfloat', label: 'A', visibleWhen: { uniform: 'op', notEqual: 9 } },
     { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'op', equal: [0, 1, 2, 7] } },
     { name: 't', type: 'sfloat', label: 'T',  visibleWhen: { uniform: 'op', equal: 7 } },
   ],
   outputs: [{ name: 'result', type: 'sfloat', label: 'Result' }],
   properties: [
     { type: 'select', uniform: 'op', label: 'Operation', options: [
-      { label: 'Multiply', value: '0' },
+      { label: 'Number',   value: '9' },
       { label: 'Add',      value: '1' },
       { label: 'Subtract', value: '2' },
+      { label: 'Multiply', value: '0' },
       { label: 'Sin',      value: '3' },
       { label: 'Cos',      value: '4' },
       { label: 'Abs',      value: '5' },
@@ -127,14 +128,16 @@ const shaderMath: NodeDefinition = {
       { label: 'Lerp',     value: '7' },
       { label: 'Fract',    value: '8' },
     ], default: 0 },
+    { type: 'float', uniform: 'value', label: 'Value', min: -1000, max: 1000, step: 0.01, hardMin: -1e9, hardMax: 1e9, default: 0.0,
+      visibleWhen: { uniform: 'op', equal: 9 } },
     { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.01, hardMin: -1e6, hardMax: 1e6, default: 1.0,
-      visibleWhen: { portDisconnected: 'a' } },
+      visibleWhen: [{ uniform: 'op', notEqual: 9 }, { portDisconnected: 'a' }] },
     { type: 'float', uniform: 'b', label: 'B', min: -100, max: 100, step: 0.01, hardMin: -1e6, hardMax: 1e6, default: 1.0,
       visibleWhen: [{ uniform: 'op', equal: [0, 1, 2, 7] }, { portDisconnected: 'b' }] },
     { type: 'float', uniform: 'lerpT', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5,
       visibleWhen: [{ uniform: 'op', equal: 7 }, { portDisconnected: 't' }] },
   ],
-  defaults: { op: 0, a: 1.0, b: 1.0, lerpT: 0.5 },
+  defaults: { op: 0, a: 1.0, b: 1.0, lerpT: 0.5, value: 0.0 },
 }
 
 const shaderColor: NodeDefinition = {
@@ -153,6 +156,7 @@ const shaderNumber: NodeDefinition = {
   type: 'shader/number',
   label: 'Shader Number',
   category: 'shader',
+  hidden: true,  // consolidated into shader/math op=9 (Number)
   inputs: [],
   outputs: [{ name: 'value', type: 'sfloat', label: 'Value' }],
   properties: [

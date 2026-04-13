@@ -405,6 +405,12 @@ export function compileShaderGraph(
 
       case 'shader/math': {
         const op = Number(props.op ?? 0)
+        if (op === 9) {  // Number — constant, no inputs
+          const valU = makeFloatUniform(node, 'value', i)
+          bodyLines.push(`float ${outVar} = ${valU};`)
+          nodeVar.set(id, outVar)
+          break
+        }
         const aIn = resolvedInput(id, 'a')
         const aExpr = aIn ?? makeFloatUniform(node, 'a', i)
         let mathExpr: string
@@ -656,6 +662,10 @@ export function compileShaderGraph(
         }
         case 'shader/math': {
           const op = Number(props.op ?? 0)
+          if (op === 9) {  // Number — constant, no inputs
+            const line = `float ${v} = _u${i}_value;`
+            vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          }
           const aExpr = vResolve(id, 'a') ?? `_u${i}_a`
           let expr: string
           if (op === 7) {

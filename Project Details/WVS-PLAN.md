@@ -212,7 +212,7 @@ Texture Nodes (Image/Noise/Normal), PBR Material, Shadow Support, Color Nodes, g
 - [ ] Custom GLSL Shader-Node (TextAreaControl + raw GLSL) — noch offen
 
 ### Phase 5e 🔄 IN PROGRESS
-glTF Expand to Graph fertig. Multi-Format ausstehend:
+glTF Expand to Graph fertig. Multi-Format unklar(GLTF an sich ausreichend):
 - [ ] FBX (THREE.FBXLoader)
 - [ ] OBJ (THREE.OBJLoader + MTLLoader)
 
@@ -223,18 +223,26 @@ glTF Expand to Graph fertig. Multi-Format ausstehend:
 - shader/position: object-space 3D noise (keine UV-Seam)
 - True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise
 
+**⚠️ Shading Bug: Shader-Noise-Displacement inteferenzen an Polen**
+Sphere und Icosphere auch bei 256 Segmenten. Wenn man einen Shader-Noise zum Mesh-Displacement nutzt, sind an den Polen zackig umrandete Kreise zu sehen wenn der Noise-Effekt das Mesh verformt. Trotz Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5), shader/position: object-space 3D noise und True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise.
+
 ### Shader Graph Erweiterungen 🔜 NEXT
 - [x] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3
 - [x] **Domain Warp** — `shader/domainwarp`: Noise-in-Noise (Ina Quilez Technik) → organische Blobs
 - [x] Curl Noise, Worley Noise als weitere Noise-Typen
+- [ ] Shader Color Ramp braucht einen Value Output-Port um punktuelles Dispalcement via b/w Color-Ramp zu ermöglichen (aktuell nur Color Outut Port)
+- [ ] Es fehlen noch Modes für die Shader-Time-Node. Ziel: Zeit ungleichmäßig vergehen zu lassen (fall-offs / ease-in / ease-out uws.)
+- [ ] Shader Dot Matrix - Shader Node um Punkt-matritzen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.
+- [ ] Shader Lines - Shader Node um verschieden Linien-Anordnungen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.
 
 ### Phase 6: Export + Polish
+- [ ] Projekt Save/Load (JSON)
+- [ ] Undo/Redo
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Video-Export via MediaRecorder
-- [ ] Post-Processing: Bloom, Vignette, DOF via `@react-three/postprocessing`
-- [ ] Projekt Save/Load (JSON)
-- [ ] Undo/Redo
+- [ ] Post-Processing: Bloom, Vignette, DOF via `@react-three/postprocessing` z.B via Scene-Output-Node
+
 
 ### Phase 7: Compound Node System (Nested Subgraphs)
 - [ ] Node-Selektion → "Group" → Compound-Node mit auto-generierten In/Out-Ports

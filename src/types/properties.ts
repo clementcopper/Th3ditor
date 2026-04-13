@@ -29,6 +29,8 @@ export interface PropertyDef {
   visibleWhen?: VisibleWhenCondition | VisibleWhenCondition[]
   /** For type='color': render the picker inline (always open) instead of as a dropdown */
   inline?: boolean
+  /** Prevent this select property from being used as the node header fallback label */
+  noHeader?: boolean
 }
 
 export type VisibleWhenCondition =

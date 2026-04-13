@@ -266,6 +266,8 @@ export function NodeEditor() {
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         fitView
+        minZoom={0.25}
+        maxZoom={2.00}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'data', animated: true }}
       >

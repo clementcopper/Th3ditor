@@ -19,15 +19,15 @@ const math: NodeDefinition = {
     {
       type: 'select', uniform: 'mode', label: 'Operation', default: 0,
       options: [
-        { label: 'Number', value: '0' },
-        { label: 'Add', value: '1' },
-        { label: 'Multiply', value: '2' },
-        { label: 'Sin', value: '3' },
-        { label: 'Cos', value: '4' },
-        { label: 'Lerp', value: '5' },
-        { label: 'Clamp', value: '6' },
-        { label: 'Remap', value: '7' },
+        { label: 'Number',   value: '0' },
+        { label: 'Add',      value: '1' },
         { label: 'Subtract', value: '8' },
+        { label: 'Multiply', value: '2' },
+        { label: 'Sin',      value: '3' },
+        { label: 'Cos',      value: '4' },
+        { label: 'Clamp',    value: '6' },
+        { label: 'Lerp',     value: '5' },
+        { label: 'Remap',    value: '7' },
       ],
     },
     // Number (0)

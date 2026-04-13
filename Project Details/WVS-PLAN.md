@@ -224,7 +224,7 @@ glTF Expand to Graph fertig. Multi-Format unklar(GLTF an sich ausreichend):
 - True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise
 
 **⚠️ Shading Bug: Shader-Noise-Displacement inteferenzen an Polen**
-Sphere und Icosphere auch bei 256 Segmenten. Wenn man einen Shader-Noise zum Mesh-Displacement nutzt, sind an den Polen zackig umrandete Kreise zu sehen wenn der Noise-Effekt das Mesh verformt. Trotz Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5), shader/position: object-space 3D noise und True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise.
+Sphere und Icosphere auch bei 256 Segmenten. Wenn man einen Shader-Noise zum Mesh-Displacement nutzt, sind an den Polen zackig umrandete Kreise(Seam) zu sehen wenn der Noise-Effekt das Mesh verformt. Trotz Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5), shader/position: object-space 3D noise und True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise.
 
 ### Shader Graph Erweiterungen 🔜 NEXT
 - [x] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3

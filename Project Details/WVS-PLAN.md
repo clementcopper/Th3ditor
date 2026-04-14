@@ -230,7 +230,7 @@ Sphere und Icosphere auch bei 256 Segmenten. Wenn man einen Shader-Noise zum Mes
 - [x] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3
 - [x] **Domain Warp** — `shader/domainwarp`: Noise-in-Noise (Ina Quilez Technik) → organische Blobs
 - [x] Curl Noise, Worley Noise als weitere Noise-Typen
-- [ ] Shader Color Ramp braucht einen Value Output-Port um punktuelles Dispalcement via b/w Color-Ramp zu ermöglichen (aktuell nur Color Outut Port)
+- [ ] Shader Color Ramp braucht einen Value Output-Port um Dispalcement via b/w Color-Ramp zu ermöglichen (aktuell nur Color Output Port). Alle Shader-Color-Nodes(Shader Color, Shader Mix, Shader Gradient, Shader Color Ramp) brauchen einen Value Output Port (Non-Color). (Oder eine Node die Color in Value umwandelt.) Zudem sollten alle Shader Color nodes zu einer Node zusammengefügt werden und als Modes angeboten werden.
 - [ ] Es fehlen noch Modes für die Shader-Time-Node. Ziel: Zeit ungleichmäßig vergehen zu lassen (fall-offs / ease-in / ease-out uws.)
 - [ ] Shader Dot Matrix - Shader Node um Punkt-matritzen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.
 - [ ] Shader Lines - Shader Node um verschieden Linien-Anordnungen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.

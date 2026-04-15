@@ -10,7 +10,7 @@ export interface CompiledShaderGraph {
   vertexPreamble?: string
   /** PBR injection: inject after #include <displacementmap_vertex> in onBeforeCompile */
   vertexBodyForPBR?: string
-  uniforms: Record<string, { value: number | [number, number] | [number, number, number] }>
+  uniforms: Record<string, { value: number | [number, number] | [number, number, number] | [number, number, number, number] }>
   uniformNodeMap: Record<string, string>  // "nodeId:propName" → uniformKey
   /** CPU float nodes wired to sfloat inputs: uniformKey → "sourceNodeId:sourceHandle" */
   bridgeUniforms: Record<string, string>
@@ -235,8 +235,10 @@ export function compileShaderGraph(
   const topoIdx = new Map<string, number>()
   sorted.forEach((id, i) => topoIdx.set(id, i))
 
-  // Map nodeId → output variable name in GLSL
+  // Map nodeId → primary output variable name in GLSL
   const nodeVar = new Map<string, string>()
+  // Per-output variables for multi-output nodes: "nodeId:portHandle" → varName
+  const portVar = new Map<string, string>()
 
   // Accumulated shader sections
   const uniformDecls: string[] = [
@@ -247,7 +249,7 @@ export function compileShaderGraph(
     'varying vec3 vPosition;',
   ]
   const bodyLines: string[] = []
-  const uniforms: Record<string, { value: number | [number, number] | [number, number, number] }> = {}
+  const uniforms: Record<string, { value: number | [number, number] | [number, number, number] | [number, number, number, number] }> = {}
   const uniformNodeMap: Record<string, string> = {}
   const bridgeUniforms: Record<string, string> = {}  // uniformKey → "srcNodeId:srcHandle"
   let needsNoise = false
@@ -274,11 +276,25 @@ export function compileShaderGraph(
     return key
   }
 
+  // Helper: create a uniform for a vec4 color property (rgba)
+  function makeVec4Uniform(node: GraphNode, propName: string, idx: number): string {
+    const key = `_u${idx}_${propName}`
+    const props = getNodeProps(node)
+    const val = props[propName] as number[] ?? [1, 1, 1, 1]
+    uniformDecls.push(`uniform vec4 ${key};`)
+    uniforms[key] = { value: [val[0] ?? 1, val[1] ?? 1, val[2] ?? 1, val[3] ?? 1] as [number, number, number, number] }
+    uniformNodeMap[`${node.id}:${propName}`] = key
+    return key
+  }
+
   // Helper: get resolved input expression (connected shader var, bridge uniform, or null)
   function resolvedInput(nodeId: string, portName: string): string | null {
     const edge = edges.find((e) => e.target === nodeId && e.targetHandle === portName)
     if (!edge) return null
-    // Shader graph node — use its GLSL variable
+    // Check per-port variable first (multi-output nodes like shader/color)
+    const pk = `${edge.source}:${edge.sourceHandle}`
+    if (portVar.has(pk)) return portVar.get(pk)!
+    // Shader graph node — use its primary GLSL variable
     if (nodeVar.has(edge.source)) return nodeVar.get(edge.source)!
     // CPU float node — create a bridge uniform (evaluated at 60fps in useFrame)
     const srcNode = nodeMap.get(edge.source)
@@ -335,9 +351,74 @@ export function compileShaderGraph(
       }
 
       case 'shader/color': {
-        const colorU = makeVec3Uniform(node, 'color', i)
-        bodyLines.push(`vec3 ${outVar} = ${colorU};`)
-        nodeVar.set(id, outVar)
+        const colorMode = Number(props.colorMode ?? 0)
+        const cVar = `_n${i}_c`
+        const vVar = `_n${i}_v`
+        const aVar = `_n${i}_a`
+
+        if (colorMode === 1) {
+          // Mix
+          const aIn = resolvedInput(id, 'colorA')
+          const aExpr = aIn ?? makeVec3Uniform(node, 'colorA', i)
+          const bIn = resolvedInput(id, 'colorB')
+          const bExpr = bIn ?? makeVec3Uniform(node, 'colorB', i)
+          const tIn = resolvedInput(id, 't')
+          const tExpr = tIn ?? makeFloatUniform(node, 't', i)
+          bodyLines.push(`vec3 ${cVar} = mix(${aExpr}, ${bExpr}, clamp(${tExpr}, 0.0, 1.0));`)
+          bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
+          bodyLines.push(`float ${aVar} = 1.0;`)
+        } else if (colorMode === 2) {
+          // Ramp
+          const tIn = resolvedInput(id, 't')
+          const tExpr = tIn ?? makeFloatUniform(node, 't', i)
+          const rawStops = props.stops as import('../types/properties').ColorRampStop[] | undefined
+          const stops = (rawStops && rawStops.length >= 2 ? rawStops : [
+            { pos: 0, color: [0, 0, 0, 1] as [number, number, number, number] },
+            { pos: 1, color: [1, 1, 1, 1] as [number, number, number, number] },
+          ]).slice().sort((a, b) => a.pos - b.pos)
+          const posUniforms: string[] = []
+          const colUniforms: string[] = []
+          for (let j = 0; j < stops.length; j++) {
+            const pk = `_u${i}_p${j}`
+            uniformDecls.push(`uniform float ${pk};`)
+            uniforms[pk] = { value: stops[j].pos }
+            posUniforms.push(pk)
+            const ck = `_u${i}_s${j}`
+            uniformDecls.push(`uniform vec3 ${ck};`)
+            uniforms[ck] = { value: [stops[j].color[0], stops[j].color[1], stops[j].color[2]] as [number, number, number] }
+            uniformNodeMap[`${node.id}:stops[${j}].color`] = ck
+            colUniforms.push(ck)
+          }
+          const tVar = `_ramp_t${i}`
+          bodyLines.push(`float ${tVar} = clamp(${tExpr}, 0.0, 1.0);`)
+          bodyLines.push(`vec3 ${cVar} = mix(${colUniforms[0]}, ${colUniforms[1]}, clamp((${tVar} - ${posUniforms[0]}) / max(${posUniforms[1]} - ${posUniforms[0]}, 0.0001), 0.0, 1.0));`)
+          for (let j = 1; j < stops.length - 1; j++) {
+            const nextVar = `_ramp_next${i}_${j}`
+            bodyLines.push(`vec3 ${nextVar} = mix(${colUniforms[j]}, ${colUniforms[j + 1]}, clamp((${tVar} - ${posUniforms[j]}) / max(${posUniforms[j + 1]} - ${posUniforms[j]}, 0.0001), 0.0, 1.0));`)
+            bodyLines.push(`${cVar} = mix(${cVar}, ${nextVar}, step(${posUniforms[j]}, ${tVar}));`)
+          }
+          bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
+          bodyLines.push(`float ${aVar} = 1.0;`)
+        } else {
+          // Mode 0: Constant color with optional per-channel overrides
+          const colorU = makeVec4Uniform(node, 'color', i)
+          const rIn = resolvedInput(id, 'r')
+          const gIn = resolvedInput(id, 'g')
+          const bIn = resolvedInput(id, 'b')
+          const aIn = resolvedInput(id, 'a')
+          const rExpr = rIn ?? `${colorU}.r`
+          const gExpr = gIn ?? `${colorU}.g`
+          const bExpr = bIn ?? `${colorU}.b`
+          const aExpr = aIn ?? `${colorU}.a`
+          bodyLines.push(`vec3 ${cVar} = vec3(${rExpr}, ${gExpr}, ${bExpr});`)
+          bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
+          bodyLines.push(`float ${aVar} = ${aExpr};`)
+        }
+
+        portVar.set(`${id}:color`, cVar)
+        portVar.set(`${id}:value`, vVar)
+        portVar.set(`${id}:alpha`, aVar)
+        nodeVar.set(id, cVar)
         break
       }
 
@@ -602,11 +683,15 @@ export function compileShaderGraph(
     const vBody: string[] = []      // inline body (position attribute)
     const vBodyFunc: string[] = []  // function body (_sg_p parameter — for finite differences)
     const vVar = new Map<string, string>()
+    const vPortVar = new Map<string, string>()  // "nodeId:portHandle" → varName (multi-output)
     let positionNodeUsed = false
 
     function vResolve(nodeId: string, portName: string): string | null {
       const e = edges.find((e) => e.target === nodeId && e.targetHandle === portName)
       if (!e) return null
+      // Check per-port variable first (multi-output nodes like shader/color)
+      const pk = `${e.source}:${e.sourceHandle}`
+      if (vPortVar.has(pk)) return vPortVar.get(pk)!
       if (vVar.has(e.source)) return vVar.get(e.source)!
       const bk = `_br_${e.source.replace(/[^a-zA-Z0-9]/g, '_')}`
       return uniforms[bk] ? bk : null
@@ -719,6 +804,65 @@ export function compileShaderGraph(
             vBody.push(l); vBodyFunc.push(l)
           }
           vVar.set(id, v); break
+        }
+        case 'shader/color': {
+          const colorMode = Number(props.colorMode ?? 0)
+          const cVar = `_n${i}_c`
+          const vVarName = `_n${i}_v`
+          const aVar = `_n${i}_a`
+
+          if (colorMode === 1) {
+            const aIn = vResolve(id, 'colorA')
+            const aExpr = aIn ?? `_u${i}_colorA`
+            const bIn = vResolve(id, 'colorB')
+            const bExpr = bIn ?? `_u${i}_colorB`
+            const tIn = vResolve(id, 't')
+            const tExpr = tIn ?? `_u${i}_t`
+            const l1 = `vec3 ${cVar} = mix(${aExpr}, ${bExpr}, clamp(${tExpr}, 0.0, 1.0));`
+            const l2 = `float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`
+            vBody.push(l1, l2); vBodyFunc.push(l1, l2)
+          } else if (colorMode === 2) {
+            const tIn = vResolve(id, 't')
+            const tExpr = tIn ?? `_u${i}_t`
+            // Build ramp using same uniforms declared in fragment pass
+            const rawStops = props.stops as import('../types/properties').ColorRampStop[] | undefined
+            const stops = (rawStops && rawStops.length >= 2 ? rawStops : [
+              { pos: 0, color: [0, 0, 0, 1] as [number, number, number, number] },
+              { pos: 1, color: [1, 1, 1, 1] as [number, number, number, number] },
+            ]).slice().sort((a, b) => a.pos - b.pos)
+            const posUniforms = stops.map((_, j) => `_u${i}_p${j}`)
+            const colUniforms = stops.map((_, j) => `_u${i}_s${j}`)
+            const tVar = `_ramp_t${i}`
+            const lines: string[] = [
+              `float ${tVar} = clamp(${tExpr}, 0.0, 1.0);`,
+              `vec3 ${cVar} = mix(${colUniforms[0]}, ${colUniforms[1]}, clamp((${tVar} - ${posUniforms[0]}) / max(${posUniforms[1]} - ${posUniforms[0]}, 0.0001), 0.0, 1.0));`,
+            ]
+            for (let j = 1; j < stops.length - 1; j++) {
+              const nextVar = `_ramp_next${i}_${j}`
+              lines.push(`vec3 ${nextVar} = mix(${colUniforms[j]}, ${colUniforms[j + 1]}, clamp((${tVar} - ${posUniforms[j]}) / max(${posUniforms[j + 1]} - ${posUniforms[j]}, 0.0001), 0.0, 1.0));`)
+              lines.push(`${cVar} = mix(${cVar}, ${nextVar}, step(${posUniforms[j]}, ${tVar}));`)
+            }
+            lines.push(`float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
+            for (const l of lines) { vBody.push(l); vBodyFunc.push(l) }
+          } else {
+            // Mode 0: constant color
+            const colorU = `_u${i}_color`
+            const rIn = vResolve(id, 'r')
+            const gIn = vResolve(id, 'g')
+            const bIn = vResolve(id, 'b')
+            const rExpr = rIn ?? `${colorU}.r`
+            const gExpr = gIn ?? `${colorU}.g`
+            const bExpr = bIn ?? `${colorU}.b`
+            const l1 = `vec3 ${cVar} = vec3(${rExpr}, ${gExpr}, ${bExpr});`
+            const l2 = `float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`
+            vBody.push(l1, l2); vBodyFunc.push(l1, l2)
+          }
+
+          vPortVar.set(`${id}:color`, cVar)
+          vPortVar.set(`${id}:value`, vVarName)
+          vPortVar.set(`${id}:alpha`, aVar)
+          vVar.set(id, vVarName)
+          break
         }
       }
     }

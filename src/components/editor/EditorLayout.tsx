@@ -49,6 +49,20 @@ export function EditorLayout() {
     initDefaultGraph()
   }, [])
 
+  // Global keyboard shortcuts: Cmd+Z = undo, Cmd+Shift+Z = redo
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      if (!(e.metaKey || e.ctrlKey)) return
+      const { undo, redo } = useGraphStore.getState()
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // Compile only on structural changes — ignore node position updates (graph canvas drag)
   useEffect(() => {
     const compile = (nodes: import('../../types/node-graph').GraphNode[], edges: import('../../types/node-graph').GraphEdge[]) => {

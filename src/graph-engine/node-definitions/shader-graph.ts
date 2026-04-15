@@ -73,6 +73,7 @@ const shaderNoise: NodeDefinition = {
 
 const shaderGradient: NodeDefinition = {
   type: 'shader/gradient',
+  hidden: true,
   label: 'Shader Gradient',
   category: 'shader',
   inputs: [
@@ -89,6 +90,7 @@ const shaderGradient: NodeDefinition = {
 
 const shaderMix: NodeDefinition = {
   type: 'shader/mix',
+  hidden: true,
   label: 'Shader Mix',
   category: 'shader',
   inputs: [
@@ -144,12 +146,58 @@ const shaderColor: NodeDefinition = {
   type: 'shader/color',
   label: 'Shader Color',
   category: 'shader',
-  inputs: [],
-  outputs: [{ name: 'color', type: 'svec3', label: 'Color' }],
-  properties: [
-    { type: 'color', uniform: 'color', label: 'Color', default: [1, 1, 1, 1], inline: true },
+  inputs: [
+    // Mode 0: Color — per-channel overrides
+    { name: 'r', type: 'sfloat', label: 'R', visibleWhen: { uniform: 'colorMode', equal: 0 } },
+    { name: 'g', type: 'sfloat', label: 'G', visibleWhen: { uniform: 'colorMode', equal: 0 } },
+    { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'colorMode', equal: 0 } },
+    { name: 'a', type: 'sfloat', label: 'A', visibleWhen: { uniform: 'colorMode', equal: 0 } },
+    // Mode 1: Mix
+    { name: 'colorA', type: 'svec3',  label: 'A',      visibleWhen: { uniform: 'colorMode', equal: 1 } },
+    { name: 'colorB', type: 'svec3',  label: 'B',      visibleWhen: { uniform: 'colorMode', equal: 1 } },
+    { name: 't',      type: 'sfloat', label: 'Factor', visibleWhen: { uniform: 'colorMode', equal: 1 } },
+    // Mode 2: Ramp — note: 't' reused from Mix, only one is visible at a time
+    { name: 't', type: 'sfloat', label: 'T', visibleWhen: { uniform: 'colorMode', equal: 2 } },
   ],
-  defaults: { color: [1, 1, 1, 1] },
+  outputs: [
+    { name: 'color', type: 'svec3',  label: 'Color' },
+    { name: 'value', type: 'sfloat', label: 'Value' },
+    { name: 'alpha', type: 'sfloat', label: 'Alpha' },
+  ],
+  properties: [
+    { type: 'select', uniform: 'colorMode', label: 'Mode', options: [
+      { label: 'Color', value: '0' },
+      { label: 'Mix',   value: '1' },
+      { label: 'Ramp',  value: '2' },
+    ], default: 0 },
+    // Mode 0: Color
+    { type: 'color', uniform: 'color', label: 'Color', default: [1, 1, 1, 1], inline: true,
+      visibleWhen: { uniform: 'colorMode', equal: 0 } },
+    // Mode 1: Mix
+    { type: 'color', uniform: 'colorA', label: 'A', default: [1, 0, 0, 1], inline: true,
+      visibleWhen: [{ uniform: 'colorMode', equal: 1 }, { portDisconnected: 'colorA' }] },
+    { type: 'color', uniform: 'colorB', label: 'B', default: [0, 0, 1, 1], inline: true,
+      visibleWhen: [{ uniform: 'colorMode', equal: 1 }, { portDisconnected: 'colorB' }] },
+    { type: 'float', uniform: 't', label: 'Factor', default: 0.5, min: 0, max: 1, step: 0.01,
+      visibleWhen: [{ uniform: 'colorMode', equal: 1 }, { portDisconnected: 't' }] },
+    // Mode 2: Ramp
+    { type: 'colorramp', uniform: 'stops', label: 'Ramp',
+      default: [{ pos: 0.0, color: [0, 0, 0, 1] as [number, number, number, number] }, { pos: 1.0, color: [1, 1, 1, 1] as [number, number, number, number] }],
+      visibleWhen: { uniform: 'colorMode', equal: 2 } },
+    { type: 'float', uniform: 't', label: 'T', default: 0.5, min: 0, max: 1, step: 0.01,
+      visibleWhen: [{ uniform: 'colorMode', equal: 2 }, { portDisconnected: 't' }] },
+  ],
+  defaults: {
+    colorMode: 0,
+    color: [1, 1, 1, 1],
+    colorA: [1, 0, 0, 1],
+    colorB: [0, 0, 1, 1],
+    t: 0.5,
+    stops: [
+      { pos: 0.0, color: [0, 0, 0, 1] },
+      { pos: 1.0, color: [1, 1, 1, 1] },
+    ],
+  },
 }
 
 const shaderNumber: NodeDefinition = {
@@ -224,6 +272,7 @@ const shaderComponent: NodeDefinition = {
 
 const shaderColorRamp: NodeDefinition = {
   type: 'shader/colorramp',
+  hidden: true,
   label: 'Shader Color Ramp',
   category: 'shader',
   inputs: [

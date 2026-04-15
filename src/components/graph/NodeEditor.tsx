@@ -153,20 +153,24 @@ export function NodeEditor() {
 
   const edgeTypes = useMemo(() => ({ data: DataEdge }), [])
 
+  const snapshot = useGraphStore((s) => s.snapshot)
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) snapshot()
       const updated = applyNodeChanges(changes, nodes as any) as any
       setNodes(updated)
     },
-    [nodes, setNodes],
+    [nodes, setNodes, snapshot],
   )
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      if (changes.some((c) => c.type === 'remove')) snapshot()
       const updated = applyEdgeChanges(changes, edges as any) as any
       setEdges(updated)
     },
-    [edges, setEdges],
+    [edges, setEdges, snapshot],
   )
 
   const isValidConnection = useCallback(
@@ -214,8 +218,9 @@ export function NodeEditor() {
     setContextMenu(null)
   }, [setSelectedNode])
 
-  // Alt+drag: record origin on drag start
+  // Alt+drag: record origin on drag start; also snapshot for undo
   const onNodeDragStart = useCallback((e: React.MouseEvent, node: any) => {
+    useGraphStore.getState().snapshot()
     if (!e.altKey) return
     altDragOrigin.current = { nodeId: node.id, position: { ...node.position } }
   }, [])

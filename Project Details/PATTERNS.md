@@ -176,6 +176,24 @@ The `texture` node uses a single node type with a `mode` property to switch betw
 
 ---
 
+## Pattern H — Node Consolidation (Modes)
+
+When multiple nodes share the same conceptual domain, merge them into one node with a mode select:
+
+| Before | After |
+|--------|-------|
+| shader/color + shader/mix + shader/gradient + shader/colorramp | shader/color (Mode: Color / Mix / Ramp) |
+| math/add + math/multiply + ... | math (Mode: Add / Multiply / ...) |
+
+**Rules:**
+- Use a select uniform named `colorMode`/`op` — NOT `mode` unless the label should completely replace the node title (geometry pattern)
+- If uniform ≠ `mode`, NodeRenderer appends option label → "Shader Color: Mix"
+- `visibleWhen: { uniform: 'colorMode', equal: N }` on all mode-specific ports and properties
+- Old node types: set `hidden: true` in NodeDefinition — keep compiler cases for backward compat
+- Multi-output nodes (e.g. Color + Value + Alpha): use `portVar` map in compiler keyed by `"nodeId:portHandle"`, and update `resolvedInput`/`vResolve` to check portVar first
+
+---
+
 ## Pattern F — Area Light
 
 `RectAreaLight` benötigt `RectAreaLightUniformsLib.init()` einmalig am Module-Level.

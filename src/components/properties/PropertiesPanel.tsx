@@ -60,6 +60,7 @@ export function PropertiesPanel() {
   )
   const connectedInputPorts = new Set(connectedEdges.map((e) => e.targetHandle))
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const snapshot = () => useGraphStore.getState().snapshot()
   const evalValues = useEvaluatorStore((s) => s.values)
   const colorValues = useEvaluatorStore((s) => s.colorValues)
   const [isExpanding, setIsExpanding] = useState(false)
@@ -88,7 +89,8 @@ export function PropertiesPanel() {
     return val !== undefined ? val : prop.default
   }
 
-  const handleChange = (uniform: string, value: unknown) => {
+  const handleChange = (uniform: string, value: unknown, withSnapshot = false) => {
+    if (withSnapshot) snapshot()
     updateNodeData(node.id, { [uniform]: value })
   }
 
@@ -227,6 +229,7 @@ export function PropertiesPanel() {
                         param={prop}
                         value={getValue(prop) as number}
                         onChange={(v) => handleChange(prop.uniform, v)}
+                        onBeforeChange={snapshot}
                       />
                     )
                   case 'color':
@@ -236,6 +239,7 @@ export function PropertiesPanel() {
                         param={prop}
                         value={getValue(prop) as [number, number, number, number]}
                         onChange={(v) => handleChange(prop.uniform, v)}
+                        onBeforeChange={snapshot}
                       />
                     )
                   case 'bool':
@@ -244,7 +248,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={getValue(prop) as boolean}
-                        onChange={(v) => handleChange(prop.uniform, v)}
+                        onChange={(v) => handleChange(prop.uniform, v, true)}
                       />
                     )
                   case 'select': {
@@ -260,7 +264,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={filteredProp}
                         value={getValue(prop) as number}
-                        onChange={(v) => handleChange(prop.uniform, v)}
+                        onChange={(v) => handleChange(prop.uniform, v, true)}
                       />
                     )
                   }
@@ -270,7 +274,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         prop={prop}
                         value={(getValue(prop) as string) ?? ''}
-                        onChange={(v) => handleChange(prop.uniform, v || undefined)}
+                        onChange={(v) => handleChange(prop.uniform, v || undefined, true)}
                       />
                     )
                   case 'file':
@@ -279,7 +283,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={getValue(prop)}
-                        onChange={(v) => handleChange(prop.uniform, v)}
+                        onChange={(v) => handleChange(prop.uniform, v, true)}
                       />
                     )
                   case 'textarea':
@@ -288,7 +292,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={(getValue(prop) as string) ?? ''}
-                        onChange={(v) => handleChange(prop.uniform, v)}
+                        onChange={(v) => handleChange(prop.uniform, v, true)}
                       />
                     )
                   case 'colorramp':
@@ -297,7 +301,7 @@ export function PropertiesPanel() {
                         key={prop.uniform}
                         param={prop}
                         value={(getValue(prop) as ColorRampStop[]) ?? []}
-                        onChange={(v) => handleChange(prop.uniform, v)}
+                        onChange={(v) => handleChange(prop.uniform, v, true)}
                       />
                     )
                   default:

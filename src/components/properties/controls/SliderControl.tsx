@@ -5,9 +5,10 @@ interface Props {
   param: ParameterDef
   value: number
   onChange: (value: number) => void
+  onBeforeChange?: () => void
 }
 
-export function SliderControl({ param, value, onChange }: Props) {
+export function SliderControl({ param, value, onChange, onBeforeChange }: Props) {
   const min = param.min ?? 0
   const max = param.max ?? 1
   const step = param.step ?? 0.01
@@ -18,6 +19,8 @@ export function SliderControl({ param, value, onChange }: Props) {
   const dragStartX = useRef(0)
   const dragStartValue = useRef(0)
   const hasMoved = useRef(false)
+  const wheelSnapped = useRef(false)
+  const wheelIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fieldRef = useRef<HTMLDivElement>(null)
 
@@ -33,13 +36,14 @@ export function SliderControl({ param, value, onChange }: Props) {
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (isEditing) return
+    onBeforeChange?.()
     isDragging.current = true
     hasMoved.current = false
     dragStartX.current = e.clientX
     dragStartValue.current = value
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     e.preventDefault()
-  }, [value, isEditing])
+  }, [value, isEditing, onBeforeChange])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging.current) return
@@ -65,9 +69,10 @@ export function SliderControl({ param, value, onChange }: Props) {
     setIsEditing(false)
     const parsed = parseFloat(editText)
     if (!isNaN(parsed)) {
+      onBeforeChange?.()
       onChange(snap(clampTyped(parsed)))
     }
-  }, [editText, onChange, min, max, step])
+  }, [editText, onChange, onBeforeChange, min, max, step])
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -82,6 +87,12 @@ export function SliderControl({ param, value, onChange }: Props) {
     const handleWheel = (e: WheelEvent) => {
       if (isEditing) return
       e.preventDefault()
+      if (!wheelSnapped.current) {
+        onBeforeChange?.()
+        wheelSnapped.current = true
+      }
+      if (wheelIdleTimer.current) clearTimeout(wheelIdleTimer.current)
+      wheelIdleTimer.current = setTimeout(() => { wheelSnapped.current = false }, 500)
       const direction = e.deltaY < 0 ? 1 : -1
       const newVal = snap(clampTyped(value + direction * step))
       onChange(newVal)

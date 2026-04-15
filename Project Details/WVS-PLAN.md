@@ -89,16 +89,14 @@ Node-basierter 3D/2D Visual Editor für das Web. Ziel: Animierte Szenen mit Geom
 | Input | Mouse, Screen Size |
 | Texture | Image, Noise (fBm/Ridged/Voronoi), Normal Map |
 | Color Ops | Mix, HSL Shift |
-| Shader (Visual Graph) | UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi 3D), Gradient, Mix, Math, Color, Number, Output |
+| Shader (Visual Graph) | UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi/Worley/Curl 3D), Color (Color/Mix/Ramp modes), Math, Band, Component, Domain Warp, Output |
 | Scene | Scene Output |
 
 ### Nächste Schritte
 | Kategorie | Nodes | Zweck |
 |---|---|---|
-| Shader (Visual Graph) | **Color Ramp** (`shader/colorramp`) | Multi-Stop Gradient sfloat→svec3, ersetzt shader/gradient |
-| Shader (Visual Graph) | **Domain Warp** (`shader/domainwarp`) | Noise-in-Noise, organische Blob-Effekte |
-| Texture | **Color Ramp** (`texture/colorramp`) | Graustufentextur → mehrfarbig remappen |
-| Shader (Visual Graph) | Mehr Noise-Typen (Curl, Worley) | Erweiterte Effekte |
+| Shader (Visual Graph) | Time-Modes (ease-in/ease-out) | Ungleichmäßigen Zeitverlauf |
+| Shader (Visual Graph) | Dot Matrix, Lines | Prozedurales Pattern-Generating |
 
 ### Längerfristig
 | Kategorie | Nodes |
@@ -211,33 +209,30 @@ Texture Nodes (Image/Noise/Normal), PBR Material, Shadow Support, Color Nodes, g
 
 - [ ] Custom GLSL Shader-Node (TextAreaControl + raw GLSL) — noch offen
 
-### Phase 5e 🔄 IN PROGRESS
-glTF Expand to Graph fertig. Multi-Format unklar(GLTF an sich ausreichend):
-- [ ] FBX (THREE.FBXLoader)
-- [ ] OBJ (THREE.OBJLoader + MTLLoader)
+### Phase 5e ✅ DONE
+glTF Expand to Graph fertig. FBX/OBJ zurückgestellt (GLTF reicht für v1).
+Shader Color konsolidiert (shader/color mit Color/Mix/Ramp-Modes, value+alpha-Outputs). ColorControl vereinheitlicht.
 
 ### Visual Shader Graph ✅ DONE
-- Nodes: UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi 3D), Gradient, Mix, Math, Color, Number, Output
+- Nodes: UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi/Worley/Curl 3D), Color (Color/Mix/Ramp), Math, Band, Component, Domain Warp, Output
+- **Shader Color konsolidiert:** shader/color, shader/mix, shader/gradient, shader/colorramp → `shader/color` (Mode: Color / Mix / Ramp). Value-Output (sfloat = Luminanz) für Displacement direkt aus Color-Ramp.
+- **Multi-Output Compiler:** `portVar`-Map für Nodes mit mehreren Output-Typen (color, value, alpha)
+- **ColorControl vereinheitlicht:** Canonical in `properties/controls/`, tool panel re-exportiert
 - 3 Rendering-Modes: Unlit (→ Mesh), PBR (→ Material → Mesh), Background (→ Scene Output)
 - Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5)
-- shader/position: object-space 3D noise (keine UV-Seam)
-- True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise
+- Math: Number/Add/Subtract/Multiply/Sin/Cos/Abs/Clamp/Lerp/Fract
 
-**⚠️ Shading Bug: Shader-Noise-Displacement inteferenzen an Polen**
-Sphere und Icosphere auch bei 256 Segmenten. Wenn man einen Shader-Noise zum Mesh-Displacement nutzt, sind an den Polen zackig umrandete Kreise(Seam) zu sehen wenn der Noise-Effekt das Mesh verformt. Trotz Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5), shader/position: object-space 3D noise und True 3D Voronoi (27-Neighbor), 3D fBm, Ridged Noise.
+**⚠️ Shading Bug: Shader-Noise-Displacement Interferenzen an Polen**
+An Sphere-/Icosphere-Polen bei hohem Displacement sichtbar. Ursache: finite-difference normal sampling über Polseam-Kanten. Deferred.
 
-### Shader Graph Erweiterungen 🔜 NEXT
-- [x] **Color Ramp** — `shader/colorramp` + `texture/colorramp`: Multi-Stop sfloat→svec3
-- [x] **Domain Warp** — `shader/domainwarp`: Noise-in-Noise (Ina Quilez Technik) → organische Blobs
-- [x] Curl Noise, Worley Noise als weitere Noise-Typen
-- [ ] Shader Color Ramp braucht einen Value Output-Port um Dispalcement via b/w Color-Ramp zu ermöglichen (aktuell nur Color Output Port). Alle Shader-Color-Nodes(Shader Color, Shader Mix, Shader Gradient, Shader Color Ramp) brauchen einen Value Output Port (Non-Color). (Oder eine Node die Color in Value umwandelt.) Zudem sollten alle Shader Color nodes zu einer Node zusammengefügt werden und als Modes angeboten werden.
-- [ ] Es fehlen noch Modes für die Shader-Time-Node. Ziel: Zeit ungleichmäßig vergehen zu lassen (fall-offs / ease-in / ease-out uws.)
-- [ ] Shader Dot Matrix - Shader Node um Punkt-matritzen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.
-- [ ] Shader Lines - Shader Node um verschieden Linien-Anordnungen zu erzeugen: Props: Anzahl, Abstand, Anordnung, Gradient, Gradient fall-offs uws. Outputs: Color, Value usw.
+### Shader Graph Erweiterungen 🔜
+- [ ] **Shader Time Modes** — ease-in/ease-out, Sawtooth, Square, Bounce
+- [ ] **Shader Dot Matrix** — prozedurales Punkt-Pattern (Anzahl, Abstand, Anordnung, Gradient), Outputs: Color, Value
+- [ ] **Shader Lines** — prozedurales Linien-Pattern, Outputs: Color, Value
 
-### Phase 6: Export + Polish
-- [ ] Projekt Save/Load (JSON)
-- [ ] Undo/Redo
+### Phase 6: Export + Polish 🔜 NEXT
+- [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
+- [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Video-Export via MediaRecorder

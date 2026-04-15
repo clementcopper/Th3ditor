@@ -15,6 +15,7 @@ interface Props {
   param: ParameterDef
   value: [number, number, number] | [number, number, number, number]
   onChange: (value: [number, number, number, number]) => void
+  onBeforeChange?: () => void
 }
 
 const COLOR_SPACES: { id: ColorSpace; label: string }[] = [
@@ -24,13 +25,16 @@ const COLOR_SPACES: { id: ColorSpace; label: string }[] = [
   { id: 'oklch', label: 'OKLCH' },
 ]
 
-export function ColorControl({ param, value, onChange }: Props) {
+export function ColorControl({ param, value, onChange, onBeforeChange }: Props) {
   const rgba: RGBA = value.length === 4 ? value as RGBA : [value[0], value[1], value[2], 1]
   const inline = param.inline ?? false
   const [open, setOpen] = useState(false)
   const [space, setSpace] = useState<ColorSpace>('hex')
   const [hexInput, setHexInput] = useState(rgbaToHex6(rgba))
   const ref = useRef<HTMLDivElement>(null)
+  // Snapshot-once-per-gesture tracking (for inline mode)
+  const inlineSnapped = useRef(false)
+  const inlineIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Close on outside click (dropdown mode only)
   useEffect(() => {
@@ -48,21 +52,36 @@ export function ColorControl({ param, value, onChange }: Props) {
     setHexInput(rgbaToHex6(rgba))
   }, [rgba[0], rgba[1], rgba[2]]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // For inline mode: snapshot only on first interaction per gesture, reset after 500ms idle
+  const fireBeforeChange = useCallback(() => {
+    if (inline) {
+      if (!inlineSnapped.current) {
+        onBeforeChange?.()
+        inlineSnapped.current = true
+      }
+      if (inlineIdleTimer.current) clearTimeout(inlineIdleTimer.current)
+      inlineIdleTimer.current = setTimeout(() => { inlineSnapped.current = false }, 500)
+    }
+    // Dropdown mode: snapshot fired once on open (see button click handler)
+  }, [inline, onBeforeChange])
+
   const handlePickerChange = useCallback(
     (color: { r: number; g: number; b: number; a: number }) => {
+      fireBeforeChange()
       onChange([color.r / 255, color.g / 255, color.b / 255, color.a])
     },
-    [onChange],
+    [onChange, fireBeforeChange],
   )
 
   const handleFieldChange = useCallback(
     (index: number, val: number) => {
+      fireBeforeChange()
       const fields = rgbaToColorFields(rgba, space)
       const newValues = [...fields.values]
       newValues[index] = val
       onChange(colorFieldsToRgba(newValues, space, hexInput))
     },
-    [rgba, space, hexInput, onChange],
+    [rgba, space, hexInput, onChange, fireBeforeChange],
   )
 
   const handleHexCommit = useCallback(
@@ -70,13 +89,14 @@ export function ColorControl({ param, value, onChange }: Props) {
       let clean = hex.trim()
       if (!clean.startsWith('#')) clean = '#' + clean
       if (/^#[0-9a-fA-F]{6,8}$/.test(clean)) {
+        fireBeforeChange()
         const newRgba = hexToRgba(clean)
         newRgba[3] = rgba[3] // preserve alpha
         onChange(newRgba)
         setHexInput(clean.slice(0, 7))
       }
     },
-    [rgba, onChange],
+    [rgba, onChange, fireBeforeChange],
   )
 
   const hex8 = rgbaToHex8(rgba)
@@ -134,7 +154,7 @@ export function ColorControl({ param, value, onChange }: Props) {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleHexCommit((e.target as HTMLInputElement).value)
                 }}
-                className="w-full px-1.5 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+                className="w-full px-1.5 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
                 maxLength={9}
               />
             </div>
@@ -147,10 +167,11 @@ export function ColorControl({ param, value, onChange }: Props) {
                 step={1}
                 value={Math.round(rgba[3] * 100)}
                 onChange={(e) => {
+                  fireBeforeChange()
                   const newAlpha = Math.min(100, Math.max(0, Number(e.target.value))) / 100
                   onChange([rgba[0], rgba[1], rgba[2], newAlpha])
                 }}
-                className="w-full px-1 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+                className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
               />
             </div>
           </>
@@ -165,7 +186,7 @@ export function ColorControl({ param, value, onChange }: Props) {
                 step={fields.steps[i]}
                 value={fields.values[i]}
                 onChange={(e) => handleFieldChange(i, Number(e.target.value))}
-                className="w-full px-1 py-1 rounded border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+                className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
               />
             </div>
           ))
@@ -188,7 +209,7 @@ export function ColorControl({ param, value, onChange }: Props) {
 
       {/* Swatch + hex display */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => { if (!open) onBeforeChange?.(); setOpen(!open) }}
         className="flex items-center gap-2 px-2 h-7 border border-border-default bg-surface-base hover:bg-surface-panel transition-colors cursor-pointer"
       >
         <div className="relative w-5 h-5 rounded border border-border-default overflow-hidden">

@@ -70,7 +70,7 @@ export interface CompiledMesh {
     vertexBodyForPBR?: string   // PBR mode: inject after #include <displacementmap_vertex>
     /** true = PBR mode (shader/output → material → mesh): uses MeshStandardMaterial + onBeforeCompile */
     pbrMode?: boolean
-    uniforms: Record<string, { value: number | [number, number] | [number, number, number] }>
+    uniforms: Record<string, { value: number | [number, number] | [number, number, number] | [number, number, number, number] }>
     uniformNodeMap: Record<string, string>
     bridgeUniforms: Record<string, string>
   }
@@ -127,7 +127,7 @@ export interface CompiledBackgroundShader {
   materialProps: Record<string, unknown>
   /** Set when connected node is shader/output (visual shader graph) */
   generatedFragmentShader?: string
-  generatedUniforms?: Record<string, { value: number | [number, number] | [number, number, number] }>
+  generatedUniforms?: Record<string, { value: number | [number, number] | [number, number, number] | [number, number, number, number] }>
   uniformNodeMap?: Record<string, string>
   /** Bridge: uniformKey → "sourceNodeId:sourceHandle" for CPU float nodes wired into shader inputs */
   bridgeUniforms?: Record<string, string>

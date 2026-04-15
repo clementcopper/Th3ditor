@@ -69,7 +69,7 @@ export function EditorToolbar() {
         <ArrowClockwise size={14} />
       </button>
 
-      <span className="ml-auto text-sm font-semibold text-text-primary tracking-wide">Web Visual Studio</span>
+      <span className="ml-auto text-sm font-semibold text-text-accent tracking-wide">3ditor</span>
     </div>
   )
 }

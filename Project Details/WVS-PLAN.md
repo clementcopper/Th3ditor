@@ -222,11 +222,11 @@ Shader Color konsolidiert (shader/color mit Color/Mix/Ramp-Modes, value+alpha-Ou
 - Vertex Displacement + Finite-Difference-Normals (eps=0.1, clamp ±1.5)
 - Math: Number/Add/Subtract/Multiply/Sin/Cos/Abs/Clamp/Lerp/Fract
 
-**⚠️ Shading Bug: Shader-Noise-Displacement Interferenzen an Polen**
-An Sphere-/Icosphere-Polen bei hohem Displacement sichtbar. Ursache: finite-difference normal sampling über Polseam-Kanten. Deferred.
+**Shading Bug: Shader-Noise-Displacement Interferenzen an Polen — ✅ FIXED**
+Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskontinuität bei abs(normal.y)=0.99. Fix: achsenausgerichtete 3D-Gradientenabtastung (X/Y/Z-Offsets) + Projektion auf Tangentialebene.
 
 ### Shader Graph Erweiterungen 🔜
-- [ ] **Shader Time Modes** — ease-in/ease-out, Sawtooth, Square, Bounce
+- [ ] **Shader Time und Time Modes** — ease-in/ease-out, Sawtooth, Square, Bounce
 - [ ] **Shader Dot Matrix** — prozedurales Punkt-Pattern (Anzahl, Abstand, Anordnung, Gradient), Outputs: Color, Value
 - [ ] **Shader Lines** — prozedurales Linien-Pattern, Outputs: Color, Value
 
@@ -235,6 +235,7 @@ An Sphere-/Icosphere-Polen bei hohem Displacement sichtbar. Ursache: finite-diff
 - [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
+- [ ] Image-Export via ? (.png,.jpg)
 - [ ] Video-Export via MediaRecorder
 - [ ] Post-Processing: Bloom, Vignette, DOF via `@react-three/postprocessing` z.B via Scene-Output-Node
 

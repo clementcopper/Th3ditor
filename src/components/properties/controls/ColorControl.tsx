@@ -3,12 +3,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import type { PropertyDef as ParameterDef } from '../../../types/properties'
 import {
   type RGBA,
-  type ColorSpace,
   rgbaToHex8,
   rgbaToHex6,
   hexToRgba,
-  rgbaToColorFields,
-  colorFieldsToRgba,
 } from '../../../utils/color'
 
 interface Props {
@@ -18,18 +15,10 @@ interface Props {
   onBeforeChange?: () => void
 }
 
-const COLOR_SPACES: { id: ColorSpace; label: string }[] = [
-  { id: 'hex', label: 'HEX' },
-  { id: 'rgb', label: 'RGB' },
-  { id: 'hsl', label: 'HSL' },
-  { id: 'oklch', label: 'OKLCH' },
-]
-
 export function ColorControl({ param, value, onChange, onBeforeChange }: Props) {
   const rgba: RGBA = value.length === 4 ? value as RGBA : [value[0], value[1], value[2], 1]
   const inline = param.inline ?? false
   const [open, setOpen] = useState(false)
-  const [space, setSpace] = useState<ColorSpace>('hex')
   const [hexInput, setHexInput] = useState(rgbaToHex6(rgba))
   const ref = useRef<HTMLDivElement>(null)
   // Snapshot-once-per-gesture tracking (for inline mode)
@@ -73,15 +62,15 @@ export function ColorControl({ param, value, onChange, onBeforeChange }: Props) 
     [onChange, fireBeforeChange],
   )
 
-  const handleFieldChange = useCallback(
-    (index: number, val: number) => {
+  const handleChannelChange = useCallback(
+    (ch: 'r' | 'g' | 'b', val255: number) => {
       fireBeforeChange()
-      const fields = rgbaToColorFields(rgba, space)
-      const newValues = [...fields.values]
-      newValues[index] = val
-      onChange(colorFieldsToRgba(newValues, space, hexInput))
+      const v = Math.min(255, Math.max(0, Math.round(val255))) / 255
+      const next: RGBA = [rgba[0], rgba[1], rgba[2], rgba[3]]
+      next[ch === 'r' ? 0 : ch === 'g' ? 1 : 2] = v
+      onChange(next)
     },
-    [rgba, space, hexInput, onChange, fireBeforeChange],
+    [rgba, onChange, fireBeforeChange],
   )
 
   const handleHexCommit = useCallback(
@@ -101,7 +90,6 @@ export function ColorControl({ param, value, onChange, onBeforeChange }: Props) 
 
   const hex8 = rgbaToHex8(rgba)
   const displayHex = rgbaToHex6(rgba)
-  const fields = rgbaToColorFields(rgba, space)
 
   // Picker color in {r,g,b,a} format for react-colorful
   const pickerColor = {
@@ -113,84 +101,61 @@ export function ColorControl({ param, value, onChange, onBeforeChange }: Props) 
 
   const pickerContent = (
     <>
-      {/* Color picker */}
-      <div className="mb-3 [&_.react-colorful]:!w-full [&_.react-colorful]:!h-[160px]">
+      {/* Color picker (2D saturation/brightness + hue + alpha sliders) */}
+      <div className="mb-2 [&_.react-colorful]:!w-full [&_.react-colorful]:!h-[160px]">
         <RgbaColorPicker color={pickerColor} onChange={handlePickerChange} />
       </div>
 
-      {/* Color space tabs */}
-      <div className="flex border border-border-default overflow-hidden mb-3">
-        {COLOR_SPACES.map((cs, i) => {
-          const isActive = space === cs.id
-          return (
-            <button
-              key={cs.id}
-              onClick={() => setSpace(cs.id)}
-              className={`flex-1 h-7 text-xs font-medium transition-colors cursor-pointer ${
-                isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
-              } ${i > 0 ? 'border-l border-border-default' : ''}`}
-              style={isActive ? {
-                color: 'var(--color-accent)',
-                background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
-              } : {}}
-            >
-              {cs.label}
-            </button>
-          )
-        })}
+      {/* Row 1: R G B */}
+      <div className="flex gap-1.5 mb-1.5">
+        {(['r', 'g', 'b'] as const).map((ch, i) => (
+          <div key={ch} className="flex-1 flex flex-col gap-0.5">
+            <span className="text-[9px] font-semibold text-text-muted text-center uppercase">{ch}</span>
+            <input
+              type="number"
+              min={0}
+              max={255}
+              step={1}
+              value={Math.round(rgba[i] * 255)}
+              onChange={(e) => handleChannelChange(ch, Number(e.target.value))}
+              className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+            />
+          </div>
+        ))}
       </div>
 
-      {/* Value inputs */}
+      {/* Row 2: HEX field + Alpha % */}
       <div className="flex gap-1.5">
-        {space === 'hex' ? (
-          <>
-            <div className="flex-1 flex flex-col gap-0.5">
-              <span className="text-[9px] font-semibold text-text-tertiary text-center">HEX</span>
-              <input
-                type="text"
-                value={hexInput}
-                onChange={(e) => setHexInput(e.target.value)}
-                onBlur={(e) => handleHexCommit(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleHexCommit((e.target as HTMLInputElement).value)
-                }}
-                className="w-full px-1.5 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
-                maxLength={9}
-              />
-            </div>
-            <div className="w-12 flex flex-col gap-0.5">
-              <span className="text-[9px] font-semibold text-text-tertiary text-center">A</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={Math.round(rgba[3] * 100)}
-                onChange={(e) => {
-                  fireBeforeChange()
-                  const newAlpha = Math.min(100, Math.max(0, Number(e.target.value))) / 100
-                  onChange([rgba[0], rgba[1], rgba[2], newAlpha])
-                }}
-                className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
-              />
-            </div>
-          </>
-        ) : (
-          fields.labels.map((label, i) => (
-            <div key={label} className="flex-1 flex flex-col gap-0.5">
-              <span className="text-[9px] font-semibold text-text-tertiary text-center">{label}</span>
-              <input
-                type="number"
-                min={fields.ranges[i][0]}
-                max={fields.ranges[i][1]}
-                step={fields.steps[i]}
-                value={fields.values[i]}
-                onChange={(e) => handleFieldChange(i, Number(e.target.value))}
-                className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
-              />
-            </div>
-          ))
-        )}
+        <div className="flex-1 flex flex-col gap-0.5">
+          <span className="text-[9px] font-semibold text-text-muted text-center uppercase">Hex</span>
+          <input
+            type="text"
+            value={hexInput}
+            onChange={(e) => setHexInput(e.target.value)}
+            onBlur={(e) => handleHexCommit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleHexCommit((e.target as HTMLInputElement).value)
+            }}
+            className="w-full px-1.5 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+            maxLength={9}
+          />
+        </div>
+        <div className="w-14 flex flex-col gap-0.5">
+          <span className="text-[9px] font-semibold text-text-muted text-center uppercase">A %</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(rgba[3] * 100)}
+            onChange={(e) => {
+              fireBeforeChange()
+              const a = Math.min(100, Math.max(0, Number(e.target.value))) / 100
+              onChange([rgba[0], rgba[1], rgba[2], a])
+            }}
+            className="w-full px-1 py-1 border border-border-default bg-surface-elevated text-[11px] font-mono text-text-primary text-center"
+          />
+        </div>
       </div>
     </>
   )
@@ -212,7 +177,7 @@ export function ColorControl({ param, value, onChange, onBeforeChange }: Props) 
         onClick={() => { if (!open) onBeforeChange?.(); setOpen(!open) }}
         className="flex items-center gap-2 px-2 h-7 border border-border-default bg-surface-base hover:bg-surface-panel transition-colors cursor-pointer"
       >
-        <div className="relative w-5 h-5 rounded border border-border-default overflow-hidden">
+        <div className="relative w-5 h-5 border border-border-default overflow-hidden">
           {/* Checkerboard for alpha */}
           <div
             className="absolute inset-0"
@@ -227,7 +192,7 @@ export function ColorControl({ param, value, onChange, onBeforeChange }: Props) 
         </div>
         <span className="text-xs font-mono text-text-secondary">{displayHex}</span>
         {rgba[3] < 1 && (
-          <span className="text-xs font-mono text-text-tertiary">{Math.round(rgba[3] * 100)}%</span>
+          <span className="text-xs font-mono text-text-muted">{Math.round(rgba[3] * 100)}%</span>
         )}
       </button>
 

@@ -87,7 +87,7 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
 - SelectControl stores values as strings ('0','1','2') — always use `Number(props.X ?? 0)` not `(props.X as number) ?? 0` for select properties.
 - Three.js `customProgramCacheKey` must include `vertexPreamble` + `vertexBodyForPBR` — key on body alone causes stale shader reuse when only preamble changes (e.g. noise type switch).
-- PBR displacement: finite-diff normals eps=0.1, gradient clamp ±1.5 — lower eps causes extreme normals at sharp noise (Voronoi) boundaries.
+- PBR displacement normals: axis-aligned 3D gradient (X/Y/Z samples) projected onto tangent plane — replaces tangent/bitangent approach that had discontinuity at abs(normal.y)=0.99 (pole artifacts).
 - Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
 - Vertex displacement needs geo density ≥ noise feature size ×5 — 256 sphere segs is practical max (512 laggy); icosphere detail 200 equivalent.
 - `shader/colorramp` stops: all positions + colors as uniforms → live update without recompile; recompile only on stop-count change.

@@ -7,7 +7,7 @@ export interface ProjectFile {
   edges: GraphEdge[]
 }
 
-export function saveProject(nodes: GraphNode[], edges: GraphEdge[], filename = 'project.wvs') {
+export function saveProject(nodes: GraphNode[], edges: GraphEdge[], filename = 'project.3dtr') {
   const data: ProjectFile = { version: 1, nodes, edges }
   downloadFile(JSON.stringify(data, null, 2), filename, 'application/json')
 }
@@ -16,7 +16,7 @@ export function loadProjectFromFile(): Promise<ProjectFile> {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.wvs,.json'
+    input.accept = '.3dtr,.json'
     input.onchange = () => {
       const file = input.files?.[0]
       if (!file) return reject(new Error('No file selected'))

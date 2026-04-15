@@ -24,6 +24,7 @@
   --color-text-primary:     oklch(0.90 0.010 48);
   --color-text-secondary:   oklch(0.70 0.010 48);
   --color-text-muted:       oklch(0.50 0.010 48);
+  --color-text-accent:      var(--color-accent);
 }
 
 *,
@@ -42,6 +43,16 @@
   border: none !important;
   padding: 0 !important;
   box-shadow: none !important;
+}
+
+/* react-colorful: hue + alpha pointer → thin vertical bar */
+.react-colorful__hue-pointer,
+.react-colorful__alpha-pointer {
+  width: 0px !important;
+  height: 100%!important;
+  border: solid 3px var(--color-surface-elevated) !important;
+  box-shadow: 0 0 0 1px var(--color-border-default), 0 0 0 1px var(--color-border-default) !important;
+  background: black !important;
 }
 
 body {

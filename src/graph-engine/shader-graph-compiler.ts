@@ -911,21 +911,21 @@ export function compileShaderGraph(
     vertexPreamble = preambleParts.join('\n')
 
     if (positionNodeUsed) {
-      // Finite difference normal computation — corrects PBR shading for displaced geometry.
-      // Samples _sg_disp at 3 points to compute displacement gradient → perturbed normal.
-      // Overrides vNormal (the last write in vertex main() wins for interpolation).
+      // Axis-aligned finite-difference normal computation.
+      // Previous tangent/bitangent approach had a hard discontinuity at abs(normal.y)=0.99
+      // causing shading artifacts at sphere poles. Axis-aligned sampling avoids this:
+      // compute 3D gradient of displacement field, project onto tangent plane, perturb normal.
       vertexBodyForPBR = [
         `  float _sg_eps = 0.1;`,
-        `  vec3 _sg_t = abs(normal.y) < 0.99`,
-        `    ? normalize(cross(normal, vec3(0.0, 1.0, 0.0)))`,
-        `    : normalize(cross(normal, vec3(1.0, 0.0, 0.0)));`,
-        `  vec3 _sg_b = normalize(cross(normal, _sg_t));`,
         `  float _sg_dC = _sg_disp(position);`,
-        `  float _sg_dT = _sg_disp(position + _sg_t * _sg_eps);`,
-        `  float _sg_dB = _sg_disp(position + _sg_b * _sg_eps);`,
-        `  float _sg_gT = clamp((_sg_dT - _sg_dC) * ${dscaleU} / _sg_eps, -1.5, 1.5);`,
-        `  float _sg_gB = clamp((_sg_dB - _sg_dC) * ${dscaleU} / _sg_eps, -1.5, 1.5);`,
-        `  vec3 _sg_norm = normalize(normal - _sg_t * _sg_gT - _sg_b * _sg_gB);`,
+        `  vec3 _sg_grad = vec3(`,
+        `    _sg_disp(position + vec3(_sg_eps, 0.0, 0.0)) - _sg_dC,`,
+        `    _sg_disp(position + vec3(0.0, _sg_eps, 0.0)) - _sg_dC,`,
+        `    _sg_disp(position + vec3(0.0, 0.0, _sg_eps)) - _sg_dC`,
+        `  ) * (${dscaleU} / _sg_eps);`,
+        `  _sg_grad = clamp(_sg_grad, vec3(-1.5), vec3(1.5));`,
+        `  vec3 _sg_perturb = _sg_grad - dot(_sg_grad, normal) * normal;`,
+        `  vec3 _sg_norm = normalize(normal - _sg_perturb);`,
         `  #ifndef FLAT_SHADED`,
         `    vNormal = normalize(normalMatrix * _sg_norm);`,
         `  #endif`,

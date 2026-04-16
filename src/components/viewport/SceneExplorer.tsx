@@ -72,62 +72,54 @@ export function SceneExplorer() {
   }
 
   return (
-    <div
-      className="absolute top-3 left-3 z-10 pointer-events-auto"
-      style={{ minWidth: 160 }}
-    >
-      <div
-        className="border border-border-default"
-        style={{ background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }}
-      >
-        <div className="px-2 py-1 border-b border-border-default">
-          <span className="text-xs font-medium uppercase tracking-widest text-text-muted">Scene</span>
-        </div>
-        <div className="flex flex-col">
-          {sceneNodes.length === 0 && (
-            <span className="px-2 py-1.5 text-[10px] text-text-muted italic">No objects</span>
-          )}
-          {sceneNodes.map((node) => {
-            const def = getNodeDef(node.type)
-            const color = CATEGORY_COLORS[def?.category ?? 'scene'] ?? '#888'
-            const isSelected = node.id === selectedId
-            const isRenaming = renamingId === node.id
+    <div className="w-full h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-border-default shrink-0">
+        <span className="text-xs font-semibold text-text-primary">Scene</span>
+      </div>
+      <div className="flex flex-col">
+        {sceneNodes.length === 0 && (
+          <span className="px-2 py-1.5 text-[10px] text-text-muted italic">No objects</span>
+        )}
+        {sceneNodes.map((node) => {
+          const def = getNodeDef(node.type)
+          const color = CATEGORY_COLORS[def?.category ?? 'scene'] ?? '#888'
+          const isSelected = node.id === selectedId
+          const isRenaming = renamingId === node.id
 
-            return (
-              <div
-                key={node.id}
-                className="flex items-center gap-1.5 px-2 py-1"
-                style={{ background: isSelected ? 'color-mix(in oklch, var(--color-accent) 15%, transparent)' : undefined }}
-              >
-                <span className="shrink-0 leading-none flex items-center">
-                  <NodeIcon node={node} color={color} />
-                </span>
-                {isRenaming ? (
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => commitRename(node.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename(node.id)
-                      if (e.key === 'Escape') setRenamingId(null)
-                    }}
-                    className="text-xs font-medium bg-transparent text-text-primary outline-none border-b border-accent flex-1 min-w-0"
-                    placeholder="Name…"
-                  />
-                ) : (
-                  <button
-                    onClick={() => setSelectedNode(isSelected ? null : node.id)}
-                    onDoubleClick={() => startRename(node)}
-                    className={`text-xs font-medium text-left flex-1 min-w-0 truncate cursor-pointer ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}
-                  >
-                    {getNodeDisplayName(node)}
-                  </button>
-                )}
-              </div>
-            )
-          })}
-        </div>
+          return (
+            <div
+              key={node.id}
+              className="flex items-center gap-1.5 px-4 py-1.5"
+              style={{ background: isSelected ? 'color-mix(in oklch, var(--color-accent) 15%, transparent)' : undefined }}
+            >
+              <span className="shrink-0 leading-none flex items-center">
+                <NodeIcon node={node} color={color} />
+              </span>
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => commitRename(node.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename(node.id)
+                    if (e.key === 'Escape') setRenamingId(null)
+                  }}
+                  className="text-xs font-medium bg-transparent text-text-primary outline-none border-b border-accent flex-1 min-w-0"
+                  placeholder="Name…"
+                />
+              ) : (
+                <button
+                  onClick={() => setSelectedNode(isSelected ? null : node.id)}
+                  onDoubleClick={() => startRename(node)}
+                  className={`text-xs font-medium text-left flex-1 min-w-0 truncate cursor-pointer ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}
+                >
+                  {getNodeDisplayName(node)}
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

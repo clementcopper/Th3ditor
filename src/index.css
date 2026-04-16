@@ -25,6 +25,9 @@
   --color-text-secondary:   oklch(0.70 0.010 48);
   --color-text-muted:       oklch(0.50 0.010 48);
   --color-text-accent:      var(--color-accent);
+
+  /* Radii — global exceptions to the no-radius rule */
+  --radius-panel-btn: 0px;
 }
 
 *,
@@ -53,6 +56,18 @@
   border: solid 3px var(--color-surface-elevated) !important;
   box-shadow: 0 0 0 1px var(--color-border-default), 0 0 0 1px var(--color-border-default) !important;
   background: black !important;
+}
+
+/* Panel collapse buttons — exception to the no-radius rule */
+/* Horizontal (graph): top edge flush with border, bottom corners rounded */
+.panel-collapse-btn-h {
+  border-bottom-left-radius: var(--radius-panel-btn) !important;
+  border-bottom-right-radius: var(--radius-panel-btn) !important;
+}
+/* Vertical (right panel): left edge flush with border, right corners rounded */
+.panel-collapse-btn-v {
+  border-top-right-radius: var(--radius-panel-btn) !important;
+  border-bottom-right-radius: var(--radius-panel-btn) !important;
 }
 
 body {

@@ -24,13 +24,16 @@ Node-basierter 3D/2D Visual Editor für das Web. Ziel: Animierte Szenen mit Geom
 ## Layout
 
 ```
-┌─ Header ───────────────────────────────────────────────────────────────────────┐
-├─ 3D Viewport (Editor) ──────────────────┬─ Kamera Viewport (Final Render) ─── │
-│  [Scene Explorer Overlay oben links]    │                                      │
-│  [Shading | Perspektiv Toggle oben re.] │  Gleiche Szene, Szenen-Kamera        │
-│  [Play | Pause | Stop  unten mitte]     │  Kein Overlay, kein UI               │
-├─ Node Graph ────────────────────────────┴──────────────────┬─ Properties ───── │
-└─ Footer ────────────────────────────────────────────────────┴───────────────── ┘
+┌─ Toolbar ──────────────────────────────────────────────────────────────────────┐
+├─ 3D Viewport (Editor) ──────────────────┬─ Kamera Viewport (Final Render) ────┤
+│  [ViewCube oben rechts]                 │                                      │
+│  [Playbar + Shading/Persp + Max  unten] │  Gleiche Szene, Szenen-Kamera        │
+│                                         │  [Maximize unten rechts]             │
+├──────────────────────────────[▼]────────┴──────────────────┬─ Properties ──── │
+│  Node Graph                                                 │  Scene Explorer  │
+│                                                             │  Properties      │
+└─────────────────────────────────────────────────────────────┴────[◀]────────── ┘
+│  Status Bar                                                                    │
 ```
 
 **Alle Trennlinien verschiebbar** via `react-resizable-panels`
@@ -38,6 +41,12 @@ Node-basierter 3D/2D Visual Editor für das Web. Ziel: Animierte Szenen mit Geom
 **Dual Viewport** — zwei separate R3F Canvas:
 - Linker View: Editor-Kamera (OrbitControls, Grid, Gizmos, Wireframe-Option)
 - Rechter View: Szenen-Kamera aus Node Graph (Final Look, kein Overlay)
+
+**Viewport Maximize** — CSS `absolute inset-0 z-10` Overlay (kein R3F-Remount, kein WebGL-Kontext-Verlust). `maximizedViewport: 'vp3d' | 'cam' | null` in EditorLayout-State.
+
+**Panel Collapse Buttons** — `BorderCollapseBtn` sitzt innerhalb des Panels direkt an der Grenze (top-0 / left-0), Farbe = `border-default`, hover = accent, runde Ecken auf der Panel-Seite (`.panel-collapse-btn-h/v`, `--radius-panel-btn`).
+
+**Playbar Stacking** — bei Viewport-Breite < 820px: Playbar hebt sich über die Controls-Leiste (full-width, `left-3 right-3`). `ResizeObserver` in `Viewport3D` und `CamMaxOverlay`.
 
 ---
 
@@ -233,6 +242,7 @@ Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskont
 ### Phase 6: Export + Polish 🔜 NEXT
 - [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
 - [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
+- [x] **UI Polish** — Viewport Maximize/Minimize (CSS Overlay), Playbar-Stacking (ResizeObserver), Panel-Collapse-Buttons (BorderCollapseBtn, merged mit Border), hover states auf allen Viewport-Controls, konsistente 26px Control-Bars.
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Image-Export via ? (.png,.jpg)

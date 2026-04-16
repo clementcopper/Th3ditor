@@ -33,7 +33,6 @@ export function EditorToolbar() {
 
   return (
     <div className="h-10 flex items-center px-4 gap-1 border-b border-border-default bg-surface-base shrink-0">
-      {/* Save / Open */}
       <button
         onClick={handleOpen}
         title="Open project"
@@ -51,7 +50,6 @@ export function EditorToolbar() {
 
       <div className="w-px h-5 bg-border-default mx-1" />
 
-      {/* Undo / Redo */}
       <button
         onClick={() => useGraphStore.getState().undo()}
         title="Undo (⌘Z)"

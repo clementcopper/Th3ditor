@@ -190,7 +190,7 @@ export function CameraView() {
           fontSize: 11, fontFamily: 'monospace', lineHeight: 1.4, whiteSpace: 'pre',
         }}
       />
-      <Canvas shadows="soft">
+      <Canvas shadows="soft" gl={{ antialias: true }}>
         <CameraBackground />
         <CameraViewContents debugRef={debugRef} />
       </Canvas>

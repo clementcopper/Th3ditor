@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
 import { Play, Pause, Stop } from '@phosphor-icons/react'
 import { SceneRenderer, LiveEvaluator } from './SceneRenderer'
-import { SceneExplorer } from './SceneExplorer'
 import { useEditorStore } from '../../store/editor-store'
 import { useAnimationStore } from '../../store/animation-store'
 import { useSceneStore } from '../../store/scene-store'
@@ -20,7 +19,7 @@ const savedCameraState = {
 
 const SCRUBBER_DURATION = 30 // seconds
 
-function PlaybackOverlay() {
+export function PlaybackOverlay({ extra, positioned = true, stacked = false }: { extra?: React.ReactNode, positioned?: boolean, stacked?: boolean } = {}) {
   // Only `playing` triggers re-render (on play/pause/stop) — not elapsed (60fps)
   const playing = useAnimationStore((s) => s.playing)
   const play = useAnimationStore((s) => s.play)
@@ -78,12 +77,11 @@ function PlaybackOverlay() {
 
   const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
 
-  return (
-    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 pointer-events-auto">
-      <div
-        className="flex items-center gap-2 px-2 py-1 border border-border-default"
-        style={overlayBg}
-      >
+  const bar = (
+    <div
+      className="flex items-center gap-2 px-2 border border-border-default"
+      style={{ ...overlayBg, height: 26 }}
+    >
         <button
           onClick={playing ? pause : play}
           className="transition-colors cursor-pointer flex items-center justify-center"
@@ -110,7 +108,7 @@ function PlaybackOverlay() {
           onPointerUp={handleScrubEnd}
           onChange={handleScrub}
           onWheel={handleWheel}
-          className="timeline-scrubber w-40"
+          className={`timeline-scrubber ${stacked ? 'flex-1' : 'w-40'}`}
           style={{
             background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-border-default) 0%)`,
           }}
@@ -121,7 +119,21 @@ function PlaybackOverlay() {
         >
           0.0s
         </span>
+        {extra && <><div className="w-px h-3 bg-border-default" />{extra}</>}
       </div>
+  )
+
+  if (!positioned) return bar
+
+  if (stacked) return (
+    <div className="absolute left-3 right-3 z-10 pointer-events-auto transition-[bottom] duration-150" style={{ bottom: 12 + 26 + 8 }}>
+      {bar}
+    </div>
+  )
+
+  return (
+    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-auto">
+      {bar}
     </div>
   )
 }
@@ -258,7 +270,7 @@ function ProjectionSwitchHandler() {
   return null
 }
 
-function ViewportControlsOverlay() {
+function ViewportControlsOverlay({ extra }: { extra?: React.ReactNode }) {
   const shadingMode = useEditorStore((s) => s.shadingMode)
   const setShadingMode = useEditorStore((s) => s.setShadingMode)
   const projectionMode = useEditorStore((s) => s.projectionMode)
@@ -280,40 +292,49 @@ function ViewportControlsOverlay() {
   const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
 
   return (
-    <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 pointer-events-auto">
+    <>
       {/* Shading */}
-      <div className="flex items-center border border-border-default" style={overlayBg}>
+      <div className="flex items-center border border-border-default" style={{ ...overlayBg, height: 26 }}>
         {(['shaded', 'wireframe'] as const).map((mode) => (
           <button
             key={mode}
             onClick={() => setShadingMode(mode)}
-            className="px-2 py-1 text-xs font-medium transition-colors cursor-pointer capitalize"
-            style={{
-              color: shadingMode === mode ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              background: shadingMode === mode ? 'color-mix(in oklch, var(--color-accent) 12%, transparent)' : undefined,
-            }}
+            className={`px-2 h-full text-xs font-medium transition-colors cursor-pointer capitalize ${
+              shadingMode === mode ? '' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
+            }`}
+            style={shadingMode === mode ? {
+              color: 'var(--color-accent)',
+              background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
+            } : undefined}
           >
             {mode}
           </button>
         ))}
       </div>
       {/* Projection */}
-      <div className="flex items-center border border-border-default" style={overlayBg}>
+      <div className="flex items-center border border-border-default" style={{ ...overlayBg, height: 26 }}>
         {(['perspective', 'orthographic'] as const).map((mode) => (
           <button
             key={mode}
             onClick={() => setProjectionMode(mode)}
-            className="px-2 py-1 text-xs font-medium transition-colors cursor-pointer capitalize"
-            style={{
-              color: projectionMode === mode ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              background: projectionMode === mode ? 'color-mix(in oklch, var(--color-accent) 12%, transparent)' : undefined,
-            }}
+            className={`px-2 h-full text-xs font-medium transition-colors cursor-pointer capitalize ${
+              projectionMode === mode ? '' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
+            }`}
+            style={projectionMode === mode ? {
+              color: 'var(--color-accent)',
+              background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
+            } : undefined}
           >
             {mode === 'perspective' ? 'Persp' : 'Ortho'}
           </button>
         ))}
       </div>
-    </div>
+      {extra && (
+        <div className="flex items-center border border-border-default" style={{ ...overlayBg, height: 26 }}>
+          {extra}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -354,19 +375,37 @@ function EditorBackground() {
   return <color attach="background" args={['#1e1b18']} />
 }
 
-export function Viewport3D() {
+// Playbar approx half-width + controls width + right margin — below this they'd overlap
+const STACK_THRESHOLD = 820
+
+export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.ReactNode, hidePlaybar?: boolean } = {}) {
   const projectionMode = useEditorStore((s) => s.projectionMode)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [stacked, setStacked] = useState(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setStacked(entry.contentRect.width < STACK_THRESHOLD)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <div className="w-full h-full relative" style={{ background: 'var(--color-surface-viewport)' }}>
+    <div ref={containerRef} className="w-full h-full relative" style={{ background: 'var(--color-surface-viewport)' }}>
       {/* Overlays */}
-      <SceneExplorer />
       <ViewCube />
-      <ViewportControlsOverlay />
-      <PlaybackOverlay />
+      {/* Controls — always bottom-right */}
+      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 pointer-events-auto">
+        <ViewportControlsOverlay extra={extraButton} />
+      </div>
+      {/* Playbar — centered normally, full-width above controls when stacked */}
+      {!hidePlaybar && <PlaybackOverlay stacked={stacked} />}
 
       {/* 3D Canvas */}
-      <Canvas shadows="soft">
+      <Canvas shadows="soft" gl={{ antialias: true }}>
         <EditorBackground />
 
         {projectionMode === 'perspective'

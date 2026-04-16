@@ -888,7 +888,10 @@ export function compileShaderGraph(
     vParts.push('  vUv = uv;')
     vParts.push('  vPosition = position;')
     for (const l of vBody) vParts.push(`  ${l}`)
-    vParts.push(`  vec3 dispPos = position + normal * ${dispValueExpr} * ${dscaleU};`)
+    vParts.push(`  vec3 _sg_wNu = normalize(mat3(modelMatrix) * normal);`)
+    vParts.push(`  vec3 _sg_vDu = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`)
+    vParts.push(`  float _sg_fadeu = smoothstep(0.0, 0.15, abs(dot(_sg_wNu, _sg_vDu)));`)
+    vParts.push(`  vec3 dispPos = position + normal * ${dispValueExpr} * ${dscaleU} * _sg_fadeu;`)
     vParts.push('  gl_Position = projectionMatrix * modelViewMatrix * vec4(dispPos, 1.0);')
     vParts.push('}')
     vertexShader = vParts.join('\n')
@@ -911,31 +914,49 @@ export function compileShaderGraph(
     vertexPreamble = preambleParts.join('\n')
 
     if (positionNodeUsed) {
-      // Axis-aligned finite-difference normal computation.
-      // Previous tangent/bitangent approach had a hard discontinuity at abs(normal.y)=0.99
-      // causing shading artifacts at sphere poles. Axis-aligned sampling avoids this:
-      // compute 3D gradient of displacement field, project onto tangent plane, perturb normal.
+      // Tangent-frame normal computation.
+      // Build a local orthonormal frame (T, B) from the vertex normal.
+      // Sample displacement along T and B, compute displaced tangent vectors,
+      // then use cross(dpT, dpB) for the exact geometric normal of the displaced patch.
+      // This avoids axis-alignment artifacts at poles and gives accurate smooth normals.
+      //
+      // Silhouette fade: near view-perpendicular edges (N·V ≈ 0), displacement and normal
+      // fade back to geometric. Prevents jagged triangle silhouettes at mesh boundaries.
       vertexBodyForPBR = [
-        `  float _sg_eps = 0.1;`,
+        `  vec3 _sg_N = normalize(normal);`,
+        // Build tangent frame — no tangent attribute required
+        `  vec3 _sg_up = (abs(_sg_N.y) < 0.999) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);`,
+        `  vec3 _sg_T = normalize(cross(_sg_up, _sg_N));`,
+        `  vec3 _sg_B = cross(_sg_N, _sg_T);`,
+        // Sample displacement at center + two surface-aligned neighbors
+        `  float _sg_eps = 0.15;`,
         `  float _sg_dC = _sg_disp(position);`,
-        `  vec3 _sg_grad = vec3(`,
-        `    _sg_disp(position + vec3(_sg_eps, 0.0, 0.0)) - _sg_dC,`,
-        `    _sg_disp(position + vec3(0.0, _sg_eps, 0.0)) - _sg_dC,`,
-        `    _sg_disp(position + vec3(0.0, 0.0, _sg_eps)) - _sg_dC`,
-        `  ) * (${dscaleU} / _sg_eps);`,
-        `  _sg_grad = clamp(_sg_grad, vec3(-1.5), vec3(1.5));`,
-        `  vec3 _sg_perturb = _sg_grad - dot(_sg_grad, normal) * normal;`,
-        `  vec3 _sg_norm = normalize(normal - _sg_perturb);`,
+        `  float _sg_dT = _sg_disp(position + _sg_T * _sg_eps);`,
+        `  float _sg_dB = _sg_disp(position + _sg_B * _sg_eps);`,
+        // Displaced tangent vectors: surface step + normal displacement delta
+        `  vec3 _sg_dpT = _sg_T * _sg_eps + _sg_N * (_sg_dT - _sg_dC) * ${dscaleU};`,
+        `  vec3 _sg_dpB = _sg_B * _sg_eps + _sg_N * (_sg_dB - _sg_dC) * ${dscaleU};`,
+        // Normal = cross product of displaced tangents → exact displaced surface normal
+        `  vec3 _sg_nraw = cross(_sg_dpT, _sg_dpB);`,
+        `  vec3 _sg_norm = normalize(_sg_nraw * sign(dot(_sg_nraw, _sg_N)));`,
+        // Silhouette fade: blend to geometric normal at view-perpendicular edges
+        `  vec3 _sg_wN = normalize(mat3(modelMatrix) * _sg_N);`,
+        `  vec3 _sg_vD = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`,
+        `  float _sg_fade = smoothstep(0.0, 0.8, abs(dot(_sg_wN, _sg_vD)));`,
+        `  _sg_norm = normalize(mix(_sg_N, _sg_norm, _sg_fade));`,
         `  #ifndef FLAT_SHADED`,
         `    vNormal = normalize(normalMatrix * _sg_norm);`,
         `  #endif`,
-        `  transformed += normal * _sg_dC * ${dscaleU};`,
+        `  transformed += _sg_N * _sg_dC * ${dscaleU} * _sg_fade;`,
       ].join('\n')
     } else {
-      // UV-based or simple displacement — no normal correction
+      // UV-based or simple displacement — silhouette fade only (no normal correction)
       vertexBodyForPBR = [
         ...vBody.map((l) => `  ${l}`),
-        `  transformed += normal * ${dispValueExpr} * ${dscaleU};`,
+        `  vec3 _sg_wN2 = normalize(mat3(modelMatrix) * normal);`,
+        `  vec3 _sg_vD2 = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`,
+        `  float _sg_fade2 = smoothstep(0.0, 0.15, abs(dot(_sg_wN2, _sg_vD2)));`,
+        `  transformed += normal * ${dispValueExpr} * ${dscaleU} * _sg_fade2;`,
       ].join('\n')
     }
   }

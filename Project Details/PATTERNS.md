@@ -126,6 +126,41 @@ Der `scene/output`-Node ist der einzige Ort für **szenen-weite Render-Einstellu
 
 ---
 
+## Pattern I — Viewport Controls & Overlays
+
+### Control-Bar Style
+Alle Viewport-Overlay-Bars: `height: 26px`, semi-transparenter Hintergrund (`color-mix(in oklch, var(--color-surface-base) 85%, transparent)`), `border border-border-default`.
+
+Buttons innerhalb der Bar: `px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer`
+
+**Aktiver Zustand** (Toggle-Buttons): inline `style={{ color: 'var(--color-accent)', background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)' }}`  
+**Inaktiver Zustand**: Tailwind-Klassen `text-text-muted hover:text-text-primary hover:bg-surface-panel` — KEIN inline `style` für Color, sonst blockiert es `hover:`.
+
+**Minimize-Button im Max-Modus**: accent-Farbe + accent-Tinting — konsistent mit aktivem Toggle-Zustand.
+
+### Viewport Maximize
+CSS `absolute inset-0 z-10` Overlay — kein R3F-Remount, kein WebGL-Kontext-Verlust.  
+`maximizedViewport: 'vp3d' | 'cam' | null` in EditorLayout.  
+3D Viewport: Maximize/Minimize-Button via `extraButton`-Prop in `ViewportControlsOverlay` (bottom-right, gleiche Bar wie Shading/Projection).  
+Camera Viewport: `ViewportMaximizeBtn` (standalone, `absolute bottom-3 right-3`). Max-Modus: `CamMaxOverlay`-Komponente mit eigenem ResizeObserver.
+
+### Playbar Stacking
+`PlaybackOverlay` hat `stacked`-Prop. Bei Viewport-Breite < 820px (`ResizeObserver` in `Viewport3D`/`CamMaxOverlay`):
+- Normal: zentriert (`left-1/2 -translate-x-1/2 bottom-3`), Scrubber `w-40`
+- Stacked: full-width (`left-3 right-3`, `bottom: 46px`), Scrubber `flex-1`
+
+Controls-Bar bleibt immer `bottom-3 right-3`.
+
+### Panel Collapse Buttons (`BorderCollapseBtn`)
+- Sitzt **innerhalb des Panels** an der Border-Seite — NICHT in `PanelResizeHandle` (würde Drag-Interaktion stören)
+- Graph Panel: `absolute top-0 left-1/2 -translate-x-1/2` — horizontale Pille (28×12px)
+- Right Panel: `absolute left-0 top-1/2 -translate-y-1/2` — vertikale Pille (12×28px)
+- Farbe: `bg-border-default hover:bg-accent` — verschmilzt visuell mit der Border
+- Runde Ecken auf der Panel-Seite (weg von der Border): `.panel-collapse-btn-h` (unten), `.panel-collapse-btn-v` (rechts), `--radius-panel-btn` CSS-Variable
+- `PanelHandle` mit `disabled={!open}` verhindert Resize im zugeklappten Zustand
+
+---
+
 ## Anti-Patterns (nicht verwenden)
 
 - ❌ Direkte positionX/Y/Z-Props auf Path-Nodes — Transform-Chain verwenden
@@ -140,6 +175,9 @@ Der `scene/output`-Node ist der einzige Ort für **szenen-weite Render-Einstellu
 - ❌ Same internal port `name` on both input and output side of the same node — ReactFlow handle collision; use unique names (`source` as input, `texture` as output)
 - ❌ `alwaysHandle: true` ghost handle (0x0 invisible Handle) for always-present ports — causes edge misalignment because ReactFlow places the edge at the ghost handle's Y position, not the visible port
 - ❌ `computeVertexNormals()` on tileable noise — destroys UV topology; just regenerate the CanvasTexture with new props
+- ❌ Collapse-Button in `PanelResizeHandle` platzieren — konkurriert mit Drag; stattdessen ins Panel mit `absolute top-0`/`left-0`
+- ❌ Inline `style={{ color }}` auf Toggle-Buttons im inaktiven Zustand — blockiert Tailwind `hover:text-*`; nur aktiver Zustand bekommt inline style
+- ❌ `border-radius` via inline style oder Tailwind-Klasse — globales `* { border-radius: 0 !important }` überschreibt alles; CSS-Klasse mit eigenem `!important` verwenden
 
 ---
 

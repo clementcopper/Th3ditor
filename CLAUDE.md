@@ -87,9 +87,9 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
 - SelectControl stores values as strings ('0','1','2') — always use `Number(props.X ?? 0)` not `(props.X as number) ?? 0` for select properties.
 - Three.js `customProgramCacheKey` must include `vertexPreamble` + `vertexBodyForPBR` — key on body alone causes stale shader reuse when only preamble changes (e.g. noise type switch).
-- PBR displacement normals: axis-aligned 3D gradient (X/Y/Z samples) projected onto tangent plane — replaces tangent/bitangent approach that had discontinuity at abs(normal.y)=0.99 (pole artifacts).
+- PBR displacement normals: tangent-frame cross product `cross(dpT, dpB)` — build T/B from normal on-the-fly, sample disp along surface, gives exact displaced face normal. eps=0.08, silhouette fade smoothstep(0,0.5).
 - Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
-- Vertex displacement needs geo density ≥ noise feature size ×5 — 256 sphere segs is practical max (512 laggy); icosphere detail 200 equivalent.
+- Vertex displacement needs geo density ≥ noise feature size ×5 — sphere max 512 segs; icosphere detail 200 equivalent. Silhouette jaggies are a hard WebGL limit (no tessellation) — MSAA + fade is the best achievable.
 - `shader/colorramp` stops: all positions + colors as uniforms → live update without recompile; recompile only on stop-count change.
 - NodeRenderer fallback label: if no `mode` select prop, first select prop appends to label ("Shader Math: Fract").
 - Domain warp IQ offsets: `(0,0,0)`, `(5.2,1.3,2.8)`, `(3.7,9.2,8.1)` for x/y/z fbm samples.
@@ -102,6 +102,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - `snapshot()` in properties: use `() => useGraphStore.getState().snapshot()` not hook selector — avoids stale reference.
 - SliderControl `onBeforeChange`: fires on pointerdown (drag), commitEdit (typed), first wheel tick (500ms idle reset).
 - ColorControl `onBeforeChange`: fires on swatch open (dropdown) or first picker interaction (inline, 500ms idle reset).
+- Viewport toggles (Shaded/Wireframe, Persp/Ortho): use conditional className for active/inactive — never inline `style` for color, or `hover:` classes won't fire.
+- `PlaybackOverlay` `stacked` prop: full-width (`left-3 right-3`, scrubber `flex-1`) above controls when viewport < 820px; detected via `ResizeObserver` in `Viewport3D`/`CamMaxOverlay`.
+- Panel collapse buttons (`BorderCollapseBtn`): inside panel at edge nearest border, NOT inside `PanelResizeHandle` — avoids drag/click conflict.
+- `border-radius: 0 !important` on `*` overrides inline styles — use named CSS class with `!important` for radius exceptions (e.g. `.panel-collapse-btn-h/v`).
+- CSS radius exceptions defined via `--radius-panel-btn` in `@theme` block (`index.css`).
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -161,14 +166,15 @@ src/
 
 ### UI Style
 - Dark warm theme: `oklch(45% 0.008 48)` base, orange accent `oklch(70% 0.18 48)`
-- `border-radius: 0` everywhere
-- OKLCH for design tokens; HEX/RGB/HSL primary in color picker (user-facing)
+- `border-radius: 0` everywhere — exceptions via `.panel-collapse-btn-h/v` classes + `--radius-panel-btn` CSS variable
+- OKLCH for design tokens; ColorControl = RGB-only (R/G/B 0-255 + HEX text field + A%)
 
-## Current Status (2026-04-15)
+## Current Status (2026-04-16)
 - Phase 1–5e complete ✅
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - **Visual Shader Graph complete ✅**: shader/color (Color/Mix/Ramp modes, value+alpha outputs), noise, math, domain warp, etc.; unlit + PBR displacement modes
 - **Phase 6 partial ✅**: Save/Load (.wvs JSON), Undo/Redo (snapshot-based, Cmd+Z/Cmd+Shift+Z + toolbar buttons)
+- **UI Polish ✅**: Viewport maximize/minimize (CSS overlay, no R3F remount), playbar stacking (ResizeObserver), panel collapse buttons merged with border
 - Next: Phase 6 remaining (React/R3F export, standalone HTML export, post-processing)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 

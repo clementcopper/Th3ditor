@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import { useEffect, useRef, useState } from 'react'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
+import { CaretUp, CaretDown, CaretLeft, CaretRight, ArrowsOut, ArrowsIn } from '@phosphor-icons/react'
 import { NodeEditor } from '../graph/NodeEditor'
-import { Viewport3D } from '../viewport/Viewport3D'
+import { Viewport3D, PlaybackOverlay } from '../viewport/Viewport3D'
 import { CameraView } from '../viewport/CameraView'
 import { PropertiesPanel } from '../properties/PropertiesPanel'
+import { SceneExplorer } from '../viewport/SceneExplorer'
 import { EditorToolbar } from './EditorToolbar'
 import { StatusBar } from './StatusBar'
 import { useGraphStore } from '../../store/graph-store'
@@ -13,7 +15,6 @@ import { compileGraph } from '../../graph-engine/compiler'
 function initDefaultGraph() {
   const { nodes, setNodes, setEdges } = useGraphStore.getState()
   if (nodes.length > 0) return
-
   setNodes([
     { id: 'n1', type: 'geometry', position: { x: 0, y: 0 }, data: { mode: 0 } },
     { id: 'n2', type: 'material', position: { x: 0, y: 200 }, data: {} },
@@ -22,7 +23,6 @@ function initDefaultGraph() {
     { id: 'n5', type: 'light', position: { x: 0, y: 380 }, data: { mode: 1, positionX: 3, positionY: 3, positionZ: 3 } },
     { id: 'n6', type: 'camera', position: { x: 0, y: 560 }, data: { positionX: 0, positionY: 0, positionZ: 5 } },
   ])
-
   setEdges([
     { id: 'e1', source: 'n1', sourceHandle: 'geometry', target: 'n3', targetHandle: 'geometry' },
     { id: 'e2', source: 'n2', sourceHandle: 'material', target: 'n3', targetHandle: 'material' },
@@ -32,24 +32,119 @@ function initDefaultGraph() {
   ])
 }
 
-const resizeHandle = (orientation: 'horizontal' | 'vertical') => (
-  <PanelResizeHandle
-    className={
-      orientation === 'horizontal'
-        ? 'w-[3px] bg-border-default hover:bg-accent transition-colors cursor-col-resize shrink-0'
-        : 'h-[3px] bg-border-default hover:bg-accent transition-colors cursor-row-resize shrink-0'
-    }
-  />
+const overlayBg = { background: 'color-mix(in oklch, var(--color-surface-base) 85%, transparent)' }
+const CAM_STACK_THRESHOLD = 820
+
+/** Camera max mode overlay — mirrors 3D viewport stacking logic for playbar + minimize button. */
+function CamMaxOverlay({ onMinimize }: { onMinimize: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [stacked, setStacked] = useState(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setStacked(entry.contentRect.width < CAM_STACK_THRESHOLD)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={containerRef} className="absolute inset-0 z-10">
+      <CameraView />
+      <PlaybackOverlay stacked={stacked} />
+      <ViewportMaximizeBtn maximized={true} onClick={onMinimize} />
+    </div>
+  )
+}
+
+/** Maximize / minimize button styled to match ViewportControlsOverlay — use as extraButton or standalone. */
+function ViewportMaximizeBtn({ maximized, onClick }: { maximized: boolean; onClick: () => void }) {
+  return (
+    <div
+      className="absolute bottom-3 right-3 z-10 pointer-events-auto flex items-center border border-border-default"
+      style={{ ...overlayBg, height: 26 }}
+    >
+      <button
+        onClick={onClick}
+        title={maximized ? 'Restore' : 'Maximize'}
+        className={`px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer ${
+          maximized ? 'hover:bg-surface-panel' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
+        }`}
+        style={maximized ? {
+          color: 'var(--color-accent)',
+          background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
+        } : undefined}
+      >
+        {maximized ? <ArrowsIn size={10} weight="bold" /> : <ArrowsOut size={10} weight="bold" />}
+      </button>
+    </div>
+  )
+}
+
+function PanelHandle({ orientation, disabled = false }: { orientation: 'horizontal' | 'vertical'; disabled?: boolean }) {
+  return (
+    <PanelResizeHandle
+      disabled={disabled}
+      className={
+        orientation === 'horizontal'
+          ? `w-[3px] shrink-0 bg-border-default transition-colors ${disabled ? '' : 'hover:bg-accent cursor-col-resize'}`
+          : `h-[3px] shrink-0 bg-border-default transition-colors ${disabled ? '' : 'hover:bg-accent cursor-row-resize'}`
+      }
+    />
+  )
+}
+
+/**
+ * Collapse/expand button that visually merges with the panel border.
+ * horizontal=true → sits on a horizontal border (graph panel); false → vertical border (right panel).
+ */
+function BorderCollapseBtn({ open, onClick, horizontal }: {
+  open: boolean
+  onClick: () => void
+  horizontal: boolean
+}) {
+  const icon = horizontal
+    ? (open ? <CaretDown size={7} weight="bold" /> : <CaretUp size={7} weight="bold" />)
+    : (open ? <CaretRight size={7} weight="bold" /> : <CaretLeft size={7} weight="bold" />)
+
+  return (
+    <button
+      onClick={onClick}
+      className={`${horizontal ? 'panel-collapse-btn-h' : 'panel-collapse-btn-v'} flex items-center justify-center bg-border-default hover:bg-accent text-surface-base transition-colors`}
+      style={horizontal ? { width: 28, height: 12 } : { width: 12, height: 28 }}
+    >
+      {icon}
+    </button>
+  )
+}
+
+const plainHandle = (orientation: 'horizontal' | 'vertical', disabled = false) => (
+  <PanelHandle orientation={orientation} disabled={disabled} />
 )
 
 export function EditorLayout() {
   const setScene = useSceneStore((s) => s.setScene)
 
-  useEffect(() => {
-    initDefaultGraph()
-  }, [])
+  const graphRef = useRef<PanelImperativeHandle>(null)
+  const rightRef = useRef<PanelImperativeHandle>(null)
 
-  // Global keyboard shortcuts: Cmd+Z = undo, Cmd+Shift+Z = redo
+  const [maximizedViewport, setMaximizedViewport] = useState<'vp3d' | 'cam' | null>(null)
+  const [graphOpen, setGraphOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+
+  function toggle(ref: React.RefObject<PanelImperativeHandle | null>, open: boolean, setOpen: (v: boolean) => void) {
+    if (open) { ref.current?.collapse(); setOpen(false) }
+    else      { ref.current?.expand();   setOpen(true)  }
+  }
+
+  function toggleMaximize(vp: 'vp3d' | 'cam') {
+    setMaximizedViewport(prev => prev === vp ? null : vp)
+  }
+
+  useEffect(() => { initDefaultGraph() }, [])
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement
@@ -63,29 +158,22 @@ export function EditorLayout() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Compile only on structural changes — ignore node position updates (graph canvas drag)
   useEffect(() => {
     const compile = (nodes: import('../../types/node-graph').GraphNode[], edges: import('../../types/node-graph').GraphEdge[]) => {
       setScene(compileGraph(nodes, edges))
     }
-
-    // Initial compile
     const { nodes, edges } = useGraphStore.getState()
     compile(nodes, edges)
-
     let prevNodes = nodes
     let prevEdges = edges
-
     return useGraphStore.subscribe((state) => {
       const { nodes, edges } = state
       const edgesChanged = edges !== prevEdges
       const structuralChange = edgesChanged ||
         nodes.length !== prevNodes.length ||
         nodes.some((n, i) => n.id !== prevNodes[i]?.id || n.type !== prevNodes[i]?.type || n.data !== prevNodes[i]?.data)
-
       prevNodes = nodes
       prevEdges = edges
-
       if (structuralChange) compile(nodes, edges)
     })
   }, [setScene])
@@ -94,39 +182,126 @@ export function EditorLayout() {
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base">
       <EditorToolbar />
 
-      {/* Main: viewport (top) | graph + properties (bottom) */}
-      <PanelGroup orientation="vertical" className="flex-1 min-h-0">
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
 
-        {/* Viewport row: Editor | Camera */}
-        <Panel defaultSize={55} minSize={20}>
-          <PanelGroup orientation="horizontal" className="h-full">
-            <Panel defaultSize={50} minSize={20}>
-              <Viewport3D />
+        <Panel defaultSize={87} minSize={20}>
+          <PanelGroup orientation="vertical" className="h-full">
+
+            {/* Viewport row */}
+            <Panel defaultSize={55} minSize={10}>
+              <div className="relative w-full h-full">
+                <PanelGroup orientation="horizontal" className="h-full">
+
+                  {/* 3D Viewport — maximize button injected into controls overlay */}
+                  <Panel defaultSize={50} minSize={10}>
+                    <div className="relative w-full h-full overflow-hidden">
+                      <Viewport3D extraButton={
+                        <button
+                          onClick={() => toggleMaximize('vp3d')}
+                          title="Maximize"
+                          className="px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer text-text-muted hover:text-text-primary hover:bg-surface-panel"
+                        >
+                          <ArrowsOut size={10} weight="bold" />
+                        </button>
+                      } />
+                    </div>
+                  </Panel>
+
+                  {plainHandle('horizontal', maximizedViewport !== null)}
+
+                  {/* Camera Viewport */}
+                  <Panel defaultSize={50} minSize={10}>
+                    <div className="relative w-full h-full overflow-hidden">
+                      <CameraView />
+                      {maximizedViewport === null && (
+                        <ViewportMaximizeBtn maximized={false} onClick={() => toggleMaximize('cam')} />
+                      )}
+                    </div>
+                  </Panel>
+
+                </PanelGroup>
+
+                {/* Maximized overlays */}
+                {maximizedViewport === 'vp3d' && (
+                  <div className="absolute inset-0 z-10">
+                    <Viewport3D extraButton={
+                      <button
+                        onClick={() => toggleMaximize('vp3d')}
+                        title="Restore"
+                        className="px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer hover:bg-surface-panel"
+                        style={{
+                          color: 'var(--color-accent)',
+                          background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
+                        }}
+                      >
+                        <ArrowsIn size={10} weight="bold" />
+                      </button>
+                    } />
+                  </div>
+                )}
+                {maximizedViewport === 'cam' && (
+                  <CamMaxOverlay onMinimize={() => toggleMaximize('cam')} />
+                )}
+              </div>
             </Panel>
-            {resizeHandle('horizontal')}
-            <Panel defaultSize={50} minSize={20}>
-              <CameraView />
+
+            <PanelHandle orientation="vertical" disabled={!graphOpen} />
+
+            {/* Node Graph */}
+            <Panel
+              panelRef={graphRef}
+              defaultSize={45} minSize={10}
+              collapsible collapsedSize={12}
+              onCollapse={() => setGraphOpen(false)}
+              onExpand={() => setGraphOpen(true)}
+            >
+              <div className="relative w-full h-full">
+                {graphOpen && <NodeEditor />}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+                  <BorderCollapseBtn
+                    open={graphOpen}
+                    onClick={() => toggle(graphRef, graphOpen, setGraphOpen)}
+                    horizontal={true}
+                  />
+                </div>
+              </div>
             </Panel>
+
           </PanelGroup>
         </Panel>
 
-        {resizeHandle('vertical')}
+        <PanelHandle orientation="horizontal" disabled={!rightOpen} />
 
-        {/* Bottom row: node graph | properties */}
-        <Panel defaultSize={45} minSize={15}>
-          <PanelGroup orientation="horizontal" className="h-full">
-
-            <Panel defaultSize={80} minSize={40}>
-              <NodeEditor />
-            </Panel>
-
-            {resizeHandle('horizontal')}
-
-            <Panel defaultSize={20} minSize={10}>
-              <PropertiesPanel />
-            </Panel>
-
-          </PanelGroup>
+        {/* Right column */}
+        <Panel
+          panelRef={rightRef}
+          defaultSize={13} minSize={1}
+          collapsible collapsedSize={12}
+          onCollapse={() => setRightOpen(false)}
+          onExpand={() => setRightOpen(true)}
+        >
+          <div className="relative w-full h-full overflow-hidden">
+            {rightOpen && (
+              <PanelGroup orientation="vertical" className="h-full">
+                <Panel defaultSize={25} minSize={5}>
+                  <div className="h-full overflow-y-auto">
+                    <SceneExplorer />
+                  </div>
+                </Panel>
+                <PanelResizeHandle className="h-[3px] bg-border-default hover:bg-accent transition-colors cursor-row-resize shrink-0" />
+                <Panel defaultSize={75} minSize={20}>
+                  <PropertiesPanel />
+                </Panel>
+              </PanelGroup>
+            )}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 z-20 pointer-events-auto">
+              <BorderCollapseBtn
+                open={rightOpen}
+                onClick={() => toggle(rightRef, rightOpen, setRightOpen)}
+                horizontal={false}
+              />
+            </div>
+          </div>
         </Panel>
 
       </PanelGroup>

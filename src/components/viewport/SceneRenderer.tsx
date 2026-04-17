@@ -41,18 +41,181 @@ function createQuadSphere(radius: number, segments: number): THREE.BufferGeometr
     uvData[i * 2 + 1] = Math.asin(Math.max(-1, Math.min(1, y / r))) / Math.PI + 0.5
   }
 
-  // Seam fix: if a triangle's u-values span > 0.5 it straddles the longitude seam.
-  // Bump the low-u vertices by +1 so GPU interpolation stays continuous across the triangle.
-  for (let f = 0; f < pos.count / 3; f++) {
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvData, 2))
+  applyLongitudeSeamFix(geo)
+  return geo
+}
+
+function applyLongitudeSeamFix(geo: THREE.BufferGeometry): void {
+  const uvAttr = geo.attributes.uv as THREE.BufferAttribute
+  const uvArr = uvAttr.array as Float32Array
+  const count = uvAttr.count
+  for (let f = 0; f < count / 3; f++) {
     const i0 = f * 3, i1 = f * 3 + 1, i2 = f * 3 + 2
-    const u0 = uvData[i0 * 2], u1 = uvData[i1 * 2], u2 = uvData[i2 * 2]
+    const u0 = uvArr[i0 * 2], u1 = uvArr[i1 * 2], u2 = uvArr[i2 * 2]
     const uMax = Math.max(u0, u1, u2)
-    if (uMax - u0 > 0.5) uvData[i0 * 2] += 1
-    if (uMax - u1 > 0.5) uvData[i1 * 2] += 1
-    if (uMax - u2 > 0.5) uvData[i2 * 2] += 1
+    if (uMax - u0 > 0.5) uvArr[i0 * 2] += 1
+    if (uMax - u1 > 0.5) uvArr[i1 * 2] += 1
+    if (uMax - u2 > 0.5) uvArr[i2 * 2] += 1
+  }
+  uvAttr.needsUpdate = true
+}
+
+function mergeQuadParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  let total = 0
+  for (const g of parts) total += g.attributes.position.count
+  const pos = new Float32Array(total * 3)
+  const norm = new Float32Array(total * 3)
+  const uv = new Float32Array(total * 2)
+  let offset = 0
+  for (const g of parts) {
+    const n = g.attributes.position.count
+    pos.set(g.attributes.position.array as Float32Array, offset * 3)
+    norm.set(g.attributes.normal.array as Float32Array, offset * 3)
+    uv.set(g.attributes.uv.array as Float32Array, offset * 2)
+    offset += n
+    g.dispose()
+  }
+  const result = new THREE.BufferGeometry()
+  result.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  result.setAttribute('normal', new THREE.BufferAttribute(norm, 3))
+  result.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+  return result
+}
+
+function createQuadBox(w: number, h: number, d: number, wS: number, hS: number, dS: number): THREE.BufferGeometry {
+  const box = new THREE.BoxGeometry(w, h, d, wS, hS, dS)
+  const geo = box.toNonIndexed()
+  box.dispose()
+  return geo
+}
+
+function createQuadCylinder(
+  radiusTop: number, radiusBottom: number, height: number,
+  radialSegs: number, heightSegs: number
+): THREE.BufferGeometry {
+  const slope = (radiusBottom - radiusTop) / height
+  const slopeLen = Math.sqrt(1 + slope * slope)
+  const nrComp = 1 / slopeLen
+  const nyComp = slope / slopeLen
+
+  // Body: indexed parametric strip → toNonIndexed + longitude seam fix
+  const bVerts: number[] = [], bNorms: number[] = [], bUVs: number[] = [], bIdx: number[] = []
+  for (let j = 0; j <= heightSegs; j++) {
+    const t = j / heightSegs
+    const y = -height / 2 + height * t
+    const r = radiusBottom + (radiusTop - radiusBottom) * t
+    for (let i = 0; i <= radialSegs; i++) {
+      const theta = 2 * Math.PI * i / radialSegs
+      bVerts.push(r * Math.cos(theta), y, r * Math.sin(theta))
+      bNorms.push(Math.cos(theta) * nrComp, nyComp, Math.sin(theta) * nrComp)
+      bUVs.push(i / radialSegs, t)
+    }
+  }
+  for (let j = 0; j < heightSegs; j++) {
+    for (let i = 0; i < radialSegs; i++) {
+      const a = j * (radialSegs + 1) + i, b = (j + 1) * (radialSegs + 1) + i
+      bIdx.push(a, b, a + 1, b, b + 1, a + 1)
+    }
+  }
+  const bodyIndexed = new THREE.BufferGeometry()
+  bodyIndexed.setAttribute('position', new THREE.Float32BufferAttribute(bVerts, 3))
+  bodyIndexed.setAttribute('normal', new THREE.Float32BufferAttribute(bNorms, 3))
+  bodyIndexed.setAttribute('uv', new THREE.Float32BufferAttribute(bUVs, 2))
+  bodyIndexed.setIndex(bIdx)
+  const body = bodyIndexed.toNonIndexed()
+  bodyIndexed.dispose()
+  applyLongitudeSeamFix(body)
+
+  const parts: THREE.BufferGeometry[] = [body]
+
+  // Top cap: CCW from above = (center, ring[i+1], ring[i])
+  if (radiusTop > 0) {
+    const tV: number[] = [], tN: number[] = [], tU: number[] = []
+    for (let i = 0; i < radialSegs; i++) {
+      const t0 = 2 * Math.PI * i / radialSegs, t1 = 2 * Math.PI * (i + 1) / radialSegs
+      tV.push(0, height / 2, 0);                                                    tN.push(0, 1, 0); tU.push(0.5, 0.5)
+      tV.push(radiusTop * Math.cos(t1), height / 2, radiusTop * Math.sin(t1)); tN.push(0, 1, 0); tU.push(0.5 + 0.5 * Math.cos(t1), 0.5 + 0.5 * Math.sin(t1))
+      tV.push(radiusTop * Math.cos(t0), height / 2, radiusTop * Math.sin(t0)); tN.push(0, 1, 0); tU.push(0.5 + 0.5 * Math.cos(t0), 0.5 + 0.5 * Math.sin(t0))
+    }
+    const topCap = new THREE.BufferGeometry()
+    topCap.setAttribute('position', new THREE.Float32BufferAttribute(tV, 3))
+    topCap.setAttribute('normal', new THREE.Float32BufferAttribute(tN, 3))
+    topCap.setAttribute('uv', new THREE.Float32BufferAttribute(tU, 2))
+    parts.push(topCap)
   }
 
+  // Bottom cap: CCW from below = (center, ring[i], ring[i+1])
+  if (radiusBottom > 0) {
+    const bV: number[] = [], bN: number[] = [], bU: number[] = []
+    for (let i = 0; i < radialSegs; i++) {
+      const t0 = 2 * Math.PI * i / radialSegs, t1 = 2 * Math.PI * (i + 1) / radialSegs
+      bV.push(0, -height / 2, 0);                                                           bN.push(0, -1, 0); bU.push(0.5, 0.5)
+      bV.push(radiusBottom * Math.cos(t0), -height / 2, radiusBottom * Math.sin(t0)); bN.push(0, -1, 0); bU.push(0.5 + 0.5 * Math.cos(t0), 0.5 + 0.5 * Math.sin(t0))
+      bV.push(radiusBottom * Math.cos(t1), -height / 2, radiusBottom * Math.sin(t1)); bN.push(0, -1, 0); bU.push(0.5 + 0.5 * Math.cos(t1), 0.5 + 0.5 * Math.sin(t1))
+    }
+    const botCap = new THREE.BufferGeometry()
+    botCap.setAttribute('position', new THREE.Float32BufferAttribute(bV, 3))
+    botCap.setAttribute('normal', new THREE.Float32BufferAttribute(bN, 3))
+    botCap.setAttribute('uv', new THREE.Float32BufferAttribute(bU, 2))
+    parts.push(botCap)
+  }
+
+  return mergeQuadParts(parts)
+}
+
+/** Quad Capsule: elongated BoxGeometry inflated to capsule shape.
+ *  Top/bottom hemisphere regions inflate like a Quad-Sphere; middle band projects to cylinder.
+ *  UV: u = longitude, v = linear from bottom pole → top pole. Seam fix same as sphere. */
+function createQuadCapsule(radius: number, length: number, radialSegs: number, capSegs: number): THREE.BufferGeometry {
+  const halfLen = length / 2
+  const L = length / radius
+  const bodySegs = Math.max(1, Math.round(capSegs * L))
+  const totalYSegs = 2 * capSegs + bodySegs
+  const totalBoxH = 1 + L
+  const boxHalfLen = L / 2
+
+  const box = new THREE.BoxGeometry(1, totalBoxH, 1, radialSegs, totalYSegs, radialSegs)
+  const geo = box.toNonIndexed()
+  box.dispose()
+
+  const pos = geo.attributes.position as THREE.BufferAttribute
+  const norm = geo.attributes.normal as THREE.BufferAttribute
+
+  const origY = new Float32Array(pos.count)
+  for (let i = 0; i < pos.count; i++) origY[i] = pos.getY(i)
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = origY[i], z = pos.getZ(i)
+    if (y > boxHalfLen) {
+      const dy = y - boxHalfLen
+      const len = Math.sqrt(x * x + dy * dy + z * z)
+      const nx = x / len, ny = dy / len, nz = z / len
+      pos.setXYZ(i, nx * radius, halfLen + ny * radius, nz * radius)
+      norm.setXYZ(i, nx, ny, nz)
+    } else if (y < -boxHalfLen) {
+      const dy = y + boxHalfLen
+      const len = Math.sqrt(x * x + dy * dy + z * z)
+      const nx = x / len, ny = dy / len, nz = z / len
+      pos.setXYZ(i, nx * radius, -halfLen + ny * radius, nz * radius)
+      norm.setXYZ(i, nx, ny, nz)
+    } else {
+      const xzLen = Math.sqrt(x * x + z * z)
+      const nx = x / xzLen, nz = z / xzLen
+      pos.setXYZ(i, nx * radius, y * radius, nz * radius)
+      norm.setXYZ(i, nx, 0, nz)
+    }
+  }
+  pos.needsUpdate = true
+  norm.needsUpdate = true
+
+  const uvData = new Float32Array(pos.count * 2)
+  for (let i = 0; i < pos.count; i++) {
+    uvData[i * 2]     = Math.atan2(pos.getZ(i), pos.getX(i)) / (Math.PI * 2) + 0.5
+    uvData[i * 2 + 1] = (origY[i] + totalBoxH / 2) / totalBoxH
+  }
   geo.setAttribute('uv', new THREE.BufferAttribute(uvData, 2))
+  applyLongitudeSeamFix(geo)
   return geo
 }
 
@@ -850,6 +1013,36 @@ function MeshObject({
   }, [mesh.geometryType, gp.radius, gp.segments])
   useEffect(() => () => { quadSphereGeo?.dispose() }, [quadSphereGeo])
 
+  const quadBoxGeo = useMemo(() => {
+    if (mesh.geometryType !== 'box') return null
+    return createQuadBox(
+      (gp.width as number) ?? 1, (gp.height as number) ?? 1, (gp.depth as number) ?? 1,
+      (gp.widthSegs as number) ?? 1, (gp.heightSegs as number) ?? 1, (gp.depthSegs as number) ?? 1
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, gp.width, gp.height, gp.depth, gp.widthSegs, gp.heightSegs, gp.depthSegs])
+  useEffect(() => () => { quadBoxGeo?.dispose() }, [quadBoxGeo])
+
+  const quadCylGeo = useMemo(() => {
+    if (mesh.geometryType !== 'cylinder') return null
+    return createQuadCylinder(
+      (gp.radiusTop as number) ?? 0.5, (gp.radiusBottom as number) ?? 0.5,
+      (gp.height as number) ?? 1, (gp.radialSegments as number) ?? 32, (gp.heightSegs as number) ?? 1
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, gp.radiusTop, gp.radiusBottom, gp.height, gp.radialSegments, gp.heightSegs])
+  useEffect(() => () => { quadCylGeo?.dispose() }, [quadCylGeo])
+
+  const quadCapsuleGeo = useMemo(() => {
+    if (mesh.geometryType !== 'capsule') return null
+    return createQuadCapsule(
+      (gp.radius as number) ?? 0.3, (gp.length as number) ?? 0.8,
+      (gp.radialSegments as number) ?? 16, (gp.capSegments as number) ?? 8
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, gp.radius, gp.length, gp.radialSegments, gp.capSegments])
+  useEffect(() => () => { quadCapsuleGeo?.dispose() }, [quadCapsuleGeo])
+
   // Viewport wireframe toggle OR material-node wireframe property — unified single mode
   const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe') || Boolean(mp.wireframe)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
@@ -979,8 +1172,8 @@ function MeshObject({
             setSelectedNode(isSelected ? null : mesh.id)
           }}
         >
-          {mesh.geometryType === 'box' && (
-            <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
+          {mesh.geometryType === 'box' && quadBoxGeo && (
+            <primitive attach="geometry" object={quadBoxGeo} />
           )}
           {mesh.geometryType === 'sphere' && quadSphereGeo && (
             <primitive attach="geometry" object={quadSphereGeo} />
@@ -991,11 +1184,11 @@ function MeshObject({
           {mesh.geometryType === 'torus' && (
             <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
           )}
-          {mesh.geometryType === 'cylinder' && (
-            <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
+          {mesh.geometryType === 'cylinder' && quadCylGeo && (
+            <primitive attach="geometry" object={quadCylGeo} />
           )}
-          {mesh.geometryType === 'capsule' && (
-            <capsuleGeometry args={[gp.radius as number, gp.length as number, gp.capSegments as number, gp.radialSegments as number]} />
+          {mesh.geometryType === 'capsule' && quadCapsuleGeo && (
+            <primitive attach="geometry" object={quadCapsuleGeo} />
           )}
           {mesh.geometryType === 'icosphere' && (
             <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />
@@ -1044,8 +1237,8 @@ function MeshObject({
         {/* Selection highlight overlay */}
         {isEditorView && isSelected && (mesh.geometryType !== 'gltf-mesh' || gltfGeometry) && (
           <mesh renderOrder={10}>
-            {mesh.geometryType === 'box' && (
-              <boxGeometry args={[gp.width as number, gp.height as number, gp.depth as number, gp.widthSegs as number, gp.heightSegs as number, gp.depthSegs as number]} />
+            {mesh.geometryType === 'box' && quadBoxGeo && (
+              <primitive attach="geometry" object={quadBoxGeo} />
             )}
             {mesh.geometryType === 'sphere' && quadSphereGeo && (
               <primitive attach="geometry" object={quadSphereGeo} />
@@ -1056,11 +1249,11 @@ function MeshObject({
             {mesh.geometryType === 'torus' && (
               <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
             )}
-            {mesh.geometryType === 'cylinder' && (
-              <cylinderGeometry args={[gp.radiusTop as number, gp.radiusBottom as number, gp.height as number, gp.radialSegments as number]} />
+            {mesh.geometryType === 'cylinder' && quadCylGeo && (
+              <primitive attach="geometry" object={quadCylGeo} />
             )}
-            {mesh.geometryType === 'capsule' && (
-              <capsuleGeometry args={[gp.radius as number, gp.length as number, gp.capSegments as number, gp.radialSegments as number]} />
+            {mesh.geometryType === 'capsule' && quadCapsuleGeo && (
+              <primitive attach="geometry" object={quadCapsuleGeo} />
             )}
             {mesh.geometryType === 'icosphere' && (
               <icosahedronGeometry args={[gp.radius as number, gp.detail as number]} />

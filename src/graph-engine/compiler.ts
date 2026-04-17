@@ -322,7 +322,7 @@ function normalizeGeoProps(type: string, props: Record<string, unknown>): Record
     case 'torus':
       return { radius: props.torusRadius, tube: props.tube, radialSegments: props.torusRadialSegs, tubularSegments: props.torusTubularSegs }
     case 'cylinder':
-      return { radiusTop: props.radiusTop, radiusBottom: props.radiusBottom, height: props.cylHeight, radialSegments: props.radialSegments }
+      return { radiusTop: props.radiusTop, radiusBottom: props.radiusBottom, height: props.cylHeight, radialSegments: props.radialSegments, heightSegs: props.cylHeightSegs ?? 1 }
     case 'capsule':
       return { radius: props.capsuleRadius, length: props.capsuleLength, capSegments: props.capSegments, radialSegments: props.capsuleRadialSegments }
     case 'icosphere':

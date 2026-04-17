@@ -38,18 +38,19 @@ const geometry: NodeDefinition = {
     // Torus (3)
     { type: 'float', uniform: 'torusRadius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 3 } },
     { type: 'float', uniform: 'tube', label: 'Tube', min: 0.01, max: 5, step: 0.05, hardMax: 1000, default: 0.2, visibleWhen: { uniform: 'mode', equal: 3 } },
-    { type: 'int', uniform: 'torusRadialSegs', label: 'Radial Segments', min: 3, max: 64, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 3 } },
+    { type: 'int', uniform: 'torusRadialSegs', label: 'Radial Segments', min: 3, max: 256, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 3 } },
     { type: 'int', uniform: 'torusTubularSegs', label: 'Tubular Segments', min: 3, max: 256, step: 1, default: 48, visibleWhen: { uniform: 'mode', equal: 3 } },
     // Cylinder (4)
     { type: 'float', uniform: 'radiusTop', label: 'Radius Top', min: 0, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 4 } },
     { type: 'float', uniform: 'radiusBottom', label: 'Radius Bottom', min: 0, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 4 } },
     { type: 'float', uniform: 'cylHeight', label: 'Height', min: 0.01, max: 20, step: 0.1, hardMax: 1000, default: 1, visibleWhen: { uniform: 'mode', equal: 4 } },
-    { type: 'int', uniform: 'radialSegments', label: 'Segments', min: 3, max: 128, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 4 } },
+    { type: 'int', uniform: 'radialSegments', label: 'Segments', min: 3, max: 256, step: 1, default: 32, visibleWhen: { uniform: 'mode', equal: 4 } },
+    { type: 'int', uniform: 'cylHeightSegs', label: 'H Segments', min: 1, max: 256, step: 1, default: 1, visibleWhen: { uniform: 'mode', equal: 4 } },
     // Capsule (5)
     { type: 'float', uniform: 'capsuleRadius', label: 'Radius', min: 0.01, max: 10, step: 0.05, hardMax: 1000, default: 0.3, visibleWhen: { uniform: 'mode', equal: 5 } },
     { type: 'float', uniform: 'capsuleLength', label: 'Length', min: 0.01, max: 20, step: 0.1, hardMax: 1000, default: 0.8, visibleWhen: { uniform: 'mode', equal: 5 } },
-    { type: 'int', uniform: 'capSegments', label: 'Cap Segments', min: 2, max: 32, step: 1, default: 8, visibleWhen: { uniform: 'mode', equal: 5 } },
-    { type: 'int', uniform: 'capsuleRadialSegments', label: 'Radial Segments', min: 3, max: 64, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 5 } },
+    { type: 'int', uniform: 'capSegments', label: 'Cap Segments', min: 2, max: 256, step: 1, default: 8, visibleWhen: { uniform: 'mode', equal: 5 } },
+    { type: 'int', uniform: 'capsuleRadialSegments', label: 'Radial Segments', min: 3, max: 256, step: 1, default: 16, visibleWhen: { uniform: 'mode', equal: 5 } },
     // Icosphere (6)
     { type: 'float', uniform: 'icoRadius', label: 'Radius', min: 0.01, max: 10, step: 0.1, hardMax: 1000, default: 0.5, visibleWhen: { uniform: 'mode', equal: 6 } },
     { type: 'int', uniform: 'icoDetail', label: 'Detail', min: 0, max: 256, step: 1, default: 20, visibleWhen: { uniform: 'mode', equal: 6 } },
@@ -60,7 +61,7 @@ const geometry: NodeDefinition = {
     radius: 0.5, sphereSegments: 32,
     planeWidth: 1, planeHeight: 1, planeWidthSegs: 1, planeHeightSegs: 1,
     torusRadius: 0.5, tube: 0.2, torusRadialSegs: 16, torusTubularSegs: 48,
-    radiusTop: 0.5, radiusBottom: 0.5, cylHeight: 1, radialSegments: 32,
+    radiusTop: 0.5, radiusBottom: 0.5, cylHeight: 1, radialSegments: 32, cylHeightSegs: 1,
     capsuleRadius: 0.3, capsuleLength: 0.8, capSegments: 8, capsuleRadialSegments: 16,
     icoRadius: 0.5, icoDetail: 2,
   },

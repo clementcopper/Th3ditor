@@ -423,27 +423,22 @@ export function compileShaderGraph(
         const posIn = resolvedInput(id, 'position')
         let p3: string
         if (posIn) {
-          // 3D object-space position: scale + seed offset + time for animation
           p3 = `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
         } else {
-          // UV mode: XY = scaled UV + seed, Z = time for morphing
           const uvIn = resolvedInput(id, 'uv') ?? 'vUv'
           p3 = `vec3(${uvIn} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
         }
 
-        let expr: string
-        if (noiseType === 4) {
-          expr = `_sg_curl3(${p3}, int(${detailU}))`
-        } else if (noiseType === 3) {
-          expr = `_sg_worley3(${p3})`
-        } else if (noiseType === 2) {
-          expr = `_sg_voronoi3(${p3})`
-        } else if (noiseType === 1) {
-          expr = `_sg_ridged3(${p3}, int(${detailU}))`
-        } else {
-          expr = `_sg_fbm3(${p3}, int(${detailU}))`
+        const mkNoise = (p: string): string => {
+          if (noiseType === 4) return `_sg_curl3(${p}, int(${detailU}))`
+          if (noiseType === 3) return `_sg_worley3(${p})`
+          if (noiseType === 2) return `_sg_voronoi3(${p})`
+          if (noiseType === 1) return `_sg_ridged3(${p}, int(${detailU}))`
+          return `_sg_fbm3(${p}, int(${detailU}))`
         }
-        bodyLines.push(`float ${outVar} = ${expr};`)
+
+        bodyLines.push(`float ${outVar} = ${mkNoise(p3)};`)
+
         nodeVar.set(id, outVar)
         break
       }

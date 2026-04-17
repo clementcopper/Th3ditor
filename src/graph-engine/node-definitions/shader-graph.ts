@@ -67,8 +67,9 @@ const shaderNoise: NodeDefinition = {
     { type: 'float', uniform: 'detail',    label: 'Detail',     min: 1,   max: 8,   step: 1,    default: 4.0, visibleWhen: { uniform: 'noiseType', equal: [0, 1, 4] } },
     { type: 'float', uniform: 'timeSpeed', label: 'Time Speed', min: 0,   max: 5,   step: 0.01, default: 1.0, visibleWhen: { portDisconnected: 'time' } },
     { type: 'float', uniform: 'seed',      label: 'Seed (Pan)', min: -100, max: 100, step: 0.01, default: 0.0, visibleWhen: { portDisconnected: 'seed' } },
+    { type: 'float', uniform: 'bevel',     label: 'Bevel',      min: 0,    max: 1,   step: 0.01, default: 0.0 },
   ],
-  defaults: { noiseType: 0, scale: 3.0, detail: 4.0, timeSpeed: 1.0, seed: 0.0 },
+  defaults: { noiseType: 0, scale: 3.0, detail: 4.0, timeSpeed: 1.0, seed: 0.0, bevel: 0.0 },
 }
 
 const shaderGradient: NodeDefinition = {

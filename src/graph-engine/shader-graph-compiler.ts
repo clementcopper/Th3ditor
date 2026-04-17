@@ -437,6 +437,7 @@ export function compileShaderGraph(
           return `_sg_fbm3(${p}, int(${detailU}))`
         }
 
+        makeFloatUniform(node, 'bevel', i)  // registered here; only used in displacement vertex path
         bodyLines.push(`float ${outVar} = ${mkNoise(p3)};`)
 
         nodeVar.set(id, outVar)
@@ -761,9 +762,34 @@ export function compileShaderGraph(
             : noiseType === 2 ? `_sg_voronoi3(${p3})`
             : noiseType === 1 ? `_sg_ridged3(${p3}, int(${detailU}))`
             : `_sg_fbm3(${p3}, int(${detailU}))`
-          vBody.push(`float ${v} = ${makeExpr(p3Body)};`)
-          vBodyFunc.push(`float ${v} = ${makeExpr(p3Func)};`)
-          vBodyUvFunc.push(`float ${v} = ${makeExpr(p3UvFunc)};`)
+          const bevelU = `_u${i}_bevel`
+          // 1-octave version for bevel neighbour sampling — 4× cheaper, sufficient for fold detection.
+          const makeExprLo = (p3: string) => noiseType === 4 ? `_sg_curl3(${p3}, 1)`
+            : noiseType === 3 ? `_sg_worley3(${p3})`
+            : noiseType === 2 ? `_sg_voronoi3(${p3})`
+            : noiseType === 1 ? `_sg_ridged3(${p3}, 1)`
+            : `_sg_fbm3(${p3}, 1)`
+          // Deviation-based bevel: ridge tips deviate above local avg → blend toward avg.
+          // Wrapped in GLSL if(bevel>0) so all 7 extra samples are skipped when bevel=0.
+          const pushBevel = (arr: string[], pv: string, p3expr: string) => {
+            arr.push(`vec3 ${pv} = ${p3expr};`)
+            arr.push(`float ${v} = ${makeExpr(pv)};`)
+            arr.push(`if (${bevelU} > 0.001) {`)
+            arr.push(`  float _vc_lo_${i} = ${makeExprLo(pv)};`)
+            arr.push(`  float _be0_${i} = ${makeExprLo(`${pv}+vec3(0.15,0.,0.)`)};`)
+            arr.push(`  float _be1_${i} = ${makeExprLo(`${pv}-vec3(0.15,0.,0.)`)};`)
+            arr.push(`  float _be2_${i} = ${makeExprLo(`${pv}+vec3(0.,0.15,0.)`)};`)
+            arr.push(`  float _be3_${i} = ${makeExprLo(`${pv}-vec3(0.,0.15,0.)`)};`)
+            arr.push(`  float _be4_${i} = ${makeExprLo(`${pv}+vec3(0.,0.,0.15)`)};`)
+            arr.push(`  float _be5_${i} = ${makeExprLo(`${pv}-vec3(0.,0.,0.15)`)};`)
+            arr.push(`  float _bavg_${i} = (_be0_${i}+_be1_${i}+_be2_${i}+_be3_${i}+_be4_${i}+_be5_${i})/6.0;`)
+            arr.push(`  float _bdev_${i} = abs(_vc_lo_${i} - _bavg_${i});`)
+            arr.push(`  ${v} = mix(${v}, _bavg_${i}, clamp(_bdev_${i}*5.0,0.0,1.0)*${bevelU});`)
+            arr.push(`}`)
+          }
+          pushBevel(vBody, `_p3b_${i}`, p3Body)
+          pushBevel(vBodyFunc, `_p3f_${i}`, p3Func)
+          pushBevel(vBodyUvFunc, `_p3u_${i}`, p3UvFunc)
           vVar.set(id, v); break
         }
         case 'shader/math': {

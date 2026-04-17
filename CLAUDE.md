@@ -108,6 +108,11 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Panel collapse buttons (`BorderCollapseBtn`): inside panel at edge nearest border, NOT inside `PanelResizeHandle` — avoids drag/click conflict.
 - `border-radius: 0 !important` on `*` overrides inline styles — use named CSS class with `!important` for radius exceptions (e.g. `.panel-collapse-btn-h/v`).
 - CSS radius exceptions defined via `--radius-panel-btn` in `@theme` block (`index.css`).
+- Displacement fold-bevel: deviation-based (abs(center−avg6)) correctly targets ridge tips; gradient-based FAILS (gradient=0 at local max).
+- Bevel neighbour sampling: eps=0.15 in noise-space (post-scale), 6 samples (±x±y±z), 1-octave FBM sufficient for detection.
+- GLSL `if (uniform > threshold)` in vertex shader: valid zero-cost branch when uniform=0 — all warps take same path.
+- Quad-Cylinder: triangle-fan caps need correct CCW winding: top `(center, ring[i+1], ring[i])`, bottom `(center, ring[i], ring[i+1])`.
+- Quad-Capsule: `L = length/radius`, `totalYSegs = 2*capSegs + round(capSegs*L)` — both hemisphere/body transforms equal at y=±L/2.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.

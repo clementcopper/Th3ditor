@@ -11,7 +11,7 @@ const DEG2RAD = Math.PI / 180
  * Raw THREE.PerspectiveCamera — no drei, no React props, zero reconciler interference.
  * ALL camera state (position, quaternion, fov) is set imperatively in a single useFrame.
  */
-function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | null> }) {
+function RawCamera() {
   const set = useThree((s) => s.set)
   const size = useThree((s) => s.size)
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
@@ -29,7 +29,7 @@ function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | nu
     const cam = new THREE.PerspectiveCamera(45, size.width / size.height, 0.1, 1000)
     camRef.current = cam
     set({ camera: cam })
-    return () => { cam.dispose?.() }
+    return () => {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -40,10 +40,6 @@ function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | nu
       camRef.current.updateProjectionMatrix()
     }
   }, [size])
-
-  // DEBUG refs
-  const frameRef = useRef(0)
-  const prevQw = useRef(0)
 
   useFrame(() => {
     const cam = camRef.current
@@ -127,28 +123,6 @@ function RawCamera({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | nu
       )
     }
 
-    // --- DEBUG HUD ---
-    frameRef.current++
-    if (frameRef.current % 6 === 0 && debugRef.current) {
-      const t = camData.pathProgress ?? 0
-      const qw = cam.quaternion.w
-      const dqw = qw - prevQw.current
-      prevQw.current = qw
-      let dbg =
-        `t: ${t.toFixed(3)}\n` +
-        `pos: ${cam.position.x.toFixed(2)}, ${cam.position.y.toFixed(2)}, ${cam.position.z.toFixed(2)}\n` +
-        `quat: ${cam.quaternion.x.toFixed(3)}, ${cam.quaternion.y.toFixed(3)}, ${cam.quaternion.z.toFixed(3)}, ${cam.quaternion.w.toFixed(3)}\n` +
-        `Δqw: ${dqw.toFixed(4)}`
-      if (hasPath && hasLookAhead) {
-        const path = scene.paths.find((p) => p.id === camData.pathNodeId)
-        if (path) {
-          const tan = evaluatePathTangent(path, t)
-          dbg += `\ntan: ${tan[0].toFixed(3)}, ${tan[1].toFixed(3)}, ${tan[2].toFixed(3)}`
-          dbg += `\nup: ${_up.x.toFixed(3)}, ${_up.y.toFixed(3)}, ${_up.z.toFixed(3)}`
-        }
-      }
-      debugRef.current.textContent = dbg
-    }
   })
 
   return null
@@ -161,10 +135,10 @@ function CameraBackground() {
   return <color attach="background" args={[bgColor]} />
 }
 
-function CameraViewContents({ debugRef }: { debugRef: React.RefObject<HTMLPreElement | null> }) {
+function CameraViewContents() {
   return (
     <>
-      <RawCamera debugRef={debugRef} />
+      <RawCamera />
       <SceneRenderer />
     </>
   )
@@ -172,7 +146,6 @@ function CameraViewContents({ debugRef }: { debugRef: React.RefObject<HTMLPreEle
 
 export function CameraView() {
   const hasCamera = useSceneStore((s) => !!s.scene.camera || !!s.scene.backgroundShader)
-  const debugRef = useRef<HTMLPreElement>(null)
 
   return (
     <div className="w-full h-full relative" style={{ background: 'oklch(0.16 0.008 48)' }}>
@@ -181,18 +154,9 @@ export function CameraView() {
           <span className="text-xs text-text-muted">No Camera Node</span>
         </div>
       )}
-      {/* DEBUG overlay — remove after debugging */}
-      <pre
-        ref={debugRef}
-        className="absolute top-2 right-2 z-50 pointer-events-none"
-        style={{
-          background: 'rgba(0,0,0,0.85)', color: '#0f0', padding: '6px 10px',
-          fontSize: 11, fontFamily: 'monospace', lineHeight: 1.4, whiteSpace: 'pre',
-        }}
-      />
       <Canvas shadows="soft" gl={{ antialias: true }}>
         <CameraBackground />
-        <CameraViewContents debugRef={debugRef} />
+        <CameraViewContents />
       </Canvas>
     </div>
   )

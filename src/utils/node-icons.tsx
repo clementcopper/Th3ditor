@@ -5,7 +5,8 @@ import {
 } from '@phosphor-icons/react'
 import type { NodeDefinition } from '../types/node-graph'
 
-export type PhosphorIcon = React.ComponentType<{ size?: number; weight?: string; color?: string }>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PhosphorIcon = React.ComponentType<{ size?: number; weight?: any; color?: string }>
 
 const CATEGORY_ICON_MAP: Record<NodeDefinition['category'], PhosphorIcon> = {
   geometry:  Shapes,

@@ -18,11 +18,11 @@ export function ToggleControl({ param, value, onChange }: Props) {
               key={label}
               onClick={() => onChange(i === 1)}
               className={`flex-1 h-7 text-xs font-medium transition-colors cursor-pointer ${
-                isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
+                isActive ? '' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
               } ${i > 0 ? 'border-l border-border-default' : ''}`}
               style={isActive ? {
                 color: 'var(--color-accent)',
-                background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
+                background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
               } : {}}
             >
               {label}

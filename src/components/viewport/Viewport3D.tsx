@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
+import * as THREE from 'three'
 import { Play, Pause, Stop } from '@phosphor-icons/react'
 import { SceneRenderer, LiveEvaluator } from './SceneRenderer'
 import { useEditorStore } from '../../store/editor-store'
@@ -275,6 +276,8 @@ function ViewportControlsOverlay({ extra }: { extra?: React.ReactNode }) {
   const setShadingMode = useEditorStore((s) => s.setShadingMode)
   const projectionMode = useEditorStore((s) => s.projectionMode)
   const setProjectionMode = useEditorStore((s) => s.setProjectionMode)
+  const showGrid = useEditorStore((s) => s.showGrid)
+  const setShowGrid = useEditorStore((s) => s.setShowGrid)
   const setGizmoMode = useEditorStore((s) => s.setGizmoMode)
 
   // T / R / S keyboard shortcuts for gizmo mode (skip when typing in inputs)
@@ -293,6 +296,21 @@ function ViewportControlsOverlay({ extra }: { extra?: React.ReactNode }) {
 
   return (
     <>
+      {/* Grid toggle */}
+      <div className="flex items-center border border-border-default" style={{ ...overlayBg, height: 26 }}>
+        <button
+          onClick={() => setShowGrid(!showGrid)}
+          className={`px-2 h-full text-xs font-medium transition-colors cursor-pointer ${
+            showGrid ? '' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
+          }`}
+          style={showGrid ? {
+            color: 'var(--color-accent)',
+            background: 'color-mix(in oklch, var(--color-accent) 12%, transparent)',
+          } : undefined}
+        >
+          Grid
+        </button>
+      </div>
       {/* Shading */}
       <div className="flex items-center border border-border-default" style={{ ...overlayBg, height: 26 }}>
         {(['shaded', 'wireframe'] as const).map((mode) => (
@@ -380,6 +398,7 @@ const STACK_THRESHOLD = 820
 
 export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.ReactNode, hidePlaybar?: boolean } = {}) {
   const projectionMode = useEditorStore((s) => s.projectionMode)
+  const showGrid = useEditorStore((s) => s.showGrid)
   const containerRef = useRef<HTMLDivElement>(null)
   const [stacked, setStacked] = useState(false)
 
@@ -423,18 +442,21 @@ export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.R
           shadow-camera-top={12} shadow-camera-bottom={-12}
         />
 
-        <Grid
-          args={[20, 20]}
-          cellSize={0.5}
-          cellThickness={0.6}
-          cellColor="#4a4540"
-          sectionSize={2}
-          sectionThickness={1.2}
-          sectionColor="#6a6055"
-          fadeDistance={40}
-          fadeStrength={0.3}
-          infiniteGrid
-        />
+        {showGrid && (
+          <Grid
+            args={[20, 20]}
+            cellSize={0.5}
+            cellThickness={0.6}
+            cellColor="#4a4540"
+            sectionSize={2}
+            sectionThickness={1.2}
+            sectionColor="#6a6055"
+            fadeDistance={40}
+            fadeStrength={0.3}
+            infiniteGrid
+            side={THREE.DoubleSide}
+          />
+        )}
 
         <SceneRenderer editorShading isEditorView />
         <LiveEvaluator />

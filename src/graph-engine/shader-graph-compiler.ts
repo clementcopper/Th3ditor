@@ -14,6 +14,17 @@ export interface CompiledShaderGraph {
   uniformNodeMap: Record<string, string>  // "nodeId:propName" → uniformKey
   /** CPU float nodes wired to sfloat inputs: uniformKey → "sourceNodeId:sourceHandle" */
   bridgeUniforms: Record<string, string>
+  /** Noise lib + uniform declarations for fragment shader injection (PBR mode) */
+  fragmentPreamble?: string
+  /** All intermediate variable computations (without gl_FragColor) for injection into Three.js main() */
+  fragmentPBRBody?: string
+  /** Per-channel GLSL expressions referencing variables from fragmentPBRBody */
+  fragmentPBR?: {
+    roughness?: string  // float expression
+    metalness?: string  // float expression
+    emissive?: string   // vec3 expression
+    albedo?: string     // vec3 expression (shader-graph color used as PBR albedo)
+  }
 }
 
 const SHADER_NODE_TYPES = new Set([
@@ -23,23 +34,6 @@ const SHADER_NODE_TYPES = new Set([
   'shader/output',
 ])
 
-// Output GLSL type per node type (undefined for terminals like shader/output)
-const NODE_OUTPUT_GLSL_TYPE: Record<string, string> = {
-  'shader/uv':         'vec2',
-  'shader/time':       'float',
-  'shader/mouse':      'vec2',
-  'shader/position':   'vec3',
-  'shader/noise':      'float',
-  'shader/gradient':   'vec3',
-  'shader/mix':        'vec3',
-  'shader/math':       'float',
-  'shader/color':      'vec3',
-  'shader/number':     'float',
-  'shader/band':       'float',
-  'shader/component':  'float',
-  'shader/colorramp':  'vec3',
-  'shader/domainwarp': 'vec3',
-}
 
 const NOISE_PREAMBLE = `
 // --- Shader Graph Noise Library ---
@@ -211,16 +205,7 @@ function colorToVec3(val: unknown): [number, number, number] {
   return [1, 1, 1]
 }
 
-// Format a float for GLSL (always has decimal point)
-function fmtFloat(v: number): string {
-  const s = v.toFixed(6).replace(/\.?0+$/, '')
-  return s.includes('.') ? s : s + '.0'
-}
 
-// Format a vec3 for GLSL
-function fmtVec3(v: [number, number, number]): string {
-  return `vec3(${fmtFloat(v[0])},${fmtFloat(v[1])},${fmtFloat(v[2])})`
-}
 
 export function compileShaderGraph(
   outputNodeId: string,
@@ -253,6 +238,7 @@ export function compileShaderGraph(
   const uniformNodeMap: Record<string, string> = {}
   const bridgeUniforms: Record<string, string> = {}  // uniformKey → "srcNodeId:srcHandle"
   let needsNoise = false
+  const outputPBR: NonNullable<CompiledShaderGraph['fragmentPBR']> = {}
 
   // Helper: create a uniform for a float property
   function makeFloatUniform(node: GraphNode, propName: string, idx: number): string {
@@ -627,6 +613,16 @@ export function compileShaderGraph(
         const colorExpr = colorIn ?? makeVec3Uniform(node, 'defaultColor', i)
         const alphaIn = resolvedInput(id, 'alpha')
         const alphaExpr = alphaIn ?? makeFloatUniform(node, 'defaultAlpha', i)
+
+        // Capture PBR channel expressions (only when port is connected)
+        const roughnessIn = resolvedInput(id, 'roughness')
+        const metalnessIn = resolvedInput(id, 'metalness')
+        const emissiveIn  = resolvedInput(id, 'emissive')
+        if (roughnessIn) outputPBR.roughness = roughnessIn
+        if (metalnessIn) outputPBR.metalness = metalnessIn
+        if (emissiveIn)  outputPBR.emissive  = emissiveIn
+        if (colorIn)     outputPBR.albedo    = colorIn
+
         bodyLines.push(`gl_FragColor = vec4(${colorExpr}, ${alphaExpr});`)
         break
       }
@@ -654,6 +650,20 @@ export function compileShaderGraph(
 
   const fragmentShader = parts.join('\n')
 
+  // Build fragment PBR fields:
+  // fragmentPBRBody = all body lines except the final gl_FragColor (for injection into Three.js main)
+  // fragmentPreamble = noise lib + uniform declarations (injected before Three.js fragment void main)
+  const pbrBodyLines = bodyLines.slice(0, -1)  // drop gl_FragColor line
+  // Fragment preamble keeps vPosition varying (not in Three.js fragment shader) but drops vUv (Three.js provides it)
+  const fragmentPBRDecls = uniformDecls.filter((d) => d !== 'varying vec2 vUv;')
+  const fragPreambleParts: string[] = []
+  if (needsNoise) fragPreambleParts.push(NOISE_PREAMBLE)
+  if (fragmentPBRDecls.length > 0) fragPreambleParts.push(fragmentPBRDecls.join('\n'))
+  const fragmentPreamble = fragPreambleParts.length > 0 ? fragPreambleParts.join('\n') : undefined
+  const fragmentPBRBody = pbrBodyLines.length > 0 ? pbrBodyLines.map(l => `  ${l}`).join('\n') : undefined
+  const fragmentPBR = Object.keys(outputPBR).length > 0 ? outputPBR : undefined
+
+
   // === Displacement vertex shader ===
   // Compile a custom vertex shader when the displacement input is connected.
   // Nodes are recompiled in "vertex context": shader/uv → uv attribute, shader/position → position attribute.
@@ -680,8 +690,9 @@ export function compileShaderGraph(
 
     // Use same topo order as fragment pass (consistent variable names)
     const dispSorted = sorted.filter((id) => dispChain.has(id))
-    const vBody: string[] = []      // inline body (position attribute)
-    const vBodyFunc: string[] = []  // function body (_sg_p parameter — for finite differences)
+    const vBody: string[] = []        // inline body (uses _sg_dispUv for UV)
+    const vBodyFunc: string[] = []    // function body (_sg_p param — position finite differences)
+    const vBodyUvFunc: string[] = []  // function body (_sg_uvp param — UV finite differences)
     const vVar = new Map<string, string>()
     const vPortVar = new Map<string, string>()  // "nodeId:portHandle" → varName (multi-output)
     let positionNodeUsed = false
@@ -706,26 +717,29 @@ export function compileShaderGraph(
 
       switch (node.type) {
         case 'shader/uv': {
-          const line = `vec2 ${v} = uv;`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(`vec2 ${v} = _sg_dispUv;`)       // pole-safe UV for inline body
+          vBodyFunc.push(`vec2 ${v} = uv;`)            // raw uv for position-based _sg_disp
+          vBodyUvFunc.push(`vec2 ${v} = _sg_uvp;`)     // UV param for _sg_disp_uv
+          vVar.set(id, v); break
         }
         case 'shader/position': {
           positionNodeUsed = true
           vBody.push(`vec3 ${v} = position;`)
-          vBodyFunc.push(`vec3 ${v} = _sg_p;`)   // parameterised for finite differences
+          vBodyFunc.push(`vec3 ${v} = _sg_p;`)         // parameterised for position finite differences
+          vBodyUvFunc.push(`vec3 ${v} = position;`)    // position accessible as attribute in function
           vVar.set(id, v); break
         }
         case 'shader/mouse': {
           const line = `vec2 ${v} = uMouse;`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(line); vBodyFunc.push(line); vBodyUvFunc.push(line); vVar.set(id, v); break
         }
         case 'shader/time': {
           const line = `float ${v} = uTime * _u${i}_speed;`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(line); vBodyFunc.push(line); vBodyUvFunc.push(line); vVar.set(id, v); break
         }
         case 'shader/number': {
           const line = `float ${v} = _u${i}_value;`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(line); vBodyFunc.push(line); vBodyUvFunc.push(line); vVar.set(id, v); break
         }
         case 'shader/noise': {
           const scaleExpr = vResolve(id, 'scale') ?? `_u${i}_scale`
@@ -734,16 +748,28 @@ export function compileShaderGraph(
           const detailU   = `_u${i}_detail`
           const noiseType = Number(props.noiseType ?? 0)
           const posIn = vResolve(id, 'position')
-          const p3 = posIn
+          const uvIn = vResolve(id, 'uv')
+          // vBody: use _sg_dispUv fallback (pole-safe UV)
+          const p3Body = posIn
             ? `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
-            : `vec3(${vResolve(id, 'uv') ?? 'uv'} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
-          const expr = noiseType === 4 ? `_sg_curl3(${p3}, int(${detailU}))`
+            : `vec3(${uvIn ?? '_sg_dispUv'} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
+          // vBodyFunc: raw uv (position-based _sg_disp helper only)
+          const p3Func = posIn
+            ? `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
+            : `vec3(${uvIn ?? 'uv'} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
+          // vBodyUvFunc: _sg_uvp parameter (UV finite difference _sg_disp_uv helper)
+          const p3UvFunc = posIn
+            ? `${posIn} * ${scaleExpr} + vec3(${seedExpr}, ${seedExpr}, ${timeExpr})`
+            : `vec3(${uvIn ?? '_sg_uvp'} * ${scaleExpr} + vec2(${seedExpr}), ${timeExpr})`
+          const makeExpr = (p3: string) => noiseType === 4 ? `_sg_curl3(${p3}, int(${detailU}))`
             : noiseType === 3 ? `_sg_worley3(${p3})`
             : noiseType === 2 ? `_sg_voronoi3(${p3})`
             : noiseType === 1 ? `_sg_ridged3(${p3}, int(${detailU}))`
             : `_sg_fbm3(${p3}, int(${detailU}))`
-          const line = `float ${v} = ${expr};`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(`float ${v} = ${makeExpr(p3Body)};`)
+          vBodyFunc.push(`float ${v} = ${makeExpr(p3Func)};`)
+          vBodyUvFunc.push(`float ${v} = ${makeExpr(p3UvFunc)};`)
+          vVar.set(id, v); break
         }
         case 'shader/math': {
           const op = Number(props.op ?? 0)
@@ -764,7 +790,7 @@ export function compileShaderGraph(
             expr = op === 4 ? `cos(${aExpr})` : op === 5 ? `abs(${aExpr})` : op === 6 ? `clamp(${aExpr}, 0.0, 1.0)` : op === 8 ? `fract(${aExpr})` : `sin(${aExpr})`
           }
           const line = `float ${v} = ${expr};`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(line); vBodyFunc.push(line); vBodyUvFunc.push(line); vVar.set(id, v); break
         }
         case 'shader/band': {
           const tExpr = vResolve(id, 't') ?? '0.0'
@@ -777,7 +803,7 @@ export function compileShaderGraph(
             `float _band_sw${i} = _band_hw${i} * (1.0 - ${sharpU});`,
             `float ${v} = 1.0 - smoothstep(_band_hw${i} - _band_sw${i}, _band_hw${i} + _band_sw${i}, _band_d${i});`,
           ]
-          for (const l of lines) { vBody.push(l); vBodyFunc.push(l) }
+          for (const l of lines) { vBody.push(l); vBodyFunc.push(l); vBodyUvFunc.push(l) }
           vVar.set(id, v); break
         }
         case 'shader/component': {
@@ -786,7 +812,7 @@ export function compileShaderGraph(
           const comp = Number(props.component ?? 1)
           const swizzle = comp === 0 ? 'x' : comp === 2 ? 'z' : 'y'
           const line = `float ${v} = ${vecExpr}.${swizzle};`
-          vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
+          vBody.push(line); vBodyFunc.push(line); vBodyUvFunc.push(line); vVar.set(id, v); break
         }
         case 'shader/domainwarp': {
           const posIn = vResolve(id, 'position')
@@ -801,7 +827,7 @@ export function compileShaderGraph(
           const lineZ = `float _dw_qz${i} = _sg_fbm3(_dw_p${i} + vec3(3.7, 9.2, 8.1), int(${octavesU}));`
           const lineW = `vec3 ${v} = ${posExpr} + vec3(_dw_qx${i}, _dw_qy${i}, _dw_qz${i}) * ${strengthExpr};`
           for (const l of [lineP, lineX, lineY, lineZ, lineW]) {
-            vBody.push(l); vBodyFunc.push(l)
+            vBody.push(l); vBodyFunc.push(l); vBodyUvFunc.push(l)
           }
           vVar.set(id, v); break
         }
@@ -820,7 +846,7 @@ export function compileShaderGraph(
             const tExpr = tIn ?? `_u${i}_t`
             const l1 = `vec3 ${cVar} = mix(${aExpr}, ${bExpr}, clamp(${tExpr}, 0.0, 1.0));`
             const l2 = `float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`
-            vBody.push(l1, l2); vBodyFunc.push(l1, l2)
+            vBody.push(l1, l2); vBodyFunc.push(l1, l2); vBodyUvFunc.push(l1, l2)
           } else if (colorMode === 2) {
             const tIn = vResolve(id, 't')
             const tExpr = tIn ?? `_u${i}_t`
@@ -843,7 +869,7 @@ export function compileShaderGraph(
               lines.push(`${cVar} = mix(${cVar}, ${nextVar}, step(${posUniforms[j]}, ${tVar}));`)
             }
             lines.push(`float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
-            for (const l of lines) { vBody.push(l); vBodyFunc.push(l) }
+            for (const l of lines) { vBody.push(l); vBodyFunc.push(l); vBodyUvFunc.push(l) }
           } else {
             // Mode 0: constant color
             const colorU = `_u${i}_color`
@@ -855,7 +881,7 @@ export function compileShaderGraph(
             const bExpr = bIn ?? `${colorU}.b`
             const l1 = `vec3 ${cVar} = vec3(${rExpr}, ${gExpr}, ${bExpr});`
             const l2 = `float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`
-            vBody.push(l1, l2); vBodyFunc.push(l1, l2)
+            vBody.push(l1, l2); vBodyFunc.push(l1, l2); vBodyUvFunc.push(l1, l2)
           }
 
           vPortVar.set(`${id}:color`, cVar)
@@ -887,11 +913,12 @@ export function compileShaderGraph(
     vParts.push('\nvoid main() {')
     vParts.push('  vUv = uv;')
     vParts.push('  vPosition = position;')
+    // Displacement UV derived from object-space position (spherical mapping).
+    // Avoids UV attribute singularity at sphere poles and requires no USE_UV define.
+    vParts.push('  vec3 _sg_np = normalize(position);')
+    vParts.push('  vec2 _sg_dispUv = vec2(atan(_sg_np.z, _sg_np.x) * 0.15915494 + 0.5, acos(clamp(_sg_np.y, -1.0, 1.0)) * 0.31830989);')
     for (const l of vBody) vParts.push(`  ${l}`)
-    vParts.push(`  vec3 _sg_wNu = normalize(mat3(modelMatrix) * normal);`)
-    vParts.push(`  vec3 _sg_vDu = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`)
-    vParts.push(`  float _sg_fadeu = smoothstep(0.0, 0.15, abs(dot(_sg_wNu, _sg_vDu)));`)
-    vParts.push(`  vec3 dispPos = position + normal * ${dispValueExpr} * ${dscaleU} * _sg_fadeu;`)
+    vParts.push(`  vec3 dispPos = position + normal * ${dispValueExpr} * ${dscaleU};`)
     vParts.push('  gl_Position = projectionMatrix * modelViewMatrix * vec4(dispPos, 1.0);')
     vParts.push('}')
     vertexShader = vParts.join('\n')
@@ -910,6 +937,14 @@ export function compileShaderGraph(
         `  return ${dispValueExpr};`,
         `}`,
       ].join('\n'))
+    } else {
+      // Generate _sg_disp_uv(vec2 _sg_uvp) helper — UV-parameterized for finite difference normals
+      preambleParts.push([
+        `float _sg_disp_uv(vec2 _sg_uvp) {`,
+        ...vBodyUvFunc.map((l) => `  ${l}`),
+        `  return ${dispValueExpr};`,
+        `}`,
+      ].join('\n'))
     }
     vertexPreamble = preambleParts.join('\n')
 
@@ -924,42 +959,52 @@ export function compileShaderGraph(
       // fade back to geometric. Prevents jagged triangle silhouettes at mesh boundaries.
       vertexBodyForPBR = [
         `  vec3 _sg_N = normalize(normal);`,
-        // Build tangent frame — no tangent attribute required
-        `  vec3 _sg_up = (abs(_sg_N.y) < 0.999) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);`,
-        `  vec3 _sg_T = normalize(cross(_sg_up, _sg_N));`,
-        `  vec3 _sg_B = cross(_sg_N, _sg_T);`,
-        // Sample displacement at center + two surface-aligned neighbors
+        // Axis-aligned 3D gradient — no tangent frame, no pole discontinuity.
+        // Sample disp in X/Y/Z, project gradient to tangential plane, tilt normal.
         `  float _sg_eps = 0.15;`,
         `  float _sg_dC = _sg_disp(position);`,
-        `  float _sg_dT = _sg_disp(position + _sg_T * _sg_eps);`,
-        `  float _sg_dB = _sg_disp(position + _sg_B * _sg_eps);`,
-        // Displaced tangent vectors: surface step + normal displacement delta
-        `  vec3 _sg_dpT = _sg_T * _sg_eps + _sg_N * (_sg_dT - _sg_dC) * ${dscaleU};`,
-        `  vec3 _sg_dpB = _sg_B * _sg_eps + _sg_N * (_sg_dB - _sg_dC) * ${dscaleU};`,
-        // Normal = cross product of displaced tangents → exact displaced surface normal
-        `  vec3 _sg_nraw = cross(_sg_dpT, _sg_dpB);`,
-        `  vec3 _sg_norm = normalize(_sg_nraw * sign(dot(_sg_nraw, _sg_N)));`,
-        // Silhouette fade: blend to geometric normal at view-perpendicular edges
-        `  vec3 _sg_wN = normalize(mat3(modelMatrix) * _sg_N);`,
-        `  vec3 _sg_vD = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`,
-        `  float _sg_fade = smoothstep(0.0, 0.8, abs(dot(_sg_wN, _sg_vD)));`,
-        `  _sg_norm = normalize(mix(_sg_N, _sg_norm, _sg_fade));`,
+        `  float _sg_gx = (_sg_disp(position + vec3(_sg_eps, 0.0, 0.0)) - _sg_dC) / _sg_eps;`,
+        `  float _sg_gy = (_sg_disp(position + vec3(0.0, _sg_eps, 0.0)) - _sg_dC) / _sg_eps;`,
+        `  float _sg_gz = (_sg_disp(position + vec3(0.0, 0.0, _sg_eps)) - _sg_dC) / _sg_eps;`,
+        `  vec3 _sg_grad3 = vec3(_sg_gx, _sg_gy, _sg_gz);`,
+        `  vec3 _sg_gradTan = _sg_grad3 - dot(_sg_grad3, _sg_N) * _sg_N;`,
+        `  vec3 _sg_norm = normalize(_sg_N - _sg_gradTan * ${dscaleU});`,
         `  #ifndef FLAT_SHADED`,
         `    vNormal = normalize(normalMatrix * _sg_norm);`,
         `  #endif`,
-        `  transformed += _sg_N * _sg_dC * ${dscaleU} * _sg_fade;`,
+        `  transformed += _sg_N * _sg_dC * ${dscaleU};`,
       ].join('\n')
     } else {
-      // UV-based or simple displacement — silhouette fade only (no normal correction)
+      // UV-based displacement — full normal correction via UV finite differences.
+      // _sg_disp_uv(vec2) is generated in vertexPreamble for this purpose.
+      // Pole-safe UV: derived from object-space position (spherical mapping) to avoid
+      // UV attribute singularity at sphere poles; no USE_UV dependency.
       vertexBodyForPBR = [
+        `  vec3 _sg_np2 = normalize(position);`,
+        `  vec2 _sg_dispUv = vec2(atan(_sg_np2.z, _sg_np2.x) * 0.15915494 + 0.5, acos(clamp(_sg_np2.y, -1.0, 1.0)) * 0.31830989);`,
         ...vBody.map((l) => `  ${l}`),
-        `  vec3 _sg_wN2 = normalize(mat3(modelMatrix) * normal);`,
-        `  vec3 _sg_vD2 = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`,
-        `  float _sg_fade2 = smoothstep(0.0, 0.15, abs(dot(_sg_wN2, _sg_vD2)));`,
-        `  transformed += normal * ${dispValueExpr} * ${dscaleU} * _sg_fade2;`,
+        // Continuous tangent frame — same pole-safe approach as position-based path.
+        `  vec3 _sg_N2 = normalize(normal);`,
+        `  float _sg_sinLat2 = length(vec2(_sg_N2.x, _sg_N2.z));`,
+        `  vec3 _sg_T2 = (_sg_sinLat2 > 0.001) ? normalize(vec3(-_sg_N2.z, 0.0, _sg_N2.x)) : vec3(1.0, 0.0, 0.0);`,
+        `  vec3 _sg_B2 = cross(_sg_N2, _sg_T2);`,
+        // UV finite differences — sample displacement at centre + two UV-space neighbours
+        `  float _sg_epsUv = 0.02;`,
+        `  float _sg_dC2 = ${dispValueExpr};`,  // reuse value already computed by vBody
+        `  float _sg_dU2 = _sg_disp_uv(_sg_dispUv + vec2(_sg_epsUv, 0.0));`,
+        `  float _sg_dV2 = _sg_disp_uv(_sg_dispUv + vec2(0.0, _sg_epsUv));`,
+        // Displaced tangent vectors → exact geometric normal of the displaced patch
+        `  vec3 _sg_dpT2 = _sg_T2 * _sg_epsUv + _sg_N2 * (_sg_dU2 - _sg_dC2) * ${dscaleU};`,
+        `  vec3 _sg_dpB2 = _sg_B2 * _sg_epsUv + _sg_N2 * (_sg_dV2 - _sg_dC2) * ${dscaleU};`,
+        `  vec3 _sg_nraw2 = cross(_sg_dpT2, _sg_dpB2);`,
+        `  vec3 _sg_norm2 = normalize(_sg_nraw2 * sign(dot(_sg_nraw2, _sg_N2)));`,
+        `  #ifndef FLAT_SHADED`,
+        `    vNormal = normalize(normalMatrix * _sg_norm2);`,
+        `  #endif`,
+        `  transformed += _sg_N2 * _sg_dC2 * ${dscaleU};`,
       ].join('\n')
     }
   }
 
-  return { fragmentShader, vertexShader, vertexPreamble, vertexBodyForPBR, uniforms, uniformNodeMap, bridgeUniforms }
+  return { fragmentShader, vertexShader, vertexPreamble, vertexBodyForPBR, uniforms, uniformNodeMap, bridgeUniforms, fragmentPreamble, fragmentPBRBody, fragmentPBR }
 }

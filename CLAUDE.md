@@ -87,9 +87,10 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
 - SelectControl stores values as strings ('0','1','2') — always use `Number(props.X ?? 0)` not `(props.X as number) ?? 0` for select properties.
 - Three.js `customProgramCacheKey` must include `vertexPreamble` + `vertexBodyForPBR` — key on body alone causes stale shader reuse when only preamble changes (e.g. noise type switch).
-- PBR displacement normals: tangent-frame cross product `cross(dpT, dpB)` — build T/B from normal on-the-fly, sample disp along surface, gives exact displaced face normal. eps=0.08, silhouette fade smoothstep(0,0.5).
+- PBR displacement normals (position-based): 3-axis gradient sampling (X/Y/Z offsets) + project to tangential plane → `normalize(N - gradTan * scale)`. No tangent frame, no pole artifacts. DO NOT use tangent-frame cross product — creates ring at `abs(N.y)=0.999` + pinch at exact poles.
+- Silhouette fade (`smoothstep(0,0.8,|N·V|)`) on displacement/normals creates circles at poles (pole normal ⊥ view → fade≈0). Removed entirely — accept minor silhouette jaggies instead.
 - Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
-- Vertex displacement needs geo density ≥ noise feature size ×5 — sphere max 512 segs; icosphere detail 200 equivalent. Silhouette jaggies are a hard WebGL limit (no tessellation) — MSAA + fade is the best achievable.
+- Vertex displacement needs geo density ≥ noise feature size ×5 — sphere max 512 segs; icosphere detail 200 equivalent. Silhouette jaggies are a hard WebGL limit (no tessellation).
 - `shader/colorramp` stops: all positions + colors as uniforms → live update without recompile; recompile only on stop-count change.
 - NodeRenderer fallback label: if no `mode` select prop, first select prop appends to label ("Shader Math: Fract").
 - Domain warp IQ offsets: `(0,0,0)`, `(5.2,1.3,2.8)`, `(3.7,9.2,8.1)` for x/y/z fbm samples.

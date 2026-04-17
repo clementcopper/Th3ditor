@@ -151,7 +151,7 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
     if (!reachesOutput) continue
 
     const props = getProps(gltfNode)
-    const glbFile = props.glbFile as { name: string; dataUrl: string } | '' | undefined
+    const glbFile = props.glbFile as { name: string; dataUrl: string; extraFiles?: { name: string; dataUrl: string }[] } | '' | undefined
 
     gltfObjects.push({
       id: gltfNode.id,

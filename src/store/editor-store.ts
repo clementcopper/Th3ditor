@@ -13,12 +13,14 @@ interface EditorState {
   projectionMode: ProjectionMode
   gizmoMode: GizmoMode
   snapToView: SnapView
+  showGrid: boolean
   setSelectedNode: (id: string | null) => void
   setViewMode: (mode: ViewMode) => void
   setShadingMode: (mode: ShadingMode) => void
   setProjectionMode: (mode: ProjectionMode) => void
   setGizmoMode: (mode: GizmoMode) => void
   setSnapToView: (view: SnapView) => void
+  setShowGrid: (v: boolean) => void
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -28,10 +30,12 @@ export const useEditorStore = create<EditorState>((set) => ({
   projectionMode: 'perspective',
   gizmoMode: 'translate',
   snapToView: null,
+  showGrid: true,
   setSelectedNode: (id) => set({ selectedNodeId: id }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setShadingMode: (mode) => set({ shadingMode: mode }),
   setProjectionMode: (mode) => set({ projectionMode: mode }),
   setGizmoMode: (mode) => set({ gizmoMode: mode }),
   setSnapToView: (view) => set({ snapToView: view }),
+  setShowGrid: (v) => set({ showGrid: v }),
 }))

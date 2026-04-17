@@ -206,6 +206,9 @@ function canvasToNormalMap(src: HTMLCanvasElement, strength: number = 3): THREE.
   return tex
 }
 
+/** Single source of truth for the selection highlight color used by all viewport icons and wireframes. */
+const SELECTION_COLOR = '#ff8800'
+
 // Uniform declarations prepended to every custom shader so users can use them without boilerplate
 const UNIFORM_PREAMBLE = `\
 uniform float uTime;
@@ -304,6 +307,82 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`
 
+/**
+ * Flat wireframe material that applies the shader graph displacement vertex shader.
+ * Used for both viewport wireframe mode and selection highlight overlay.
+ * `depthTest=false` for overlay; `depthTest=true` for viewport wireframe.
+ */
+function ShaderDisplacementWireframe({
+  sg, color, depthTest = true,
+}: {
+  sg: NonNullable<CompiledMesh['shaderGraph']>
+  color: THREE.ColorRepresentation
+  depthTest?: boolean
+}) {
+  const mat = useMemo(() => {
+    const unis: Record<string, { value: unknown }> = {
+      uTime:        { value: 0 },
+      uMouse:       { value: new THREE.Vector2() },
+      uResolution:  { value: new THREE.Vector2() },
+      uWireColor:   { value: new THREE.Color(color) },
+    }
+    for (const [key, entry] of Object.entries(sg.uniforms)) {
+      const v = entry.value
+      unis[key] = { value: Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v }
+    }
+    return new THREE.ShaderMaterial({
+      vertexShader: sg.vertexShader!,
+      fragmentShader: 'uniform vec3 uWireColor; void main() { gl_FragColor = vec4(uWireColor, 1.0); }',
+      uniforms: unis,
+      wireframe: true,
+      depthTest,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sg.vertexShader, depthTest])
+
+  useEffect(() => {
+    ;(mat.uniforms.uWireColor.value as THREE.Color).set(color)
+  }, [mat, color])
+
+  // Sync property uniforms (slider values like scale, detail, etc.) when they change
+  useEffect(() => {
+    for (const [key, entry] of Object.entries(sg.uniforms)) {
+      if (!mat.uniforms[key]) continue
+      const v = entry.value
+      mat.uniforms[key].value = Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v
+    }
+  }, [sg.uniforms, mat])
+
+  const sgRef = useRef(sg)
+  sgRef.current = sg
+  const bridgeCache = useRef(new Map<string, number>())
+
+  useFrame(({ mouse, viewport }, delta) => {
+    const u = mat.uniforms
+    const animStore = useAnimationStore.getState()
+    u.uTime.value = animStore.elapsed
+    ;(u.uMouse.value as THREE.Vector2).set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
+    ;(u.uResolution.value as THREE.Vector2).set(viewport.width, viewport.height)
+    const bridges = sgRef.current.bridgeUniforms
+    if (bridges && Object.keys(bridges).length > 0) {
+      const { nodes, edges } = useGraphStore.getState()
+      const ctx: EvalContext = {
+        elapsed: animStore.elapsed, delta: animStore.playing ? delta : 0,
+        mouseX: mouse.x, mouseY: mouse.y, screenW: viewport.width, screenH: viewport.height,
+      }
+      bridgeCache.current.clear()
+      for (const [uniformKey, evalKey] of Object.entries(bridges)) {
+        if (!u[uniformKey]) continue
+        const [srcNodeId, srcHandle] = evalKey.split(':')
+        const val = evaluateFloatPort(srcNodeId, srcHandle, nodes, edges, ctx, bridgeCache.current)
+        if (val !== undefined) u[uniformKey].value = val
+      }
+    }
+  })
+
+  return <primitive attach="material" object={mat} />
+}
+
 function MeshShaderGraphMaterial({ sg }: { sg: NonNullable<CompiledMesh['shaderGraph']> }) {
   const mat = useMemo(() => {
     const unis: Record<string, { value: unknown }> = {
@@ -373,7 +452,7 @@ function MeshPBRShaderGraphMaterial({
   sg: NonNullable<CompiledMesh['shaderGraph']>
   mp: Record<string, unknown>
   loadedTextures: Record<string, THREE.Texture>
-  matRef: React.RefObject<THREE.MeshStandardMaterial>
+  matRef: React.RefObject<THREE.MeshStandardMaterial | null>
 }) {
   const sgRef = useRef(sg)
   sgRef.current = sg
@@ -390,16 +469,66 @@ function MeshPBRShaderGraphMaterial({
       opacity: (mp.opacity as number) ?? 1,
       side: [THREE.FrontSide, THREE.BackSide, THREE.DoubleSide][(mp.side as number) ?? 0],
     })
-    if (sg.vertexPreamble && sg.vertexBodyForPBR) {
+    const hasVertexInjection = !!(sg.vertexPreamble && sg.vertexBodyForPBR)
+    // Only inject fragment PBR code when channels are actually connected (avoids vUv reference errors)
+    const hasFragmentInjection = !!sg.fragmentPBR
+    if (hasVertexInjection || hasFragmentInjection) {
       m.onBeforeCompile = (shader) => {
-        // Prepend noise library + uniform declarations
-        shader.vertexShader = sgRef.current.vertexPreamble! + '\n' + shader.vertexShader
-        // Inject displacement after Three.js built-in displacement
-        shader.vertexShader = shader.vertexShader.replace(
-          '#include <displacementmap_vertex>',
-          `#include <displacementmap_vertex>\n${sgRef.current.vertexBodyForPBR!}`,
-        )
-        // Add initial uniform values
+        // --- Vertex shader injection (displacement) ---
+        if (sgRef.current.vertexPreamble && sgRef.current.vertexBodyForPBR) {
+          shader.vertexShader = sgRef.current.vertexPreamble + '\n' + shader.vertexShader
+          shader.vertexShader = shader.vertexShader.replace(
+            '#include <displacementmap_vertex>',
+            `#include <displacementmap_vertex>\n${sgRef.current.vertexBodyForPBR}`,
+          )
+        }
+
+        // --- Fragment shader injection (PBR channels) ---
+        // If the fragment body references vPosition, ensure it's declared + written in vertex shader too
+        if (sgRef.current.fragmentPBRBody?.includes('vPosition')) {
+          shader.vertexShader = 'varying vec3 vPosition;\n' + shader.vertexShader
+          shader.vertexShader = shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>\nvPosition = position;`,
+          )
+        }
+        if (sgRef.current.fragmentPreamble) {
+          shader.fragmentShader = sgRef.current.fragmentPreamble + '\n' + shader.fragmentShader
+        }
+        // Only inject fragment body when PBR channels are connected
+        if (sgRef.current.fragmentPBRBody && sgRef.current.fragmentPBR) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <clipping_planes_fragment>',
+            `#include <clipping_planes_fragment>\n${sgRef.current.fragmentPBRBody}`,
+          )
+        }
+        const pbr = sgRef.current.fragmentPBR
+        if (pbr?.roughness) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            `float roughnessFactor = clamp(${pbr.roughness}, 0.0, 1.0);`,
+          )
+        }
+        if (pbr?.metalness) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <metalnessmap_fragment>',
+            `float metalnessFactor = clamp(${pbr.metalness}, 0.0, 1.0);`,
+          )
+        }
+        if (pbr?.emissive) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <emissivemap_fragment>',
+            `totalEmissiveRadiance += vec3(${pbr.emissive});`,
+          )
+        }
+        if (pbr?.albedo) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <map_fragment>',
+            `diffuseColor.rgb = vec3(${pbr.albedo});`,
+          )
+        }
+
+        // Add initial uniform values (shared between vertex + fragment)
         for (const [key, entry] of Object.entries(sgRef.current.uniforms)) {
           const v = entry.value
           shader.uniforms[key] = { value: Array.isArray(v) && v.length === 3 ? new THREE.Vector3(v[0], v[1], v[2]) : v }
@@ -410,11 +539,18 @@ function MeshPBRShaderGraphMaterial({
         compiledShaderRef.current = shader
       }
       m.needsUpdate = true
-      m.customProgramCacheKey = () => (sg.vertexPreamble ?? '') + '|' + (sg.vertexBodyForPBR ?? '')
+      m.customProgramCacheKey = () => [
+        sg.vertexPreamble ?? '', sg.vertexBodyForPBR ?? '',
+        sg.fragmentPBRBody ?? '',
+        sg.fragmentPBR?.roughness ?? '', sg.fragmentPBR?.metalness ?? '',
+        sg.fragmentPBR?.emissive ?? '', sg.fragmentPBR?.albedo ?? '',
+      ].join('|')
     }
     return m
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sg.vertexBodyForPBR, sg.vertexPreamble])
+  }, [sg.vertexBodyForPBR, sg.vertexPreamble, sg.fragmentPreamble, sg.fragmentPBRBody,
+      sg.fragmentPBR?.roughness, sg.fragmentPBR?.metalness,
+      sg.fragmentPBR?.emissive, sg.fragmentPBR?.albedo])
 
   // Assign matRef so parent can call needsUpdate
   useEffect(() => {
@@ -426,6 +562,7 @@ function MeshPBRShaderGraphMaterial({
     mat.color.set(toThreeColor(mp.color) as THREE.ColorRepresentation)
     mat.metalness = (mp.metalness as number) ?? 0.1
     mat.roughness = (mp.roughness as number) ?? 0.5
+    mat.needsUpdate = true
   }, [mat, mp.color, mp.metalness, mp.roughness])
 
   // Update textures
@@ -713,7 +850,8 @@ function MeshObject({
   }, [mesh.geometryType, gp.radius, gp.segments])
   useEffect(() => () => { quadSphereGeo?.dispose() }, [quadSphereGeo])
 
-  const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe')
+  // Viewport wireframe toggle OR material-node wireframe property — unified single mode
+  const wireframeOverride = useEditorStore((s) => editorShading && s.shadingMode === 'wireframe') || Boolean(mp.wireframe)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const setSelectedNode = useEditorStore((s) => s.setSelectedNode)
   const gizmoMode = useEditorStore((s) => s.gizmoMode)
@@ -809,7 +947,7 @@ function MeshObject({
             >
               <octahedronGeometry args={[0.15, 0]} />
               <meshBasicMaterial
-                color={isSelected ? '#ff8800' : '#aaaaaa'}
+                color={isSelected ? SELECTION_COLOR : '#aaaaaa'}
                 wireframe
                 depthTest={false}
               />
@@ -867,14 +1005,17 @@ function MeshObject({
               ? <primitive attach="geometry" object={gltfGeometry} />
               : <boxGeometry args={[0.01, 0.01, 0.01]} />
           )}
-          {mesh.shaderGraph?.pbrMode && !wireframeOverride ? (
-            <MeshPBRShaderGraphMaterial sg={mesh.shaderGraph} mp={mp} loadedTextures={loadedTextures} matRef={matRef} />
-          ) : mesh.materialType === 'shader/output' && mesh.shaderGraph && !wireframeOverride ? (
-            <MeshShaderGraphMaterial sg={mesh.shaderGraph} />
-          ) : mesh.materialType === 'shader/glsl' && !wireframeOverride ? (
-            <ShaderMaterialObject mp={mp} loadedTextures={loadedTextures} />
+          {wireframeOverride && mesh.shaderGraph?.vertexShader ? (
+            // Wireframe + displacement: flat unlit wireframe that matches the displaced shape
+            <ShaderDisplacementWireframe sg={mesh.shaderGraph} color={toThreeColor(mp.color) as THREE.ColorRepresentation} />
           ) : wireframeOverride ? (
             <meshBasicMaterial color={toThreeColor(mp.color)} wireframe />
+          ) : mesh.shaderGraph?.pbrMode ? (
+            <MeshPBRShaderGraphMaterial sg={mesh.shaderGraph} mp={mp} loadedTextures={loadedTextures} matRef={matRef} />
+          ) : mesh.materialType === 'shader/output' && mesh.shaderGraph ? (
+            <MeshShaderGraphMaterial sg={mesh.shaderGraph} />
+          ) : mesh.materialType === 'shader/glsl' ? (
+            <ShaderMaterialObject mp={mp} loadedTextures={loadedTextures} />
           ) : (
             <meshStandardMaterial
               ref={matRef}
@@ -897,7 +1038,6 @@ function MeshObject({
               transparent={(mp.transparent as boolean) ?? false}
               opacity={(mp.opacity as number) ?? 1}
               side={((mp.side as number) ?? 0) as 0 | 1 | 2}
-              wireframe={(mp.wireframe as boolean) ?? false}
             />
           )}
         </mesh>
@@ -928,7 +1068,11 @@ function MeshObject({
             {mesh.geometryType === 'gltf-mesh' && gltfGeometry && (
               <primitive attach="geometry" object={gltfGeometry} />
             )}
-            <meshBasicMaterial color="#ff8800" wireframe depthTest={false} />
+            {mesh.shaderGraph?.vertexShader ? (
+              <ShaderDisplacementWireframe sg={mesh.shaderGraph} color="#ff8800" depthTest={false} />
+            ) : (
+              <meshBasicMaterial color="#ff8800" wireframe depthTest={false} />
+            )}
           </mesh>
         )}
       </group>
@@ -1007,7 +1151,7 @@ function LightObject({
         groupRef.current.rotation.set(areaRotX, areaRotY, areaRotZ)
       }
       if (areaVisualRef.current) {
-        areaVisualRef.current.mat.color.set(isSelected ? '#ff8800' : '#ffdd44')
+        areaVisualRef.current.mat.color.set(isSelected ? SELECTION_COLOR : '#ffdd44')
       }
     }
     // Update directional light target position imperatively
@@ -1149,7 +1293,7 @@ function LightObject({
     return <ambientLight color={color} intensity={intensity} />
   }
 
-  const iconColor = isSelected ? '#ff8800' : '#ffdd44'
+  const iconColor = isSelected ? SELECTION_COLOR : '#ffdd44'
   const iconScale = Math.max(0.5, Math.min(3.0, 0.8 + Math.sqrt(Math.max(0, intensity)) * 0.25))
 
   return (
@@ -1301,7 +1445,7 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
           {/* Square pyramid — radius scales with FOV, base faces -Z (camera look direction) */}
           <coneGeometry args={[Math.max(0.05, Math.tan((camera.fov * Math.PI / 180) / 2) * 0.5), 0.35, 4]} />
           <meshBasicMaterial
-            color={isSelected ? '#ff8800' : '#38BDF8'}
+            color={isSelected ? SELECTION_COLOR : '#38BDF8'}
             depthTest={false}
             wireframe
           />
@@ -2195,7 +2339,7 @@ function PathObject({ path }: { path: CompiledPath }) {
       path.pathProps.lineAxis, path.pathProps.segments,
       path.pathProps.rotationX, path.pathProps.rotationY, path.pathProps.rotationZ])
 
-  const lineColor = isSelected ? '#ff8800' : '#7C3AED'
+  const lineColor = isSelected ? SELECTION_COLOR : '#7C3AED'
 
   return (
     <>

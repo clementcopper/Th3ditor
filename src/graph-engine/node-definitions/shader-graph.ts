@@ -220,18 +220,25 @@ const shaderOutput: NodeDefinition = {
   inputs: [
     { name: 'color',        type: 'svec3',  label: 'Color' },
     { name: 'alpha',        type: 'sfloat', label: 'Alpha' },
+    { name: 'roughness',    type: 'sfloat', label: 'Roughness' },
+    { name: 'metalness',    type: 'sfloat', label: 'Metalness' },
+    { name: 'emissive',     type: 'svec3',  label: 'Emissive' },
     { name: 'displacement', type: 'sfloat', label: 'Displacement' },
   ],
   outputs: [{ name: 'material', type: 'material', label: 'Material' }],
   properties: [
-    { type: 'color', uniform: 'defaultColor',      label: 'Color',  default: [0, 0, 0, 1], inline: true,
+    { type: 'color', uniform: 'defaultColor',      label: 'Color',     default: [0, 0, 0, 1], inline: true,
       visibleWhen: { portDisconnected: 'color' } },
-    { type: 'float', uniform: 'defaultAlpha',      label: 'Alpha',  min: 0, max: 1, step: 0.01, default: 1.0,
+    { type: 'float', uniform: 'defaultAlpha',      label: 'Alpha',     min: 0, max: 1, step: 0.01, default: 1.0,
       visibleWhen: { portDisconnected: 'alpha' } },
+    { type: 'float', uniform: 'defaultRoughness',  label: 'Roughness', min: 0, max: 1, step: 0.01, default: 0.5,
+      visibleWhen: { portDisconnected: 'roughness' } },
+    { type: 'float', uniform: 'defaultMetalness',  label: 'Metalness', min: 0, max: 1, step: 0.01, default: 0.1,
+      visibleWhen: { portDisconnected: 'metalness' } },
     { type: 'float', uniform: 'displacementScale', label: 'Disp Scale', min: -2, max: 2, step: 0.01, default: 0.2,
       visibleWhen: { portConnected: 'displacement' } },
   ],
-  defaults: { defaultColor: [0, 0, 0, 1], defaultAlpha: 1.0, displacementScale: 0.2 },
+  defaults: { defaultColor: [0, 0, 0, 1], defaultAlpha: 1.0, defaultRoughness: 0.5, defaultMetalness: 0.1, displacementScale: 0.2 },
 }
 
 const shaderBand: NodeDefinition = {

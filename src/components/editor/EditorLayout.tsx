@@ -112,7 +112,7 @@ function BorderCollapseBtn({ open, onClick, horizontal }: {
   return (
     <button
       onClick={onClick}
-      className={`${horizontal ? 'panel-collapse-btn-h' : 'panel-collapse-btn-v'} flex items-center justify-center bg-border-default hover:bg-accent text-surface-base transition-colors`}
+      className={`${horizontal ? 'panel-collapse-btn-h' : 'panel-collapse-btn-v'} flex items-center justify-center bg-border-default text-surface-base hover:bg-accent transition-colors`}
       style={horizontal ? { width: 28, height: 12 } : { width: 12, height: 28 }}
     >
       {icon}
@@ -130,7 +130,7 @@ export function EditorLayout() {
   const graphRef = useRef<PanelImperativeHandle>(null)
   const rightRef = useRef<PanelImperativeHandle>(null)
 
-  const [maximizedViewport, setMaximizedViewport] = useState<'vp3d' | 'cam' | null>(null)
+  const [maximizedViewport, setMaximizedViewport] = useState<'vp3d' | 'cam' | null>('vp3d')
   const [graphOpen, setGraphOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
@@ -192,27 +192,29 @@ export function EditorLayout() {
               <div className="relative w-full h-full">
                 <PanelGroup orientation="horizontal" className="h-full">
 
-                  {/* 3D Viewport — maximize button injected into controls overlay */}
+                  {/* 3D Viewport — hidden when maximized to avoid 3rd WebGL context */}
                   <Panel defaultSize={50} minSize={10}>
                     <div className="relative w-full h-full overflow-hidden">
-                      <Viewport3D extraButton={
-                        <button
-                          onClick={() => toggleMaximize('vp3d')}
-                          title="Maximize"
-                          className="px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer text-text-muted hover:text-text-primary hover:bg-surface-panel"
-                        >
-                          <ArrowsOut size={10} weight="bold" />
-                        </button>
-                      } />
+                      {maximizedViewport !== 'vp3d' && (
+                        <Viewport3D extraButton={
+                          <button
+                            onClick={() => toggleMaximize('vp3d')}
+                            title="Maximize"
+                            className="px-2 h-full flex items-center text-xs font-medium transition-colors cursor-pointer text-text-muted hover:text-text-primary hover:bg-surface-panel"
+                          >
+                            <ArrowsOut size={10} weight="bold" />
+                          </button>
+                        } />
+                      )}
                     </div>
                   </Panel>
 
                   {plainHandle('horizontal', maximizedViewport !== null)}
 
-                  {/* Camera Viewport */}
+                  {/* Camera Viewport — hidden when maximized to avoid 3rd WebGL context */}
                   <Panel defaultSize={50} minSize={10}>
                     <div className="relative w-full h-full overflow-hidden">
-                      <CameraView />
+                      {maximizedViewport !== 'cam' && <CameraView />}
                       {maximizedViewport === null && (
                         <ViewportMaximizeBtn maximized={false} onClick={() => toggleMaximize('cam')} />
                       )}
@@ -252,8 +254,7 @@ export function EditorLayout() {
               panelRef={graphRef}
               defaultSize={45} minSize={10}
               collapsible collapsedSize={12}
-              onCollapse={() => setGraphOpen(false)}
-              onExpand={() => setGraphOpen(true)}
+              onResize={(s) => setGraphOpen(s.inPixels > 12)}
             >
               <div className="relative w-full h-full">
                 {graphOpen && <NodeEditor />}
@@ -277,8 +278,7 @@ export function EditorLayout() {
           panelRef={rightRef}
           defaultSize={13} minSize={1}
           collapsible collapsedSize={12}
-          onCollapse={() => setRightOpen(false)}
-          onExpand={() => setRightOpen(true)}
+          onResize={(s) => setRightOpen(s.inPixels > 12)}
         >
           <div className="relative w-full h-full overflow-hidden">
             {rightOpen && (

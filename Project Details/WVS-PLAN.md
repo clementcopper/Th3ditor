@@ -243,6 +243,7 @@ Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskont
 - [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
 - [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
 - [x] **UI Polish** — Viewport Maximize/Minimize (CSS Overlay), Playbar-Stacking (ResizeObserver), Panel-Collapse-Buttons (BorderCollapseBtn, merged mit Border), hover states auf allen Viewport-Controls, konsistente 26px Control-Bars.
+- [ ] Könnte man eine Quad-Box, Quad-Capsule und Quad-Zylinder Geometrie bauen mit der Vorgehensweise von der Quad-Sphere. Box -> Quad- Sphere/Box/Capsule/Zylinder/Plane
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Image-Export via ? (.png,.jpg)

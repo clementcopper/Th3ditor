@@ -73,6 +73,17 @@ export interface CompiledMesh {
     uniforms: Record<string, { value: number | [number, number] | [number, number, number] | [number, number, number, number] }>
     uniformNodeMap: Record<string, string>
     bridgeUniforms: Record<string, string>
+    /** PBR fragment injection: noise lib + uniform declarations */
+    fragmentPreamble?: string
+    /** PBR fragment injection: intermediate variable computations for insertion into Three.js main() */
+    fragmentPBRBody?: string
+    /** PBR fragment injection: per-channel GLSL expressions */
+    fragmentPBR?: {
+      roughness?: string
+      metalness?: string
+      emissive?: string
+      albedo?: string
+    }
   }
   transformNodeIds: string[]   // node IDs in the transform chain
   transform: CompiledTransform

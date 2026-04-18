@@ -48,13 +48,20 @@
   box-shadow: none !important;
 }
 
+/* react-colorful: saturation pointer → 24×24px, 1px border */
+.react-colorful__saturation-pointer {
+  width: 20px !important;
+  height: 20px !important;
+  border-width: 1px !important;
+}
+
 /* react-colorful: hue + alpha pointer → thin vertical bar */
 .react-colorful__hue-pointer,
 .react-colorful__alpha-pointer {
   width: 0px !important;
   height: 100%!important;
-  border: solid 3px var(--color-surface-elevated) !important;
-  box-shadow: 0 0 0 1px var(--color-border-default), 0 0 0 1px var(--color-border-default) !important;
+  border: solid 2px var(--color-surface-elevated) !important;
+  box-shadow: 0 0 0 1px white, 0 0 0 1px white !important;
   background: black !important;
 }
 

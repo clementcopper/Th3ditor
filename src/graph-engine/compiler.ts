@@ -313,20 +313,37 @@ export function compileGraph(nodes: GraphNode[], edges: GraphEdge[]): CompiledSc
 /** Normalize geometry props to a renderer-friendly format */
 function normalizeGeoProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
   switch (type) {
-    case 'box':
-      return { width: props.width, height: props.height, depth: props.depth, widthSegs: props.boxWidthSegs, heightSegs: props.boxHeightSegs, depthSegs: props.boxDepthSegs }
+    case 'box': {
+      const segs = (props.boxSegments as number) ?? 4
+      const w = (props.width as number) ?? 1, h = (props.height as number) ?? 1, d = (props.depth as number) ?? 1
+      const m = Math.max(w, h, d)
+      return { width: w, height: h, depth: d, widthSegs: Math.max(1, Math.round(segs * w / m)), heightSegs: Math.max(1, Math.round(segs * h / m)), depthSegs: Math.max(1, Math.round(segs * d / m)) }
+    }
     case 'sphere':
       return { radius: props.radius, segments: props.sphereSegments }
-    case 'plane':
-      return { width: props.planeWidth, height: props.planeHeight, widthSegs: props.planeWidthSegs, heightSegs: props.planeHeightSegs }
-    case 'torus':
-      return { radius: props.torusRadius, tube: props.tube, radialSegments: props.torusRadialSegs, tubularSegments: props.torusTubularSegs }
-    case 'cylinder':
-      return { radiusTop: props.radiusTop, radiusBottom: props.radiusBottom, height: props.cylHeight, radialSegments: props.radialSegments, heightSegs: props.cylHeightSegs ?? 1 }
-    case 'capsule':
-      return { radius: props.capsuleRadius, length: props.capsuleLength, capSegments: props.capSegments, radialSegments: props.capsuleRadialSegments }
+    case 'plane': {
+      const segs = (props.planeSegments as number) ?? 4
+      const w = (props.planeWidth as number) ?? 1, h = (props.planeHeight as number) ?? 1
+      const m = Math.max(w, h)
+      return { width: w, height: h, widthSegs: Math.max(1, Math.round(segs * w / m)), heightSegs: Math.max(1, Math.round(segs * h / m)) }
+    }
+    case 'torus': {
+      const segs = (props.torusSegments as number) ?? 32
+      const r = (props.torusRadius as number) ?? 0.5, t = (props.tube as number) ?? 0.2
+      return { radius: r, tube: t, radialSegments: segs, tubularSegments: Math.max(3, Math.round(segs * t / r)) }
+    }
+    case 'cylinder': {
+      const segs = (props.cylSegments as number) ?? 32
+      const rTop = (props.radiusTop as number) ?? 0.5, rBot = (props.radiusBottom as number) ?? 0.5, ch = (props.cylHeight as number) ?? 1
+      const rAvg = Math.max(0.001, (rTop + rBot) / 2)
+      return { radiusTop: rTop, radiusBottom: rBot, height: ch, radialSegments: segs, heightSegs: Math.max(1, Math.round(segs * ch / (2 * Math.PI * rAvg))) }
+    }
+    case 'capsule': {
+      const segs = (props.capsuleSegments as number) ?? 24
+      return { radius: props.capsuleRadius, length: props.capsuleLength, capSegments: Math.max(2, Math.round(segs / 4)), radialSegments: segs }
+    }
     case 'icosphere':
-      return { radius: props.icoRadius, detail: props.icoDetail }
+      return { radius: props.icoRadius, detail: props.icoSegments }
     default:
       return props
   }

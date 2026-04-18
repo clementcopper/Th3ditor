@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
 import * as THREE from 'three'
@@ -368,10 +368,10 @@ function CameraSnapper() {
     const configs = {
       top:    { pos: [eps, dist, 0]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
       bottom: { pos: [eps, -dist, 0]  as [number, number, number], up: [0, 1, 0] as [number, number, number] },
-      right:  { pos: [dist, 0, 0]    as [number, number, number], up: [0, 1, 0] as [number, number, number] },
-      left:   { pos: [-dist, 0, 0]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
-      front:  { pos: [0, 0, dist]    as [number, number, number], up: [0, 1, 0] as [number, number, number] },
-      back:   { pos: [0, 0, -dist]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      right:  { pos: [dist, eps, 0]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      left:   { pos: [-dist, eps, 0]  as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      front:  { pos: [0, eps, dist]   as [number, number, number], up: [0, 1, 0] as [number, number, number] },
+      back:   { pos: [0, eps, -dist]  as [number, number, number], up: [0, 1, 0] as [number, number, number] },
     }
     const { pos, up } = configs[snapToView]
     camera.position.set(...pos)
@@ -385,6 +385,41 @@ function CameraSnapper() {
   }, [snapToView])
 
   return null
+}
+
+function OriginIndicator() {
+  const lines = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([
+      -1, 0, 0,  1, 0, 0,
+       0,-1, 0,  0, 1, 0,
+       0, 0,-1,  0, 0, 1,
+    ], 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute([
+      1, 0, 0,  1, 0, 0,
+      0, 1, 0,  0, 1, 0,
+      0, 0, 1,  0, 0, 1,
+    ], 3))
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true })
+    const obj = new THREE.LineSegments(geo, mat)
+    obj.renderOrder = 999
+    return obj
+  }, [])
+
+  useEffect(() => () => {
+    lines.geometry.dispose()
+    ;(lines.material as THREE.LineBasicMaterial).dispose()
+  }, [lines])
+
+  useFrame(({ camera }) => {
+    const isOrtho = (camera as THREE.OrthographicCamera).isOrthographicCamera
+    const s = isOrtho
+      ? 14 / (camera as THREE.OrthographicCamera).zoom
+      : camera.position.length() * 0.037
+    lines.scale.setScalar(s)
+  })
+
+  return <primitive object={lines} />
 }
 
 function EditorBackground() {
@@ -458,12 +493,13 @@ export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.R
           />
         )}
 
+        <OriginIndicator />
         <SceneRenderer editorShading isEditorView />
         <LiveEvaluator />
         <CameraSnapper />
         <CameraRotationSync />
         <ProjectionSwitchHandler />
-        <OrbitControls makeDefault />
+        <OrbitControls makeDefault enableDamping={projectionMode === 'perspective'} dampingFactor={0.08} />
       </Canvas>
     </div>
   )

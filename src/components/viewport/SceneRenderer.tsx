@@ -61,6 +61,21 @@ function applyLongitudeSeamFix(geo: THREE.BufferGeometry): void {
   uvAttr.needsUpdate = true
 }
 
+function applyLatitudeSeamFix(geo: THREE.BufferGeometry): void {
+  const uvAttr = geo.attributes.uv as THREE.BufferAttribute
+  const uvArr = uvAttr.array as Float32Array
+  const count = uvAttr.count
+  for (let f = 0; f < count / 3; f++) {
+    const i0 = f * 3, i1 = f * 3 + 1, i2 = f * 3 + 2
+    const v0 = uvArr[i0 * 2 + 1], v1 = uvArr[i1 * 2 + 1], v2 = uvArr[i2 * 2 + 1]
+    const vMax = Math.max(v0, v1, v2)
+    if (vMax - v0 > 0.5) uvArr[i0 * 2 + 1] += 1
+    if (vMax - v1 > 0.5) uvArr[i1 * 2 + 1] += 1
+    if (vMax - v2 > 0.5) uvArr[i2 * 2 + 1] += 1
+  }
+  uvAttr.needsUpdate = true
+}
+
 function mergeQuadParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   let total = 0
   for (const g of parts) total += g.attributes.position.count
@@ -216,6 +231,40 @@ function createQuadCapsule(radius: number, length: number, radialSegs: number, c
   }
   geo.setAttribute('uv', new THREE.BufferAttribute(uvData, 2))
   applyLongitudeSeamFix(geo)
+  return geo
+}
+
+/** Quad Torus: ring in XY plane (matching Three.js TorusGeometry orientation).
+ *  u = tube angle / 2π, v = ring angle / 2π. toNonIndexed + both seam fixes. */
+function createQuadTorus(radius: number, tube: number, radialSegs: number, tubularSegs: number): THREE.BufferGeometry {
+  const verts: number[] = [], norms: number[] = [], uvs: number[] = [], idx: number[] = []
+  for (let j = 0; j <= radialSegs; j++) {
+    const theta = 2 * Math.PI * j / radialSegs
+    const cosT = Math.cos(theta), sinT = Math.sin(theta)
+    for (let i = 0; i <= tubularSegs; i++) {
+      const phi = 2 * Math.PI * i / tubularSegs
+      const cosP = Math.cos(phi), sinP = Math.sin(phi)
+      // Ring sweeps around Z-axis in XY plane — matches Three.js TorusGeometry
+      verts.push((radius + tube * cosP) * cosT, (radius + tube * cosP) * sinT, tube * sinP)
+      norms.push(cosP * cosT, cosP * sinT, sinP)
+      uvs.push(i / tubularSegs, j / radialSegs)
+    }
+  }
+  for (let j = 0; j < radialSegs; j++) {
+    for (let i = 0; i < tubularSegs; i++) {
+      const a = j * (tubularSegs + 1) + i, b = (j + 1) * (tubularSegs + 1) + i
+      idx.push(a, b, a + 1, b, b + 1, a + 1)
+    }
+  }
+  const indexed = new THREE.BufferGeometry()
+  indexed.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  indexed.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3))
+  indexed.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  indexed.setIndex(idx)
+  const geo = indexed.toNonIndexed()
+  indexed.dispose()
+  applyLongitudeSeamFix(geo)
+  applyLatitudeSeamFix(geo)
   return geo
 }
 
@@ -1033,6 +1082,16 @@ function MeshObject({
   }, [mesh.geometryType, gp.radiusTop, gp.radiusBottom, gp.height, gp.radialSegments, gp.heightSegs])
   useEffect(() => () => { quadCylGeo?.dispose() }, [quadCylGeo])
 
+  const quadTorusGeo = useMemo(() => {
+    if (mesh.geometryType !== 'torus') return null
+    return createQuadTorus(
+      (gp.radius as number) ?? 0.5, (gp.tube as number) ?? 0.2,
+      (gp.radialSegments as number) ?? 32, (gp.tubularSegments as number) ?? 13
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesh.geometryType, gp.radius, gp.tube, gp.radialSegments, gp.tubularSegments])
+  useEffect(() => () => { quadTorusGeo?.dispose() }, [quadTorusGeo])
+
   const quadCapsuleGeo = useMemo(() => {
     if (mesh.geometryType !== 'capsule') return null
     return createQuadCapsule(
@@ -1181,8 +1240,8 @@ function MeshObject({
           {mesh.geometryType === 'plane' && (
             <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
           )}
-          {mesh.geometryType === 'torus' && (
-            <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
+          {mesh.geometryType === 'torus' && quadTorusGeo && (
+            <primitive attach="geometry" object={quadTorusGeo} />
           )}
           {mesh.geometryType === 'cylinder' && quadCylGeo && (
             <primitive attach="geometry" object={quadCylGeo} />
@@ -1246,8 +1305,8 @@ function MeshObject({
             {mesh.geometryType === 'plane' && (
               <planeGeometry args={[gp.width as number, gp.height as number, gp.widthSegs as number, gp.heightSegs as number]} />
             )}
-            {mesh.geometryType === 'torus' && (
-              <torusGeometry args={[gp.radius as number, gp.tube as number, gp.radialSegments as number, gp.tubularSegments as number]} />
+            {mesh.geometryType === 'torus' && quadTorusGeo && (
+              <primitive attach="geometry" object={quadTorusGeo} />
             )}
             {mesh.geometryType === 'cylinder' && quadCylGeo && (
               <primitive attach="geometry" object={quadCylGeo} />
@@ -1628,15 +1687,15 @@ function CameraIcon({ camera }: { camera: CompiledCamera }) {
       <group ref={groupRef} position={camera.position}>
         <mesh
           renderOrder={999}
-          rotation={[Math.PI / 2, Math.PI / 4, 0]}
-          position={[0, 0, -0.08]}
+          rotation={[Math.PI / 2, 0, 0]}
+          position={[0, 0, -0.175]}
           onClick={(e) => {
             e.stopPropagation()
             setSelectedNode(isSelected ? null : camera.nodeId)
           }}
         >
           {/* Square pyramid — radius scales with FOV, base faces -Z (camera look direction) */}
-          <coneGeometry args={[Math.max(0.05, Math.tan((camera.fov * Math.PI / 180) / 2) * 0.5), 0.35, 4]} />
+          <coneGeometry args={[Math.max(0.05, Math.tan((camera.fov * Math.PI / 180) / 2) * 0.5), 0.35, 4, 1, false, Math.PI / 4]} />
           <meshBasicMaterial
             color={isSelected ? SELECTION_COLOR : '#38BDF8'}
             depthTest={false}

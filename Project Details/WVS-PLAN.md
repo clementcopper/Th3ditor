@@ -246,7 +246,9 @@ Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskont
 - [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
 - [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
 - [x] **UI Polish** — Viewport Maximize/Minimize (CSS Overlay), Playbar-Stacking (ResizeObserver), Panel-Collapse-Buttons (BorderCollapseBtn, merged mit Border), hover states auf allen Viewport-Controls, konsistente 26px Control-Bars.
-- [x] Könnte man eine Quad-Box, Quad-Capsule und Quad-Zylinder Geometrie bauen mit der Vorgehensweise von der Quad-Sphere. Box -> Quad- Capsule/Zylinder
+- [x] **Geometry Polish** — Quad-Box, Quad-Sphere, Quad-Torus, Quad-Cylinder, Quad-Capsule; einzelner `Segments`-Slider pro Typ mit proportionaler Sekundär-Berechnung in `normalizeGeoProps`.
+- [x] **Viewport Polish** — Origin-Indicator (RGB LineSegments, konstante Screengröße), Camera-Icon Pyramidenspitze am Origin, OrbitControls-Damping in Ortho deaktiviert.
+- [x] **Properties Controls Polish** — `SliderControl`: getrennter Drag-Balken + Textfeld in einer Zeile. `ColorControl`: R/G/B/A als Drag-Slider (`ChannelSlider`), HEX schmal, Dropdown-Breite = Header-Breite. `SelectControl`: Toggle-Button Hover-Style vereinheitlicht.
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Image-Export via ? (.png,.jpg)

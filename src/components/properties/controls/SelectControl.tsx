@@ -22,12 +22,12 @@ export function SelectControl({ param, value, onChange }: Props) {
                 key={opt.value}
                 onClick={() => onChange(parseFloat(opt.value))}
                 className={`flex-1 px-2 h-7 text-xs font-medium transition-colors cursor-pointer ${
-                  isActive ? '' : 'bg-surface-base text-text-secondary hover:bg-surface-panel'
+                  isActive ? '' : 'text-text-muted hover:text-text-primary hover:bg-surface-panel'
                 } ${i > 0 ? 'border-l border-border-default' : ''}`}
                 style={isActive ? {
                   color: 'var(--color-accent)',
                   background: 'color-mix(in oklch, var(--color-accent) 15%, transparent)',
-                } : {}}
+                } : undefined}
               >
                 {opt.label}
               </button>

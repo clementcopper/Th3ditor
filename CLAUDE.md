@@ -113,6 +113,14 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - GLSL `if (uniform > threshold)` in vertex shader: valid zero-cost branch when uniform=0 — all warps take same path.
 - Quad-Cylinder: triangle-fan caps need correct CCW winding: top `(center, ring[i+1], ring[i])`, bottom `(center, ring[i], ring[i+1])`.
 - Quad-Capsule: `L = length/radius`, `totalYSegs = 2*capSegs + round(capSegs*L)` — both hemisphere/body transforms equal at y=±L/2.
+- Geometry node: one `Segments` slider per type; secondary segs auto-computed proportionally in `normalizeGeoProps`.
+- `createQuadTorus`: ring in XY-plane (Z-axis), `toNonIndexed()` + longitude seam fix + latitude seam fix.
+- Origin indicator: `THREE.LineSegments` + `transparent:true` required to render above drei `Grid` (opaque/transparent queue order).
+- OrbitControls: disable damping in ortho (`enableDamping={projectionMode==='perspective'}`) — prevents camera drift after pan.
+- Camera icon cone tip at group origin: `rotation=[PI/2,0,0]`, `position=[0,0,-height/2]`, `thetaStart=PI/4` for edge-facing base.
+- `SliderControl`: separate drag-bar (`flex-1`) + text input (`w-12`) in one row — drag-only slider, no click-to-edit toggle.
+- `react-colorful` pointer CSS overrides: must use `index.css` direct rules — Tailwind arbitrary variants don't apply.
+- `ColorControl`: R/G/B/A = `ChannelSlider` sub-components (inline, not exported); HEX narrow `w-[66px]`; dropdown `left-0 right-0`.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -175,12 +183,12 @@ src/
 - `border-radius: 0` everywhere — exceptions via `.panel-collapse-btn-h/v` classes + `--radius-panel-btn` CSS variable
 - OKLCH for design tokens; ColorControl = RGB-only (R/G/B 0-255 + HEX text field + A%)
 
-## Current Status (2026-04-16)
+## Current Status (2026-04-18)
 - Phase 1–5e complete ✅
 - **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
 - **Visual Shader Graph complete ✅**: shader/color (Color/Mix/Ramp modes, value+alpha outputs), noise, math, domain warp, etc.; unlit + PBR displacement modes
 - **Phase 6 partial ✅**: Save/Load (.wvs JSON), Undo/Redo (snapshot-based, Cmd+Z/Cmd+Shift+Z + toolbar buttons)
-- **UI Polish ✅**: Viewport maximize/minimize (CSS overlay, no R3F remount), playbar stacking (ResizeObserver), panel collapse buttons merged with border
+- **UI Polish ✅**: Viewport: origin indicator (RGB cross), Quad Torus, single Segments slider per geometry type, OrbitControls damping fix in ortho, camera icon tip at origin. Properties: SliderControl split layout (drag-bar + text input), ColorControl channel sliders (R/G/B/A drag), HEX narrow, dropdown width matches header.
 - Next: Phase 6 remaining (React/R3F export, standalone HTML export, post-processing)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
 

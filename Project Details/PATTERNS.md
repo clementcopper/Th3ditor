@@ -222,13 +222,75 @@ When multiple nodes share the same conceptual domain, merge them into one node w
 |--------|-------|
 | shader/color + shader/mix + shader/gradient + shader/colorramp | shader/color (Mode: Color / Mix / Ramp) |
 | math/add + math/multiply + ... | math (Mode: Add / Multiply / ...) |
+| time (Linear only) + sin(time) | time (Mode: Linear / Sine / Sawtooth / Square / Bounce / Ease In / Ease Out / Ease In-Out) |
 
 **Rules:**
 - Use a select uniform named `colorMode`/`op` — NOT `mode` unless the label should completely replace the node title (geometry pattern)
 - If uniform ≠ `mode`, NodeRenderer appends option label → "Shader Color: Mix"
+- `appendToHeader: true` on a select property → appends the active option to the node title instead of replacing it: "Time: Sine" instead of just "Sine"
 - `visibleWhen: { uniform: 'colorMode', equal: N }` on all mode-specific ports and properties
 - Old node types: set `hidden: true` in NodeDefinition — keep compiler cases for backward compat
 - Multi-output nodes (e.g. Color + Value + Alpha): use `portVar` map in compiler keyed by `"nodeId:portHandle"`, and update `resolvedInput`/`vResolve` to check portVar first
+
+---
+
+## Pattern J — Shader Graph Mouse Interaction
+
+**Use case:** Per-element mouse effects in a shader (e.g. Dot Matrix where each dot reacts individually to the cursor).
+
+**Node graph wiring:**
+```
+[Shader Mouse] ──mouse──▶ [Shader Pattern: Dots]
+                              mouseEffect: Attract / Repel / Grow / Shrink
+                              mouseRadius: 0.2   (influence area)
+                              mouseStrength: 0.5 (max displacement / size change)
+```
+
+**`uMouse` coordinate system:**
+- Three.js pointer (NDC [-1,1]) → `mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5` → UV [0,1]
+- `uMouse.y = 1` at top, `0` at bottom — matches `vUv.y` for flat plane / screen effects
+
+**Pixel-correct circular radius (critical):**
+```glsl
+// WRONG — creates vertical ellipse on wide viewports:
+float dist = length(vec2(mVec.x, mVec.y * uAspect));
+
+// CORRECT — 1 mouseRadius unit = fraction of viewport height:
+float dist = length(vec2(mVec.x * uAspect, mVec.y));
+```
+
+**Per-dot center computation (Grid layout example):**
+```glsl
+// Expand fract() into floor+sub to expose the cell index
+vec2 cellIdx  = floor(coord * vec2(scale, scaleY) + timeShift);
+vec2 cell     = coord * vec2(scale, scaleY) + timeShift - cellIdx - 0.5;
+vec2 dotCtrUV = (cellIdx + 0.5 - timeShift) / vec2(scale, scaleY);
+vec2 mVec     = uMouse - dotCtrUV;
+```
+
+**Displacement direction (pixel-correct, Attract/Repel):**
+```glsl
+vec2 mPx  = vec2(mVec.x * uAspect, mVec.y);   // pixel-proportional space
+vec2 mDir = normalize(mPx + vec2(0.00001, 0.0));
+// Attract: cell -= mInfl * strength * mDir * 0.45  (max 0.45 cells = half a cell)
+// Repel:   cell += mInfl * strength * mDir * 0.45
+```
+
+**Layout-specific direction handling:**
+- **Grid / Hex:** use `mDir` directly (axis-aligned cell space matches pixel space)
+- **Diagonal (45°-rotated grid):** rotate `mPx` by 45° before normalizing: `normalize(R45 * mPx)`, where `R45 = [[0.7071, -0.7071], [0.7071, 0.7071]]`
+
+**Property visibility pattern:**
+```typescript
+// Effect selector — only visible when mouse port is connected
+{ visibleWhen: [{ portConnected: 'mouse' }, { uniform: 'mode', equal: [0] }] }
+// Radius + Strength — only when effect != None
+{ visibleWhen: [..., { uniform: 'mouseEffect', notEqual: 0 }] }
+```
+
+**Anti-pattern:**
+- ❌ Scaling displacement by `mouseRadius * scale` — produces 2+ cell displacement at defaults; use fixed constant (0.45 cells) instead
+- ❌ `normalize(mVec)` in UV space for Diagonal — wrong direction; always normalize in pixel-proportional space first, then rotate into cell space
 
 ---
 

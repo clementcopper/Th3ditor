@@ -93,19 +93,18 @@ Node-basierter 3D/2D Visual Editor für das Web. Ziel: Animierte Szenen mit Geom
 | Light | Ambient, Directional, Point, Area (RectArea) |
 | Camera | Perspective, Orthographic |
 | Path | Line, Circle, Arc |
-| Time | Time, Sin(Time), Delta |
+| Time | Time (Linear/Sine/Sawtooth/Square/Bounce/Ease In/Ease Out/Ease In-Out + Speed/Offset) |
 | Math | Add, Subtract, Multiply, Divide, Sin, Cos, Lerp, Clamp, Remap, Abs |
 | Input | Mouse, Screen Size |
 | Texture | Image, Noise (fBm/Ridged/Voronoi), Normal Map |
 | Color Ops | Mix, HSL Shift |
-| Shader (Visual Graph) | UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi/Worley/Curl 3D), Color (Color/Mix/Ramp modes), Math, Band, Component, Domain Warp, Output |
+| Shader (Visual Graph) | UV, Time, Mouse, Position, Noise (fBm/Ridged/Voronoi/Worley/Curl 3D), Color (Color/Mix/Ramp modes), Math, Band, Component, Domain Warp, Pattern (Dots/Lines), Output |
 | Scene | Scene Output |
 
 ### Nächste Schritte
 | Kategorie | Nodes | Zweck |
 |---|---|---|
 | Shader (Visual Graph) | Time-Modes (ease-in/ease-out) | Ungleichmäßigen Zeitverlauf |
-| Shader (Visual Graph) | Dot Matrix, Lines | Prozedurales Pattern-Generating |
 
 ### Längerfristig
 | Kategorie | Nodes |
@@ -235,13 +234,12 @@ Shader Color konsolidiert (shader/color mit Color/Mix/Ramp-Modes, value+alpha-Ou
 Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskontinuität bei abs(normal.y)=0.99. Fix: achsenausgerichtete 3D-Gradientenabtastung (X/Y/Z-Offsets) + Projektion auf Tangentialebene.
 
 ### Shader Graph Erweiterungen 🔜
-- [ ] **Shader Time Node Modes** — ease-in/ease-out, Sawtooth, Square, Bounce uws. 
-- [ ] **Time Node Modes** - ease-in/ease-out, Sawtooth, Square, Bounce usw.
-- [ ] **Shader Dot Matrix** — prozedurales Punkt-Pattern (Anzahl, Abstand, Anordnung, Gradient), Outputs: Color, Value
-- [ ] **Shader Lines** — prozedurales Linien-Pattern, Outputs: Color, Value
+- [ ] **Shader Time Node Modes** — ease-in/ease-out, Sawtooth, Square, Bounce usw.
+- [x] **Shader Pattern (Dots)** — Grid / Hex / Diagonal Layouts, Softness, Radius, Time-Animation-Port, Mouse-Effects (Attract/Repel/Grow/Shrink mit Radius + Strength), Outputs: Color, Value
+- [x] **Shader Pattern (Lines)** — Angle, Width, Softness, Time-Animation-Port, Outputs: Color, Value
 
 ### 3D Graph Erweiterungen
-- [ ] Time-Node Modes 
+- [x] **Time Node Modes** — Linear, Sine, Sawtooth, Square, Bounce, Ease In, Ease Out, Ease In-Out; Speed + Offset Properties; einheitlicher `value`-Output
 
 ### Phase 6: Export + Polish 🔜 NEXT
 - [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
@@ -250,6 +248,7 @@ Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskont
 - [x] **Geometry Polish** — Quad-Box, Quad-Sphere, Quad-Torus, Quad-Cylinder, Quad-Capsule; einzelner `Segments`-Slider pro Typ mit proportionaler Sekundär-Berechnung in `normalizeGeoProps`.
 - [x] **Viewport Polish** — Origin-Indicator (RGB LineSegments, konstante Screengröße), Camera-Icon Pyramidenspitze am Origin, OrbitControls-Damping in Ortho deaktiviert.
 - [x] **Properties Controls Polish** — `SliderControl`: getrennter Drag-Balken + Textfeld in einer Zeile. `ColorControl`: R/G/B/A als Drag-Slider (`ChannelSlider`), HEX schmal, Dropdown-Breite = Header-Breite. `SelectControl`: Toggle-Button Hover-Style vereinheitlicht.
+- [x] **Shader Pattern Node** — `shader/pattern` mit Dots (Grid/Hex/Diagonal) + Lines-Modus. Aspect-Ratio-Fix (quadratische Pixel-Zellen), Time-Animation-Port, Mouse-Interaktion (Attract/Repel/Grow/Shrink) für alle Layouts mit pixel-korrektem Kreisradius.
 - [ ] Export als React+R3F-Komponente
 - [ ] Export als standalone HTML+Three.js
 - [ ] Image-Export via ? (.png,.jpg)

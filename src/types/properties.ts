@@ -31,6 +31,8 @@ export interface PropertyDef {
   inline?: boolean
   /** Prevent this select property from being used as the node header fallback label */
   noHeader?: boolean
+  /** For mode selects: append mode label to node label ("Time: Square") instead of replacing it ("Square") */
+  appendToHeader?: boolean
 }
 
 export type VisibleWhenCondition =

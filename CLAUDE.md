@@ -121,6 +121,9 @@ When something fails repeatedly, when Daniel has to re-explain, or when a workar
 - `SliderControl`: separate drag-bar (`flex-1`) + text input (`w-12`) in one row — drag-only slider, no click-to-edit toggle.
 - `react-colorful` pointer CSS overrides: must use `index.css` direct rules — Tailwind arbitrary variants don't apply.
 - `ColorControl`: R/G/B/A = `ChannelSlider` sub-components (inline, not exported); HEX narrow `w-[66px]`; dropdown `left-0 right-0`.
+- Shader Pattern aspect fix: `scaleY = scale / uAspect` → square pixel cells; `scale` = columns, rows auto-adjust.
+- Triplanar for seamless sphere dots: sample 3 planes (XY/XZ/YZ), blend by `abs(normalize(pos))`; use `vPosition` as fallback — no extra port needed.
+- `timeSpeed` default 0 → no animation on existing nodes; pattern `uTime * timeSpeed` as fallback when time port disconnected.
 
 ## Overview
 Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
@@ -191,10 +194,3 @@ src/
 - **UI Polish ✅**: Viewport: origin indicator (RGB cross), Quad Torus, single Segments slider per geometry type, OrbitControls damping fix in ortho, camera icon tip at origin. Properties: SliderControl split layout (drag-bar + text input), ColorControl channel sliders (R/G/B/A drag), HEX narrow, dropdown width matches header.
 - Next: Phase 6 remaining (React/R3F export, standalone HTML export, post-processing)
 - Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
-
-## Planned: Quad-Mesh Primitives (Phase 6+)
-- Three.js built-in geometries (Sphere, Cylinder, Capsule) have UV seams at poles and cap-rims that break displacement mapping
-- Plan: Daniel provides Blender-authored quad meshes (.glb) per primitive → bundled as `src/assets/geometry/`
-- Requirements for meshes: single UV island per mesh, no pole singularities, ≥32×32 quads for displacement, caps and sides share UV space
-- Cylinder/Capsule seams currently not fixable via tiling — openEnded option deferred pending quad-mesh solution
-- Sphere poles (SphereGeometry) not fixable via UV tiling — use Icosphere or quad-sphere

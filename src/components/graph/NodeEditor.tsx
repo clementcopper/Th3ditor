@@ -164,13 +164,35 @@ export function NodeEditor() {
     [nodes, setNodes, snapshot],
   )
 
+  const COLOR_RGB_HANDLES = new Set(['r', 'g', 'b'])
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       if (changes.some((c) => c.type === 'remove')) snapshot()
+      // When a Math→Color.r/g/b edge is removed, clear colorMode if no other Color connections remain
+      for (const c of changes) {
+        if (c.type !== 'remove') continue
+        const edge = edges.find((e) => e.id === c.id)
+        if (!edge || !COLOR_RGB_HANDLES.has(edge.targetHandle ?? '')) continue
+        const targetNode = nodes.find((n) => n.id === edge.target)
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        const isColorTarget = targetNode?.type === 'color'
+        const isShaderColorTarget = targetNode?.type === 'shader/color'
+        if (!isColorTarget && !isShaderColorTarget) continue
+        if (isColorTarget && sourceNode.type !== 'math') continue
+        if (isShaderColorTarget && sourceNode.type !== 'shader/math') continue
+        const remainingColorEdges = edges.filter(
+          (e) => e.id !== edge.id && e.source === edge.source &&
+            COLOR_RGB_HANDLES.has(e.targetHandle ?? '') &&
+            nodes.find((n) => n.id === e.target)?.type === (isColorTarget ? 'color' : 'shader/color'),
+        )
+        if (remainingColorEdges.length === 0) updateNodeData(sourceNode.id, { colorMode: false })
+      }
       const updated = applyEdgeChanges(changes, edges as any) as any
       setEdges(updated)
     },
-    [edges, setEdges, snapshot],
+    [edges, nodes, setEdges, snapshot, updateNodeData],
   )
 
   const isValidConnection = useCallback(
@@ -196,6 +218,17 @@ export function NodeEditor() {
       if (connection.targetHandle === 'source') {
         const targetNode = nodes.find((n) => n.id === connection.target)
         if (targetNode?.type === 'texture') updateNodeData(connection.target!, { mode: 2 })
+      }
+      // Auto-configure Number nodes for 0-255 color channel mode
+      if (COLOR_RGB_HANDLES.has(connection.targetHandle ?? '')) {
+        const targetNode = nodes.find((n) => n.id === connection.target)
+        const sourceNode = nodes.find((n) => n.id === connection.source)
+        if (targetNode?.type === 'color' && sourceNode?.type === 'math' && Number(sourceNode.data.mode ?? 0) === 0) {
+          updateNodeData(connection.source!, { numType: '1', colorMode: true })
+        }
+        if (targetNode?.type === 'shader/color' && sourceNode?.type === 'shader/math' && Number(sourceNode.data.op ?? 0) === 9) {
+          updateNodeData(connection.source!, { colorMode: true })
+        }
       }
       addEdge({
         id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,

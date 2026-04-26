@@ -601,6 +601,7 @@ function MeshShaderGraphMaterial({ sg }: { sg: NonNullable<CompiledMesh['shaderG
       uTime:       { value: 0 },
       uMouse:      { value: new THREE.Vector2() },
       uResolution: { value: new THREE.Vector2() },
+      uAspect:     { value: 1.0 },
     }
     for (const [key, entry] of Object.entries(sg.uniforms)) {
       const v = entry.value
@@ -677,14 +678,18 @@ function MeshPBRShaderGraphMaterial({
       color: toThreeColor(mp.color) as THREE.ColorRepresentation,
       metalness: (mp.metalness as number) ?? 0.1,
       roughness: (mp.roughness as number) ?? 0.5,
-      transparent: Boolean(mp.transparent),
       opacity: (mp.opacity as number) ?? 1,
+      transparent: ((mp.opacity as number) ?? 1) < 1,
       side: [THREE.FrontSide, THREE.BackSide, THREE.DoubleSide][(mp.side as number) ?? 0],
     })
     const hasVertexInjection = !!(sg.vertexPreamble && sg.vertexBodyForPBR)
-    // Only inject fragment PBR code when channels are actually connected (avoids vUv reference errors)
     const hasFragmentInjection = !!sg.fragmentPBR
     if (hasVertexInjection || hasFragmentInjection) {
+      // Force USE_UV if the fragment body uses vUv (e.g. shader/pattern) — Three.js only declares
+      // vUv when USE_UV is set, which requires a texture map. Without this, vUv is undeclared.
+      if (sg.fragmentPBRBody?.includes('vUv')) {
+        m.defines = { ...m.defines, USE_UV: '' }
+      }
       m.onBeforeCompile = (shader) => {
         // --- Vertex shader injection (displacement) ---
         if (sgRef.current.vertexPreamble && sgRef.current.vertexBodyForPBR) {
@@ -748,6 +753,7 @@ function MeshPBRShaderGraphMaterial({
         shader.uniforms.uTime       = { value: 0 }
         shader.uniforms.uMouse      = { value: new THREE.Vector2() }
         shader.uniforms.uResolution = { value: new THREE.Vector2() }
+        shader.uniforms.uAspect     = { value: 1.0 }
         compiledShaderRef.current = shader
       }
       m.needsUpdate = true
@@ -774,8 +780,10 @@ function MeshPBRShaderGraphMaterial({
     mat.color.set(toThreeColor(mp.color) as THREE.ColorRepresentation)
     mat.metalness = (mp.metalness as number) ?? 0.1
     mat.roughness = (mp.roughness as number) ?? 0.5
+    mat.opacity = (mp.opacity as number) ?? 1
+    mat.transparent = mat.opacity < 1
     mat.needsUpdate = true
-  }, [mat, mp.color, mp.metalness, mp.roughness])
+  }, [mat, mp.color, mp.metalness, mp.roughness, mp.opacity])
 
   // Update textures
   useEffect(() => {
@@ -845,6 +853,7 @@ function BackgroundShader({ bg }: { bg: CompiledBackgroundShader }) {
       uTime:       { value: 0 },
       uMouse:      { value: new THREE.Vector2() },
       uResolution: { value: new THREE.Vector2() },
+      uAspect:     { value: 1.0 },
     }
     if (!isGenerated) {
       // Raw GLSL path: float and texture ports
@@ -896,13 +905,15 @@ function BackgroundShader({ bg }: { bg: CompiledBackgroundShader }) {
   // Per-frame eval cache for bridge uniforms (cleared each frame)
   const bridgeCache = useRef(new Map<string, number>())
 
-  useFrame(({ mouse, viewport }, delta) => {
+  useFrame(({ mouse, size }, delta) => {
     const u = mat.uniforms
     const animStore = useAnimationStore.getState()
     // Read elapsed from animation store — LiveEvaluator owns advancement
     u.uTime.value = animStore.elapsed
     ;(u.uMouse.value as THREE.Vector2).set(mouse.x * 0.5 + 0.5, mouse.y * 0.5 + 0.5)
-    ;(u.uResolution.value as THREE.Vector2).set(viewport.width, viewport.height)
+    // Use CSS pixel dimensions — gives correct aspect ratio regardless of camera zoom/distance
+    ;(u.uResolution.value as THREE.Vector2).set(size.width, size.height)
+    if (u.uAspect) u.uAspect.value = size.height > 0 ? size.width / size.height : 1.0
     if (!isGenerated && u.uFloat1) {
       u.uFloat1.value = (mpRef.current.u1 as number) ?? 0
       u.uFloat2.value = (mpRef.current.u2 as number) ?? 0
@@ -918,8 +929,8 @@ function BackgroundShader({ bg }: { bg: CompiledBackgroundShader }) {
         delta: animStore.playing ? delta : 0,
         mouseX: mouse.x,
         mouseY: mouse.y,
-        screenW: viewport.width,
-        screenH: viewport.height,
+        screenW: size.width,
+        screenH: size.height,
       }
       bridgeCache.current.clear()
       for (const [uniformKey, evalKey] of Object.entries(bridges)) {
@@ -1287,8 +1298,8 @@ function MeshObject({
               displacementBias={(mp.displacementBias as number) ?? 0}
               metalness={(mp.metalness as number) ?? 0.1}
               roughness={(mp.roughness as number) ?? 0.5}
-              transparent={(mp.transparent as boolean) ?? false}
               opacity={(mp.opacity as number) ?? 1}
+              transparent={((mp.opacity as number) ?? 1) < 1}
               side={((mp.side as number) ?? 0) as 0 | 1 | 2}
             />
           )}
@@ -1768,13 +1779,11 @@ function LiveEvaluator() {
       }
     }
 
-    // Evaluate ALL color source ports so node previews and properties work
-    for (const edge of edges) {
-      const sourceNode = nodes.find((n) => n.id === edge.source)
-      if (!sourceNode) continue
-      if (sourceNode.type === 'color' || sourceNode.type === 'color/mix' || sourceNode.type === 'color/hsl') {
-        const val = evaluateColorPort(sourceNode.id, edge.sourceHandle, nodes, edges, ctx, cache)
-        if (val) colorCache.set(`${sourceNode.id}:${edge.sourceHandle}`, val)
+    // Evaluate ALL color nodes (including standalone) so node previews and properties work
+    for (const node of nodes) {
+      if (node.type === 'color' || node.type === 'color/mix' || node.type === 'color/hsl') {
+        const val = evaluateColorPort(node.id, 'color', nodes, edges, ctx, cache)
+        if (val) colorCache.set(`${node.id}:color`, val)
       }
     }
 

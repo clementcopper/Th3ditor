@@ -48,6 +48,12 @@
   box-shadow: none !important;
 }
 
+
+/* react-colorful: background matches panel so the gap between saturation + hue bar disappears */
+.react-colorful {
+  background: var(--color-surface-panel) !important;
+}
+
 /* react-colorful: saturation pointer → 24×24px, 1px border */
 .react-colorful__saturation-pointer {
   width: 20px !important;

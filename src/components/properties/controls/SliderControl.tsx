@@ -71,6 +71,10 @@ export function SliderControl({ param, value, onChange, onBeforeChange }: Props)
     ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
   }, [])
 
+  const handlePointerCancel = useCallback(() => {
+    isDragging.current = false
+  }, [])
+
   useEffect(() => {
     const el = sliderRef.current
     if (!el) return
@@ -97,6 +101,7 @@ export function SliderControl({ param, value, onChange, onBeforeChange }: Props)
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         >
           <div
             className="absolute inset-y-0 left-0 bg-accent/15 pointer-events-none transition-[width] duration-75"

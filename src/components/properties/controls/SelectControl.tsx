@@ -16,7 +16,7 @@ export function SelectControl({ param, value, onChange }: Props) {
         <label className="text-xs font-semibold text-text-secondary">{param.label}</label>
         <div className="flex border border-border-default overflow-hidden">
           {options.map((opt, i) => {
-            const isActive = value === parseFloat(opt.value)
+            const isActive = Number(value) === parseFloat(opt.value)
             return (
               <button
                 key={opt.value}

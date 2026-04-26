@@ -28,7 +28,6 @@ const material: NodeDefinition = {
     { type: 'color', uniform: 'emissive', label: 'Emissive', default: [0, 0, 0, 1], group: 'Emissive' },
     { type: 'float', uniform: 'emissiveIntensity', label: 'Intensity', min: 0, max: 10, step: 0.1, default: 1, linkedPort: 'emissiveIntensity', group: 'Emissive' },
     { type: 'float', uniform: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1, linkedPort: 'opacity' },
-    { type: 'bool', uniform: 'transparent', label: 'Transparent', default: false },
     {
       type: 'select', uniform: 'side', label: 'Side', default: 0, noHeader: true,
       options: [{ label: 'Front', value: '0' }, { label: 'Back', value: '1' }, { label: 'Double', value: '2' }],
@@ -46,7 +45,6 @@ const material: NodeDefinition = {
     emissive: [0, 0, 0, 1],
     emissiveIntensity: 1,
     opacity: 1,
-    transparent: false,
     side: 0,
     wireframe: false,
     normalScale: 1,

@@ -235,7 +235,8 @@ Shader Color konsolidiert (shader/color mit Color/Mix/Ramp-Modes, value+alpha-Ou
 Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskontinuität bei abs(normal.y)=0.99. Fix: achsenausgerichtete 3D-Gradientenabtastung (X/Y/Z-Offsets) + Projektion auf Tangentialebene.
 
 ### Shader Graph Erweiterungen 🔜
-- [ ] **Shader Time Modes** — ease-in/ease-out, Sawtooth, Square, Bounce
+- [ ] **Shader Time Node Modes** — ease-in/ease-out, Sawtooth, Square, Bounce uws. 
+- [ ] **Time Node Modes** - ease-in/ease-out, Sawtooth, Square, Bounce usw.
 - [ ] **Shader Dot Matrix** — prozedurales Punkt-Pattern (Anzahl, Abstand, Anordnung, Gradient), Outputs: Color, Value
 - [ ] **Shader Lines** — prozedurales Linien-Pattern, Outputs: Color, Value
 

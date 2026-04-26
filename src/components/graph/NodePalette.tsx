@@ -3,7 +3,7 @@ import { getAllNodeDefs } from '../../graph-engine/node-registry'
 import { useGraphStore } from '../../store/graph-store'
 import type { NodeDefinition } from '../../types/node-graph'
 
-let nextId = 100
+let nextId = 1
 
 type ContextMenu = {
   screen: { x: number; y: number }
@@ -40,6 +40,7 @@ export function NodePalette({ contextMenu, onClose }: Props) {
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
   const addNode = useGraphStore((s) => s.addNode)
   const addEdge = useGraphStore((s) => s.addEdge)
+  const nodes = useGraphStore((s) => s.nodes)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const allDefs = useMemo(() => getAllNodeDefs().filter((d) => !d.hidden), [])
@@ -102,6 +103,13 @@ export function NodePalette({ contextMenu, onClose }: Props) {
 
   const handleAdd = (def: NodeDefinition) => {
     const { x: baseX, y: baseY } = contextMenu.flow
+    // Compute safe starting ID: max of all existing numeric IDs + 1
+    const maxExisting = nodes.reduce((m, n) => {
+      const num = parseInt(n.id.replace(/\D+/g, ''), 10)
+      return isNaN(num) ? m : Math.max(m, num)
+    }, nextId - 1)
+    nextId = maxExisting + 1
+
     if (def.type === 'object/mesh') {
       const geoId = `n${nextId++}`
       const matId = `n${nextId++}`

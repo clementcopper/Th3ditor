@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position, useEdges, type NodeProps } from '@xyflow/react'
+import { useShallow } from 'zustand/react/shallow'
 import { getNodeDef } from '../../graph-engine/node-registry'
 import { PORT_COLORS, CATEGORY_COLORS, isVisible } from '../../graph-engine/type-system'
 import { useGraphStore } from '../../store/graph-store'
@@ -11,6 +12,20 @@ const EMPTY_DATA: Record<string, unknown> = {}
 function NodeRendererInner({ id, type, selected }: NodeProps) {
   const def = getNodeDef(type ?? '')
   const nodeData = useGraphStore((s) => s.nodes.find((n) => n.id === id)?.data ?? EMPTY_DATA)
+  const colorModeNodeIds = useGraphStore(useShallow((s) => s.nodes.filter((n) => n.data.colorMode).map((n) => n.id)))
+  // Reactive channel values for shader/color mode 0 swatch (connected shader/math sources)
+  const shaderChannelValues = useGraphStore(useShallow((s) => {
+    const result: { r?: number; g?: number; b?: number } = {}
+    for (const edge of s.edges) {
+      if (edge.target !== id) continue
+      if (edge.targetHandle !== 'r' && edge.targetHandle !== 'g' && edge.targetHandle !== 'b') continue
+      const src = s.nodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const raw = (src.data.value as number) ?? 0
+      result[edge.targetHandle as 'r' | 'g' | 'b'] = src.data.colorMode ? raw / 255 : raw
+    }
+    return result
+  }))
   const values = useEvaluatorStore((s) => s.values)
   const colorValues = useEvaluatorStore((s) => s.colorValues)
   const edges = useEdges()
@@ -31,8 +46,11 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
   const modeValue = modeProp ? Number(getData('mode') ?? 0) : undefined
   const fallbackSelectProp = !modeProp ? def.properties.find((p) => p.type === 'select' && !p.noHeader) : undefined
   const fallbackValue = fallbackSelectProp ? Number(getData(fallbackSelectProp.uniform) ?? 0) : undefined
+  const modeLabel = modeProp?.options?.find((o) => Number(o.value) === modeValue)?.label ?? ''
   const baseLabel = modeProp?.options && modeValue !== undefined
-    ? (modeProp.options.find((o) => Number(o.value) === modeValue)?.label ?? def.label)
+    ? modeProp.appendToHeader
+      ? `${def.label}: ${modeLabel}`
+      : (modeLabel || def.label)
     : fallbackSelectProp?.options && fallbackValue !== undefined
       ? `${def.label}: ${fallbackSelectProp.options.find((o) => Number(o.value) === fallbackValue)?.label ?? ''}`
       : def.label
@@ -71,7 +89,7 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
       {/* Ports */}
       <div className="flex justify-between items-start px-1 py-2 gap-1">
         {/* Inputs — min-w reserves space for float value display so swatch left edge stays stable */}
-        <div className={`flex flex-col gap-1.5 ${(type === 'color' || type === 'color/mix' || type === 'color/hsl') ? 'min-w-[60px]' : ''}`}>
+        <div className="flex flex-col gap-1.5">
           {visibleInputs.map((port) => {
             let portValue: number | undefined
             if (port.type === 'float') {
@@ -90,9 +108,15 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
                   style={{ background: PORT_COLORS[port.type], left: -5 }}
                 />
                 <span className="text-[10px] text-text-muted ml-2 leading-none">{port.label ?? port.name}</span>
-                {portValue !== undefined && (
-                  <span className="text-[10px] font-mono leading-none text-accent inline-block w-10 text-left tabular-nums">{portValue.toFixed(2)}</span>
-                )}
+                {portValue !== undefined && (() => {
+                  const srcEdge = edges.find((e) => e.target === id && e.targetHandle === port.name)
+                  const isColorMode = srcEdge ? colorModeNodeIds.includes(srcEdge.source) : false
+                  return (
+                    <span className={`text-[10px] font-mono leading-none text-accent inline-block text-left tabular-nums ${isColorMode ? 'w-5' : 'w-10'}`}>
+                      {isColorMode ? portValue.toFixed(0) : portValue.toFixed(2)}
+                    </span>
+                  )
+                })()}
               </div>
             )
           })}
@@ -128,14 +152,52 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
 
             const bg = toRgb(mixed)
             if (!bg) return null
-            return <div className="flex-1 min-w-0 self-stretch" style={{ background: bg }} />
+            return <div className="w-10 h-10 shrink-0 self-center" style={{ background: bg }} />
           }
 
-          // color / color/hsl — always show own color property
-          const c = getData('color') as [number,number,number,number] | undefined
+          // color / color/hsl — prefer live evaluated color, fall back to static property
+          const live = colorValues.get(`${id}:color`)
+          const c = live ?? getData('color') as [number,number,number,number] | undefined
           const bg = toRgb(c)
           if (!bg) return null
-          return <div className="flex-1 min-w-0 self-stretch" style={{ background: bg }} />
+          return <div className="w-10 h-10 shrink-0 self-center" style={{ background: bg }} />
+        })()}
+
+        {/* Shader Color preview swatch */}
+        {type === 'shader/color' && (() => {
+          const colorMode = Number(getData('colorMode') ?? 0)
+          const toRgb = (c: number[]) =>
+            `rgb(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)})`
+
+          if (colorMode === 1) {
+            // Mix: single blended color at factor t
+            const a = getData('colorA') as number[] | undefined ?? [1,0,0]
+            const b = getData('colorB') as number[] | undefined ?? [0,0,1]
+            const t = Math.min(1, Math.max(0, (getData('t') as number) ?? 0.5))
+            const mixed = [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]
+            return <div className="w-10 h-10 shrink-0 self-center" style={{ background: toRgb(mixed) }} />
+          }
+
+          if (colorMode === 2) {
+            // Ramp: gradient from stops
+            const stops = getData('stops') as { pos: number; color: number[] }[] | undefined
+            if (!stops || stops.length < 2) return null
+            const sorted = [...stops].sort((a, b) => a.pos - b.pos)
+            const parts = sorted.map((s) => `${toRgb(s.color)} ${Math.round(s.pos * 100)}%`)
+            const bg = `linear-gradient(to right, ${parts.join(', ')})`
+            return <div className="w-10 h-10 shrink-0 self-center" style={{ background: bg }} />
+          }
+
+          // Mode 0: solid color — use live channel values if any R/G/B port is connected
+          const anyChannel = shaderChannelValues.r !== undefined || shaderChannelValues.g !== undefined || shaderChannelValues.b !== undefined
+          if (anyChannel) {
+            const r = shaderChannelValues.r ?? 0
+            const g = shaderChannelValues.g ?? 0
+            const b = shaderChannelValues.b ?? 0
+            return <div className="w-10 h-10 shrink-0 self-center" style={{ background: toRgb([r, g, b]) }} />
+          }
+          const c = getData('color') as number[] | undefined ?? [1,1,1]
+          return <div className="w-10 h-10 shrink-0 self-center" style={{ background: toRgb(c) }} />
         })()}
 
         {/* Outputs */}
@@ -145,7 +207,9 @@ function NodeRendererInner({ id, type, selected }: NodeProps) {
             return (
               <div key={port.name} className="relative flex items-center gap-1">
                 {portValue !== undefined && (
-                  <span className="text-[10px] font-mono text-accent inline-block w-10 text-right tabular-nums">{portValue.toFixed(2)}</span>
+                  <span className={`text-[10px] font-mono text-accent inline-block text-right tabular-nums ${nodeData.colorMode ? 'w-5' : 'w-10'}`}>
+                    {nodeData.colorMode ? portValue.toFixed(0) : portValue.toFixed(2)}
+                  </span>
                 )}
                 <span className="text-[10px] text-text-muted mr-2 leading-none">{port.label ?? port.name}</span>
                 <Handle

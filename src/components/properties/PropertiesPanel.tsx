@@ -54,7 +54,8 @@ function NodeRefControl({
 
 export function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedNodeId)
-  const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedId))
+  const allNodes = useGraphStore((s) => s.nodes)
+  const node = allNodes.find((n) => n.id === selectedId)
   const connectedEdges = useGraphStore(
     useShallow((s) => s.edges.filter((e) => e.target === selectedId))
   )
@@ -220,28 +221,63 @@ export function PropertiesPanel() {
                   )
                 }
 
+                // Override ranges/display when node is in color mode
+                const effectiveProp =
+                  (node.data.colorMode && prop.uniform === 'numInt')
+                    ? { ...prop, min: 0, max: 255, hardMin: 0, hardMax: 255 }
+                  : (node.data.colorMode && prop.uniform === 'value' && node.type === 'shader/math')
+                    ? { ...prop, min: 0, max: 255, hardMin: 0, hardMax: 255, step: 1 }
+                  : prop
+
                 switch (prop.type) {
                   case 'float':
                   case 'int':
                     return (
                       <SliderControl
                         key={prop.uniform}
-                        param={prop}
+                        param={effectiveProp}
                         value={getValue(prop) as number}
                         onChange={(v) => handleChange(prop.uniform, v)}
                         onBeforeChange={snapshot}
                       />
                     )
-                  case 'color':
+                  case 'color': {
+                    const connR = connectedInputPorts.has('r')
+                    const connG = connectedInputPorts.has('g')
+                    const connB = connectedInputPorts.has('b')
+                    const anyConnected = connR || connG || connB
+                    const hiddenChannels = anyConnected
+                      ? new Set<string>([connR ? 'r' : '', connG ? 'g' : '', connB ? 'b' : ''].filter(Boolean))
+                      : undefined
+                    let displayValue = getValue(prop) as [number, number, number, number]
+                    if (anyConnected) {
+                      // Read live float values directly from the evaluator store via connected edges
+                      const base = displayValue
+                      const rEdge = connectedEdges.find((e) => e.targetHandle === 'r')
+                      const gEdge = connectedEdges.find((e) => e.targetHandle === 'g')
+                      const bEdge = connectedEdges.find((e) => e.targetHandle === 'b')
+                      const rSrc = rEdge ? allNodes.find((n) => n.id === rEdge.source) : undefined
+                      const gSrc = gEdge ? allNodes.find((n) => n.id === gEdge.source) : undefined
+                      const bSrc = bEdge ? allNodes.find((n) => n.id === bEdge.source) : undefined
+                      const rRaw = rEdge ? (evalValues.get(`${rEdge.source}:${rEdge.sourceHandle}`) ?? base[0]) : base[0]
+                      const gRaw = gEdge ? (evalValues.get(`${gEdge.source}:${gEdge.sourceHandle}`) ?? base[1]) : base[1]
+                      const bRaw = bEdge ? (evalValues.get(`${bEdge.source}:${bEdge.sourceHandle}`) ?? base[2]) : base[2]
+                      const r = rSrc?.data?.colorMode ? rRaw / 255 : rRaw
+                      const g = gSrc?.data?.colorMode ? gRaw / 255 : gRaw
+                      const b = bSrc?.data?.colorMode ? bRaw / 255 : bRaw
+                      displayValue = [r, g, b, base[3]]
+                    }
                     return (
                       <ColorControl
                         key={prop.uniform}
                         param={prop}
-                        value={getValue(prop) as [number, number, number, number]}
+                        value={displayValue}
                         onChange={(v) => handleChange(prop.uniform, v)}
                         onBeforeChange={snapshot}
+                        hiddenChannels={hiddenChannels}
                       />
                     )
+                  }
                   case 'bool':
                     return (
                       <ToggleControl
@@ -252,6 +288,17 @@ export function PropertiesPanel() {
                       />
                     )
                   case 'select': {
+                    // Lock op/numType selects when node is in color mode
+                    if (node.data.colorMode && (prop.uniform === 'numType' || (prop.uniform === 'op' && node.type === 'shader/math'))) {
+                      return (
+                        <div key={prop.uniform} className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold text-text-secondary">{prop.label}</span>
+                          <div className="h-7 flex items-center justify-center border border-border-default bg-accent/15">
+                            <span className="text-xs font-mono text-accent">{node.type === 'shader/math' ? 'Number' : 'INT'}</span>
+                          </div>
+                        </div>
+                      )
+                    }
                     // Filter options where visibleWhenPortDisconnected points to a connected port
                     const filteredOptions = prop.options?.filter(
                       (o) => !o.visibleWhenPortDisconnected || !connectedInputPorts.has(o.visibleWhenPortDisconnected)

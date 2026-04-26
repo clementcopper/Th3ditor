@@ -16,11 +16,24 @@ const shaderTime: NodeDefinition = {
   label: 'Shader Time',
   category: 'shader',
   inputs: [],
-  outputs: [{ name: 'time', type: 'sfloat', label: 'Time' }],
+  outputs: [{ name: 'time', type: 'sfloat', label: 'Value' }],
   properties: [
+    {
+      type: 'select', uniform: 'mode', label: 'Mode', default: 0, appendToHeader: true,
+      options: [
+        { label: 'Linear', value: '0' },
+        { label: 'Sawtooth', value: '1' },
+        { label: 'Sine', value: '2' },
+        { label: 'Square', value: '3' },
+        { label: 'Bounce', value: '4' },
+        { label: 'Ease In', value: '5' },
+        { label: 'Ease Out', value: '6' },
+        { label: 'Ease In-Out', value: '7' },
+      ],
+    },
     { type: 'float', uniform: 'speed', label: 'Speed', min: 0, max: 10, step: 0.01, default: 1.0 },
   ],
-  defaults: { speed: 1.0 },
+  defaults: { mode: 0, speed: 1.0 },
 }
 
 const shaderMouse: NodeDefinition = {
@@ -54,7 +67,10 @@ const shaderNoise: NodeDefinition = {
     { name: 'time',  type: 'sfloat', label: 'Time' },
     { name: 'seed',  type: 'sfloat', label: 'Seed' },
   ],
-  outputs: [{ name: 'value', type: 'sfloat', label: 'Value' }],
+  outputs: [
+    { name: 'value', type: 'sfloat', label: 'Value' },
+    { name: 'color', type: 'svec3',  label: 'Color' },
+  ],
   properties: [
     { type: 'select', uniform: 'noiseType', label: 'Type', options: [
       { label: 'fBm', value: '0' },
@@ -117,7 +133,7 @@ const shaderMath: NodeDefinition = {
     { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'op', equal: [0, 1, 2, 7] } },
     { name: 't', type: 'sfloat', label: 'T',  visibleWhen: { uniform: 'op', equal: 7 } },
   ],
-  outputs: [{ name: 'result', type: 'sfloat', label: 'Result' }],
+  outputs: [{ name: 'value', type: 'sfloat', label: 'Value' }],
   properties: [
     { type: 'select', uniform: 'op', label: 'Operation', options: [
       { label: 'Number',   value: '9' },
@@ -130,7 +146,7 @@ const shaderMath: NodeDefinition = {
       { label: 'Clamp',    value: '6' },
       { label: 'Lerp',     value: '7' },
       { label: 'Fract',    value: '8' },
-    ], default: 0 },
+    ], default: 9 },
     { type: 'float', uniform: 'value', label: 'Value', min: -1000, max: 1000, step: 0.01, hardMin: -1e9, hardMax: 1e9, default: 0.0,
       visibleWhen: { uniform: 'op', equal: 9 } },
     { type: 'float', uniform: 'a', label: 'A', min: -100, max: 100, step: 0.01, hardMin: -1e6, hardMax: 1e6, default: 1.0,
@@ -140,7 +156,7 @@ const shaderMath: NodeDefinition = {
     { type: 'float', uniform: 'lerpT', label: 'T', min: 0, max: 1, step: 0.01, default: 0.5,
       visibleWhen: [{ uniform: 'op', equal: 7 }, { portDisconnected: 't' }] },
   ],
-  defaults: { op: 0, a: 1.0, b: 1.0, lerpT: 0.5, value: 0.0 },
+  defaults: { op: 9, a: 1.0, b: 1.0, lerpT: 0.5, value: 0.0 },
 }
 
 const shaderColor: NodeDefinition = {
@@ -152,7 +168,6 @@ const shaderColor: NodeDefinition = {
     { name: 'r', type: 'sfloat', label: 'R', visibleWhen: { uniform: 'colorMode', equal: 0 } },
     { name: 'g', type: 'sfloat', label: 'G', visibleWhen: { uniform: 'colorMode', equal: 0 } },
     { name: 'b', type: 'sfloat', label: 'B', visibleWhen: { uniform: 'colorMode', equal: 0 } },
-    { name: 'a', type: 'sfloat', label: 'A', visibleWhen: { uniform: 'colorMode', equal: 0 } },
     // Mode 1: Mix
     { name: 'colorA', type: 'svec3',  label: 'A',      visibleWhen: { uniform: 'colorMode', equal: 1 } },
     { name: 'colorB', type: 'svec3',  label: 'B',      visibleWhen: { uniform: 'colorMode', equal: 1 } },
@@ -163,7 +178,6 @@ const shaderColor: NodeDefinition = {
   outputs: [
     { name: 'color', type: 'svec3',  label: 'Color' },
     { name: 'value', type: 'sfloat', label: 'Value' },
-    { name: 'alpha', type: 'sfloat', label: 'Alpha' },
   ],
   properties: [
     { type: 'select', uniform: 'colorMode', label: 'Mode', options: [
@@ -171,9 +185,9 @@ const shaderColor: NodeDefinition = {
       { label: 'Mix',   value: '1' },
       { label: 'Ramp',  value: '2' },
     ], default: 0 },
-    // Mode 0: Color
+    // Mode 0: Color — hidden when any channel port is connected (channels override static color)
     { type: 'color', uniform: 'color', label: 'Color', default: [1, 1, 1, 1], inline: true,
-      visibleWhen: { uniform: 'colorMode', equal: 0 } },
+      visibleWhen: [{ uniform: 'colorMode', equal: 0 }, { portDisconnected: 'r' }, { portDisconnected: 'g' }, { portDisconnected: 'b' }] },
     // Mode 1: Mix
     { type: 'color', uniform: 'colorA', label: 'A', default: [1, 0, 0, 1], inline: true,
       visibleWhen: [{ uniform: 'colorMode', equal: 1 }, { portDisconnected: 'colorA' }] },
@@ -220,7 +234,6 @@ const shaderOutput: NodeDefinition = {
   category: 'shader',
   inputs: [
     { name: 'color',        type: 'svec3',  label: 'Color' },
-    { name: 'alpha',        type: 'sfloat', label: 'Alpha' },
     { name: 'roughness',    type: 'sfloat', label: 'Roughness' },
     { name: 'metalness',    type: 'sfloat', label: 'Metalness' },
     { name: 'emissive',     type: 'svec3',  label: 'Emissive' },
@@ -230,8 +243,6 @@ const shaderOutput: NodeDefinition = {
   properties: [
     { type: 'color', uniform: 'defaultColor',      label: 'Color',     default: [0, 0, 0, 1], inline: true,
       visibleWhen: { portDisconnected: 'color' } },
-    { type: 'float', uniform: 'defaultAlpha',      label: 'Alpha',     min: 0, max: 1, step: 0.01, default: 1.0,
-      visibleWhen: { portDisconnected: 'alpha' } },
     { type: 'float', uniform: 'defaultRoughness',  label: 'Roughness', min: 0, max: 1, step: 0.01, default: 0.5,
       visibleWhen: { portDisconnected: 'roughness' } },
     { type: 'float', uniform: 'defaultMetalness',  label: 'Metalness', min: 0, max: 1, step: 0.01, default: 0.1,
@@ -239,7 +250,7 @@ const shaderOutput: NodeDefinition = {
     { type: 'float', uniform: 'displacementScale', label: 'Disp Scale', min: -2, max: 2, step: 0.01, default: 0.2,
       visibleWhen: { portConnected: 'displacement' } },
   ],
-  defaults: { defaultColor: [0, 0, 0, 1], defaultAlpha: 1.0, defaultRoughness: 0.5, defaultMetalness: 0.1, displacementScale: 0.2 },
+  defaults: { defaultColor: [0, 0, 0, 1], defaultRoughness: 0.5, defaultMetalness: 0.1, displacementScale: 0.2 },
 }
 
 const shaderBand: NodeDefinition = {
@@ -325,6 +336,100 @@ const shaderDomainWarp: NodeDefinition = {
   defaults: { strength: 0.5, scale: 2.0, octaves: 4, timeSpeed: 0.3 },
 }
 
+
+const shaderPattern: NodeDefinition = {
+  type: 'shader/pattern',
+  label: 'Shader Pattern',
+  category: 'shader',
+  inputs: [
+    { name: 'uv',       type: 'svec2',  label: 'UV',       visibleWhen: { portDisconnected: 'position' } },
+    { name: 'position', type: 'svec3',  label: 'Position', visibleWhen: { portDisconnected: 'uv' } },
+    { name: 'scale',    type: 'sfloat', label: 'Scale' },
+    { name: 'softness', type: 'sfloat', label: 'Softness' },
+    { name: 'radius',   type: 'sfloat', label: 'Radius',   visibleWhen: { uniform: 'mode', equal: [0] } },
+    { name: 'width',    type: 'sfloat', label: 'Width',    visibleWhen: { uniform: 'mode', equal: [1] } },
+    { name: 'angle',    type: 'sfloat', label: 'Angle',    visibleWhen: { uniform: 'mode', equal: [1] } },
+    { name: 'colorFG',  type: 'svec3',  label: 'Fill' },
+    { name: 'colorBG',  type: 'svec3',  label: 'Back' },
+    { name: 'time',     type: 'sfloat', label: 'Time' },
+    { name: 'mouse',    type: 'svec2',  label: 'Mouse', visibleWhen: { uniform: 'mode', equal: [0] } },
+  ],
+  outputs: [
+    { name: 'color', type: 'svec3',  label: 'Color' },
+    { name: 'value', type: 'sfloat', label: 'Value' },
+  ],
+  properties: [
+    { type: 'select', uniform: 'mode', label: 'Mode', appendToHeader: true, options: [
+      { label: 'Dots',  value: '0' },
+      { label: 'Lines', value: '1' },
+    ], default: 0 },
+    { type: 'float', uniform: 'scale',    label: 'Scale',  min: 0.1, max: 100, step: 0.1,  default: 5,    visibleWhen: { portDisconnected: 'scale' } },
+    { type: 'float', uniform: 'softness', label: 'Soft',   min: 0,   max: 1,   step: 0.01, default: 0.1,  visibleWhen: { portDisconnected: 'softness' } },
+    { type: 'float', uniform: 'radius',   label: 'Radius', min: 0,   max: 0.5, step: 0.01, default: 0.25, visibleWhen: [{ uniform: 'mode', equal: [0] }, { portDisconnected: 'radius' }] },
+    { type: 'float', uniform: 'width',    label: 'Width',  min: 0,   max: 1,   step: 0.01, default: 0.5,  visibleWhen: [{ uniform: 'mode', equal: [1] }, { portDisconnected: 'width' }] },
+    { type: 'float', uniform: 'angle',    label: 'Angle',  min: 0,   max: 180, step: 1,    default: 0,    visibleWhen: [{ uniform: 'mode', equal: [1] }, { portDisconnected: 'angle' }] },
+    { type: 'select', uniform: 'layout', label: 'Layout', options: [
+      { label: 'Grid',     value: '0' },
+      { label: 'Hex',      value: '1' },
+      { label: 'Diagonal', value: '2' },
+    ], default: '0', visibleWhen: { uniform: 'mode', equal: [0] } },
+    { type: 'float', uniform: 'timeSpeed', label: 'Time Speed', min: 0, max: 10, step: 0.1, default: 0, visibleWhen: { portDisconnected: 'time' } },
+    { type: 'select', uniform: 'mouseEffect', label: 'Effect', options: [
+      { label: 'None',    value: '0' },
+      { label: 'Attract', value: '1' },
+      { label: 'Repel',   value: '2' },
+      { label: 'Grow',    value: '3' },
+      { label: 'Shrink',  value: '4' },
+    ], default: '0', visibleWhen: [{ portConnected: 'mouse' }, { uniform: 'mode', equal: [0] }] },
+    { type: 'float', uniform: 'mouseRadius',   label: 'Radius',   min: 0.01, max: 0.5, step: 0.01, default: 0.2,  visibleWhen: [{ portConnected: 'mouse' }, { uniform: 'mode', equal: [0] }, { uniform: 'mouseEffect', notEqual: 0 }] },
+    { type: 'float', uniform: 'mouseStrength', label: 'Strength', min: 0,    max: 1,   step: 0.01, default: 0.5,  visibleWhen: [{ portConnected: 'mouse' }, { uniform: 'mode', equal: [0] }, { uniform: 'mouseEffect', notEqual: 0 }] },
+    { type: 'color', uniform: 'colorFG',  label: 'Fill',   default: [1, 1, 1, 1], visibleWhen: { portDisconnected: 'colorFG' } },
+    { type: 'color', uniform: 'colorBG',  label: 'Back',   default: [0, 0, 0, 1], visibleWhen: { portDisconnected: 'colorBG' } },
+  ],
+  defaults: { mode: 0, scale: 5, softness: 0.1, radius: 0.25, width: 0.5, angle: 0, layout: '0', timeSpeed: 0, mouseEffect: '0', mouseRadius: 0.2, mouseStrength: 0.5, colorFG: [1, 1, 1, 1], colorBG: [0, 0, 0, 1] },
+}
+
+const shaderDots: NodeDefinition = {
+  type: 'shader/dots',
+  hidden: true,
+  label: 'Shader Dots',
+  category: 'shader',
+  inputs: [{ name: 'uv', type: 'svec2', label: 'UV' }],
+  outputs: [
+    { name: 'color', type: 'svec3', label: 'Color' },
+    { name: 'value', type: 'sfloat', label: 'Value' },
+  ],
+  properties: [
+    { type: 'float', uniform: 'scale',    label: 'Scale',    min: 0.1, max: 50,  step: 0.1,  default: 5 },
+    { type: 'float', uniform: 'radius',   label: 'Radius',   min: 0,   max: 0.5, step: 0.01, default: 0.25 },
+    { type: 'float', uniform: 'softness', label: 'Soft',     min: 0,   max: 1,   step: 0.01, default: 0.1 },
+    { type: 'color', uniform: 'colorFG',  label: 'Fill',     default: [1, 1, 1, 1] },
+    { type: 'color', uniform: 'colorBG',  label: 'Back',     default: [0, 0, 0, 1] },
+  ],
+  defaults: { scale: 5, radius: 0.25, softness: 0.1, colorFG: [1, 1, 1, 1], colorBG: [0, 0, 0, 1] },
+}
+
+const shaderLines: NodeDefinition = {
+  type: 'shader/lines',
+  hidden: true,
+  label: 'Shader Lines',
+  category: 'shader',
+  inputs: [{ name: 'uv', type: 'svec2', label: 'UV' }],
+  outputs: [
+    { name: 'color', type: 'svec3', label: 'Color' },
+    { name: 'value', type: 'sfloat', label: 'Value' },
+  ],
+  properties: [
+    { type: 'float', uniform: 'scale',    label: 'Scale',    min: 0.1, max: 50,  step: 0.1,  default: 5 },
+    { type: 'float', uniform: 'width',    label: 'Width',    min: 0,   max: 1,   step: 0.01, default: 0.5 },
+    { type: 'float', uniform: 'angle',    label: 'Angle',    min: 0,   max: 180, step: 1,    default: 0 },
+    { type: 'float', uniform: 'softness', label: 'Soft',     min: 0,   max: 1,   step: 0.01, default: 0.1 },
+    { type: 'color', uniform: 'colorFG',  label: 'Fill',     default: [1, 1, 1, 1] },
+    { type: 'color', uniform: 'colorBG',  label: 'Back',     default: [0, 0, 0, 1] },
+  ],
+  defaults: { scale: 5, width: 0.5, angle: 0, softness: 0.1, colorFG: [1, 1, 1, 1], colorBG: [0, 0, 0, 1] },
+}
+
 export function registerShaderGraphNodes() {
   registerNode(shaderUV)
   registerNode(shaderTime)
@@ -340,5 +445,8 @@ export function registerShaderGraphNodes() {
   registerNode(shaderComponent)
   registerNode(shaderColorRamp)
   registerNode(shaderDomainWarp)
+  registerNode(shaderPattern)
+  registerNode(shaderDots)
+  registerNode(shaderLines)
   registerNode(shaderOutput)
 }

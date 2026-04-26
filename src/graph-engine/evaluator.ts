@@ -71,9 +71,12 @@ function evalColorPort(
       const rEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'r')
       const gEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'g')
       const bEdge = edges.find((e) => e.target === nodeId && e.targetHandle === 'b')
-      const r = rEdge ? (evalPort(rEdge.source, rEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[0]) : base[0]
-      const g = gEdge ? (evalPort(gEdge.source, gEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[1]) : base[1]
-      const b = bEdge ? (evalPort(bEdge.source, bEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[2]) : base[2]
+      const rRaw = rEdge ? (evalPort(rEdge.source, rEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[0]) : base[0]
+      const gRaw = gEdge ? (evalPort(gEdge.source, gEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[1]) : base[1]
+      const bRaw = bEdge ? (evalPort(bEdge.source, bEdge.sourceHandle, nodeMap, edges, ctx, floatCache) ?? base[2]) : base[2]
+      const r = rEdge && nodeMap.get(rEdge.source)?.data?.colorMode ? rRaw / 255 : rRaw
+      const g = gEdge && nodeMap.get(gEdge.source)?.data?.colorMode ? gRaw / 255 : gRaw
+      const b = bEdge && nodeMap.get(bEdge.source)?.data?.colorMode ? bRaw / 255 : bRaw
       return [r, g, b, base[3]]
     }
 
@@ -165,15 +168,25 @@ function evalPort(
     case 'time': {
       const mode = Number(props.mode ?? 0)
       const speed = (props.speed as number) ?? 1
+      const t = ctx.elapsed * speed
+      const ft = t - Math.floor(t) // fract(t)
       if (mode === 0) {
-        // Time
-        if (portName === 'elapsed') result = ctx.elapsed * speed
-        else if (portName === 'delta') result = ctx.delta * speed
-      } else if (mode === 1) {
-        // Sin(Time)
-        const amp = (props.amplitude as number) ?? 1
-        const offset = (props.offset as number) ?? 0
-        result = Math.sin(ctx.elapsed * speed) * amp + offset
+        result = t
+      } else {
+        switch (mode) {
+          case 1: { // Sine
+            const amp = (props.amplitude as number) ?? 1
+            const offset = (props.offset as number) ?? 0
+            result = Math.sin(t * Math.PI * 2) * amp + offset
+            break
+          }
+          case 2: result = ft; break                              // Sawtooth
+          case 3: result = ft < 0.5 ? 0 : 1; break               // Square
+          case 4: result = Math.abs(Math.sin(t * Math.PI)); break  // Bounce
+          case 5: result = ft * ft; break                          // Ease-In
+          case 6: result = 1 - (1 - ft) * (1 - ft); break         // Ease-Out
+          case 7: result = ft < 0.5 ? 2 * ft * ft : 1 - 2 * (1 - ft) * (1 - ft); break // Ease-In-Out
+        }
       }
       break
     }

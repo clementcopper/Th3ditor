@@ -424,6 +424,41 @@ function resolveTextureSlot(
 }
 
 /**
+ * Statically resolve a float value from a math/number node (no dynamic context).
+ */
+function resolveStaticFloat(
+  node: GraphNode,
+  edges: GraphEdge[],
+  nodeMap: Map<string, GraphNode>,
+): number | undefined {
+  const def = getNodeDef(node.type)
+  const props = { ...(def?.defaults ?? {}), ...node.data }
+
+  if (node.type === 'math') {
+    const mode = Number(props.mode ?? 0)
+    if (mode === 0) {
+      const numType = Number(props.numType ?? 0)
+      return numType === 1
+        ? Math.round((props.numInt as number) ?? 1)
+        : (props.numFloat as number) ?? 0
+    }
+    // For binary ops, try to resolve both inputs recursively
+    function upstreamFloat(handle: string, fallbackProp: string): number {
+      const edge = edges.find((e) => e.target === node.id && e.targetHandle === handle)
+      if (edge) {
+        const src = nodeMap.get(edge.source)
+        if (src) { const v = resolveStaticFloat(src, edges, nodeMap); if (v !== undefined) return v }
+      }
+      return (props[fallbackProp] as number) ?? 0
+    }
+    if (mode === 1) return upstreamFloat('a', 'a') + upstreamFloat('b', 'addB')
+    if (mode === 2) return upstreamFloat('a', 'mulA') * upstreamFloat('b', 'mulB')
+    if (mode === 8) return upstreamFloat('a', 'subA') - upstreamFloat('b', 'subB')
+  }
+  return undefined
+}
+
+/**
  * Statically resolve a color value from a color-type node chain (no dynamic context).
  * Used by the compiler to set initial materialProps.color at compile time.
  */
@@ -448,7 +483,19 @@ function resolveStaticColor(
   }
 
   if (node.type === 'color') {
-    return (props.color as [number, number, number, number]) ?? [1, 1, 1, 1]
+    const base = (props.color as [number, number, number, number]) ?? [1, 1, 1, 1]
+    function resolveChannel(handle: string, fallback: number): number {
+      const edge = edges.find((e) => e.target === node.id && e.targetHandle === handle)
+      if (edge) {
+        const src = nodeMap.get(edge.source)
+        if (src) {
+          const v = resolveStaticFloat(src, edges, nodeMap)
+          if (v !== undefined) return src.data.colorMode ? v / 255 : v
+        }
+      }
+      return fallback
+    }
+    return [resolveChannel('r', base[0]), resolveChannel('g', base[1]), resolveChannel('b', base[2]), base[3]]
   }
 
   if (node.type === 'color/mix') {

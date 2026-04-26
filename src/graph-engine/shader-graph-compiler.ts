@@ -31,6 +31,7 @@ const SHADER_NODE_TYPES = new Set([
   'shader/uv', 'shader/time', 'shader/mouse', 'shader/position',
   'shader/noise', 'shader/gradient', 'shader/mix', 'shader/math',
   'shader/color', 'shader/number', 'shader/band', 'shader/component', 'shader/colorramp', 'shader/domainwarp',
+  'shader/pattern', 'shader/dots', 'shader/lines',
   'shader/output',
 ])
 
@@ -230,6 +231,7 @@ export function compileShaderGraph(
     'uniform float uTime;',
     'uniform vec2 uMouse;',
     'uniform vec2 uResolution;',
+    'uniform float uAspect;',
     'varying vec2 vUv;',
     'varying vec3 vPosition;',
   ]
@@ -323,8 +325,22 @@ export function compileShaderGraph(
       }
 
       case 'shader/time': {
+        const mode = Number(props.mode ?? 0)
         const speedU = makeFloatUniform(node, 'speed', i)
-        bodyLines.push(`float ${outVar} = uTime * ${speedU};`)
+        const t = `_st_t${i}`
+        bodyLines.push(`float ${t} = uTime * ${speedU};`)
+        let expr: string
+        switch (mode) {
+          case 1: expr = `fract(${t})`; break                                           // Sawtooth
+          case 2: expr = `sin(${t} * 6.28318) * 0.5 + 0.5`; break                     // Sine
+          case 3: expr = `step(0.5, fract(${t}))`; break                               // Square
+          case 4: expr = `abs(sin(${t} * 3.14159))`; break                             // Bounce
+          case 5: { const f=`_st_f${i}`; bodyLines.push(`float ${f}=fract(${t});`); expr=`${f}*${f}`; break }  // Ease-In
+          case 6: { const f=`_st_f${i}`; bodyLines.push(`float ${f}=fract(${t});`); expr=`1.0-(1.0-${f})*(1.0-${f})`; break }  // Ease-Out
+          case 7: { const f=`_st_f${i}`; bodyLines.push(`float ${f}=fract(${t});`); expr=`${f}<0.5?2.0*${f}*${f}:1.0-2.0*(1.0-${f})*(1.0-${f})`; break }  // Ease-In-Out
+          default: expr = t; break                                                      // Linear
+        }
+        bodyLines.push(`float ${outVar} = ${expr};`)
         nodeVar.set(id, outVar)
         break
       }
@@ -340,7 +356,6 @@ export function compileShaderGraph(
         const colorMode = Number(props.colorMode ?? 0)
         const cVar = `_n${i}_c`
         const vVar = `_n${i}_v`
-        const aVar = `_n${i}_a`
 
         if (colorMode === 1) {
           // Mix
@@ -352,7 +367,6 @@ export function compileShaderGraph(
           const tExpr = tIn ?? makeFloatUniform(node, 't', i)
           bodyLines.push(`vec3 ${cVar} = mix(${aExpr}, ${bExpr}, clamp(${tExpr}, 0.0, 1.0));`)
           bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
-          bodyLines.push(`float ${aVar} = 1.0;`)
         } else if (colorMode === 2) {
           // Ramp
           const tIn = resolvedInput(id, 't')
@@ -384,26 +398,23 @@ export function compileShaderGraph(
             bodyLines.push(`${cVar} = mix(${cVar}, ${nextVar}, step(${posUniforms[j]}, ${tVar}));`)
           }
           bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
-          bodyLines.push(`float ${aVar} = 1.0;`)
         } else {
           // Mode 0: Constant color with optional per-channel overrides
           const colorU = makeVec4Uniform(node, 'color', i)
           const rIn = resolvedInput(id, 'r')
           const gIn = resolvedInput(id, 'g')
           const bIn = resolvedInput(id, 'b')
-          const aIn = resolvedInput(id, 'a')
-          const rExpr = rIn ?? `${colorU}.r`
-          const gExpr = gIn ?? `${colorU}.g`
-          const bExpr = bIn ?? `${colorU}.b`
-          const aExpr = aIn ?? `${colorU}.a`
+          // When any channel is connected, unconnected channels default to 0 (not static white)
+          const anyConnected = rIn !== null || gIn !== null || bIn !== null
+          const rExpr = rIn ?? (anyConnected ? '0.0' : `${colorU}.r`)
+          const gExpr = gIn ?? (anyConnected ? '0.0' : `${colorU}.g`)
+          const bExpr = bIn ?? (anyConnected ? '0.0' : `${colorU}.b`)
           bodyLines.push(`vec3 ${cVar} = vec3(${rExpr}, ${gExpr}, ${bExpr});`)
           bodyLines.push(`float ${vVar} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`)
-          bodyLines.push(`float ${aVar} = ${aExpr};`)
         }
 
         portVar.set(`${id}:color`, cVar)
         portVar.set(`${id}:value`, vVar)
-        portVar.set(`${id}:alpha`, aVar)
         nodeVar.set(id, cVar)
         break
       }
@@ -439,7 +450,10 @@ export function compileShaderGraph(
 
         makeFloatUniform(node, 'bevel', i)  // registered here; only used in displacement vertex path
         bodyLines.push(`float ${outVar} = ${mkNoise(p3)};`)
-
+        const noiseColorVar = `_ns_col${i}`
+        bodyLines.push(`vec3 ${noiseColorVar} = vec3(${outVar});`)
+        portVar.set(`${id}:value`, outVar)
+        portVar.set(`${id}:color`, noiseColorVar)
         nodeVar.set(id, outVar)
         break
       }
@@ -470,7 +484,8 @@ export function compileShaderGraph(
         const op = Number(props.op ?? 0)
         if (op === 9) {  // Number — constant, no inputs
           const valU = makeFloatUniform(node, 'value', i)
-          bodyLines.push(`float ${outVar} = ${valU};`)
+          const valExpr = node.data.colorMode ? `(${valU} / 255.0)` : valU
+          bodyLines.push(`float ${outVar} = ${valExpr};`)
           nodeVar.set(id, outVar)
           break
         }
@@ -603,12 +618,192 @@ export function compileShaderGraph(
         break
       }
 
+      case 'shader/pattern': {
+        const mode = Number(props.mode ?? 0)
+        const posIn = resolvedInput(id, 'position')
+        let coord2D: string
+        if (posIn) {
+          // Spherical UV from 3D position — seamless on sphere, no linear distortion at poles
+          bodyLines.push(`vec3 _pt_npos${i} = normalize(${posIn});`)
+          bodyLines.push(`vec2 _pt_coord${i} = vec2(atan(_pt_npos${i}.z, _pt_npos${i}.x) * 0.15915494 + 0.5, acos(clamp(_pt_npos${i}.y, -1.0, 1.0)) * 0.31830989);`)
+          coord2D = `_pt_coord${i}`
+        } else {
+          coord2D = resolvedInput(id, 'uv') ?? 'vUv'
+        }
+
+        const scaleIn  = resolvedInput(id, 'scale')
+        const scaleExpr = scaleIn ?? makeFloatUniform(node, 'scale', i)
+        const softIn   = resolvedInput(id, 'softness')
+        const softExpr  = softIn ?? makeFloatUniform(node, 'softness', i)
+        const fgIn  = resolvedInput(id, 'colorFG')
+        const fgExpr = fgIn ?? makeVec3Uniform(node, 'colorFG', i)
+        const bgIn  = resolvedInput(id, 'colorBG')
+        const bgExpr = bgIn ?? makeVec3Uniform(node, 'colorBG', i)
+        const timeIn   = resolvedInput(id, 'time')
+        const timeExpr = timeIn ?? makeFloatUniform(node, 'timeSpeed', i)
+
+        const cVar = `${outVar}_c`
+        const vVar = `${outVar}_v`
+
+        if (mode === 0) {
+          const layout      = Number(props.layout ?? 0)
+          const mouseEffect = Number(props.mouseEffect ?? 0)
+          const mouseIn     = resolvedInput(id, 'mouse')
+          const radIn       = resolvedInput(id, 'radius')
+          const radExpr     = radIn ?? makeFloatUniform(node, 'radius', i)
+          const mouseRadExpr = mouseIn && mouseEffect > 0 ? makeFloatUniform(node, 'mouseRadius', i) : '0.2'
+          const mouseStrExpr = mouseIn && mouseEffect > 0 ? makeFloatUniform(node, 'mouseStrength', i) : '0.5'
+
+          bodyLines.push(`float _pt_edge${i} = ${softExpr} * 0.08 + 0.001;`)
+
+          // Shared helper: emit distance/influence/direction lines after _pt_mVec is already pushed.
+          // dirExpr: GLSL for direction in cell space (may reference _pt_mPx which this fn pushes first).
+          // Returns the effective radius expression (possibly modified by Grow/Shrink).
+          const emitMouse = (dirExpr: string): string => {
+            bodyLines.push(`vec2 _pt_mPx${i} = vec2(_pt_mVec${i}.x * uAspect, _pt_mVec${i}.y);`)
+            bodyLines.push(`float _pt_mDist${i} = length(_pt_mPx${i});`)
+            bodyLines.push(`float _pt_mInfl${i} = 1.0 - smoothstep(0.0, ${mouseRadExpr}, _pt_mDist${i});`)
+            bodyLines.push(`vec2 _pt_mDir${i} = normalize(${dirExpr} + vec2(0.00001, 0.0));`)
+            if (mouseEffect === 1) bodyLines.push(`_pt_cell${i} -= _pt_mInfl${i} * ${mouseStrExpr} * _pt_mDir${i} * 0.45;`)
+            else if (mouseEffect === 2) bodyLines.push(`_pt_cell${i} += _pt_mInfl${i} * ${mouseStrExpr} * _pt_mDir${i} * 0.45;`)
+            bodyLines.push(`float _pt_d${i} = length(_pt_cell${i});`)
+            let er = radExpr
+            if (mouseEffect === 3) { bodyLines.push(`float _pt_effRad${i} = ${radExpr} + _pt_mInfl${i} * ${mouseStrExpr} * (0.5 - ${radExpr});`); er = `_pt_effRad${i}` }
+            else if (mouseEffect === 4) { bodyLines.push(`float _pt_effRad${i} = max(0.0, ${radExpr} * (1.0 - _pt_mInfl${i} * ${mouseStrExpr}));`); er = `_pt_effRad${i}` }
+            return er
+          }
+
+          if (layout === 1) {
+            // Hex
+            bodyLines.push(`float _pt_scaleY${i} = ${scaleExpr} / uAspect;`)
+            if (mouseIn && mouseEffect > 0) {
+              bodyLines.push(`vec2 _pt_ts${i} = vec2(${timeExpr}, 0.0);`)
+              bodyLines.push(`float _pt_row${i} = floor(${coord2D}.y * _pt_scaleY${i});`)
+              bodyLines.push(`float _pt_hoff${i} = 0.5 * mod(_pt_row${i}, 2.0) / ${scaleExpr};`)
+              bodyLines.push(`vec2 _pt_hexC${i} = vec2(${coord2D}.x + _pt_hoff${i}, ${coord2D}.y);`)
+              bodyLines.push(`vec2 _pt_cIdx${i} = floor(_pt_hexC${i} * vec2(${scaleExpr}, _pt_scaleY${i}) + _pt_ts${i});`)
+              bodyLines.push(`vec2 _pt_cell${i} = _pt_hexC${i} * vec2(${scaleExpr}, _pt_scaleY${i}) + _pt_ts${i} - _pt_cIdx${i} - 0.5;`)
+              bodyLines.push(`vec2 _pt_ctrS${i} = (_pt_cIdx${i} + 0.5 - _pt_ts${i}) / vec2(${scaleExpr}, _pt_scaleY${i});`)
+              bodyLines.push(`vec2 _pt_dotCtr${i} = vec2(_pt_ctrS${i}.x - _pt_hoff${i}, _pt_ctrS${i}.y);`)
+              bodyLines.push(`vec2 _pt_mVec${i} = ${mouseIn} - _pt_dotCtr${i};`)
+              const er = emitMouse(`_pt_mPx${i}`)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${er} - _pt_edge${i}, ${er} + _pt_edge${i}, _pt_d${i});`)
+            } else {
+              bodyLines.push(`float _pt_row${i} = floor(${coord2D}.y * _pt_scaleY${i});`)
+              bodyLines.push(`float _pt_hoff${i} = 0.5 * mod(_pt_row${i}, 2.0) / ${scaleExpr};`)
+              bodyLines.push(`vec2 _pt_cell${i} = fract(vec2(${coord2D}.x + _pt_hoff${i}, ${coord2D}.y) * vec2(${scaleExpr}, _pt_scaleY${i}) + vec2(${timeExpr}, 0.0)) - 0.5;`)
+              bodyLines.push(`float _pt_d${i} = length(_pt_cell${i});`)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${radExpr} - _pt_edge${i}, ${radExpr} + _pt_edge${i}, _pt_d${i});`)
+            }
+          } else if (layout === 2) {
+            // Diagonal — cell space is 45°-rotated, so mouse direction must be rotated to match
+            if (mouseIn && mouseEffect > 0) {
+              const scaleD = `(${scaleExpr} / uAspect)`
+              bodyLines.push(`vec2 _pt_ts${i} = vec2(${timeExpr}, 0.0);`)
+              bodyLines.push(`vec2 _pt_sq${i} = vec2(${coord2D}.x * uAspect, ${coord2D}.y);`)
+              bodyLines.push(`vec2 _pt_rot${i} = vec2(0.7071 * _pt_sq${i}.x - 0.7071 * _pt_sq${i}.y, 0.7071 * _pt_sq${i}.x + 0.7071 * _pt_sq${i}.y);`)
+              bodyLines.push(`vec2 _pt_cIdx${i} = floor(_pt_rot${i} * ${scaleD} + _pt_ts${i});`)
+              bodyLines.push(`vec2 _pt_cell${i} = _pt_rot${i} * ${scaleD} + _pt_ts${i} - _pt_cIdx${i} - 0.5;`)
+              // Invert back to UV: un-scale → inverse-rotate (R^T) → un-aspect X
+              bodyLines.push(`vec2 _pt_ctrRot${i} = (_pt_cIdx${i} + 0.5 - _pt_ts${i}) / ${scaleD};`)
+              bodyLines.push(`vec2 _pt_ctrSq${i} = vec2(0.7071 * _pt_ctrRot${i}.x + 0.7071 * _pt_ctrRot${i}.y, -0.7071 * _pt_ctrRot${i}.x + 0.7071 * _pt_ctrRot${i}.y);`)
+              bodyLines.push(`vec2 _pt_dotCtr${i} = vec2(_pt_ctrSq${i}.x / uAspect, _pt_ctrSq${i}.y);`)
+              bodyLines.push(`vec2 _pt_mVec${i} = ${mouseIn} - _pt_dotCtr${i};`)
+              // Rotate pixel-space direction into the 45°-rotated cell space
+              const diagDir = `vec2(0.7071 * _pt_mPx${i}.x - 0.7071 * _pt_mPx${i}.y, 0.7071 * _pt_mPx${i}.x + 0.7071 * _pt_mPx${i}.y)`
+              const er = emitMouse(diagDir)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${er} - _pt_edge${i}, ${er} + _pt_edge${i}, _pt_d${i});`)
+            } else {
+              bodyLines.push(`vec2 _pt_sq${i} = vec2(${coord2D}.x * uAspect, ${coord2D}.y);`)
+              bodyLines.push(`vec2 _pt_rot${i} = vec2(0.7071 * _pt_sq${i}.x - 0.7071 * _pt_sq${i}.y, 0.7071 * _pt_sq${i}.x + 0.7071 * _pt_sq${i}.y);`)
+              bodyLines.push(`vec2 _pt_cell${i} = fract(_pt_rot${i} * (${scaleExpr} / uAspect) + vec2(${timeExpr}, 0.0)) - 0.5;`)
+              bodyLines.push(`float _pt_d${i} = length(_pt_cell${i});`)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${radExpr} - _pt_edge${i}, ${radExpr} + _pt_edge${i}, _pt_d${i});`)
+            }
+          } else {
+            // Grid
+            bodyLines.push(`float _pt_scaleY${i} = ${scaleExpr} / uAspect;`)
+            if (mouseIn && mouseEffect > 0) {
+              bodyLines.push(`vec2 _pt_ts${i} = vec2(${timeExpr}, 0.0);`)
+              bodyLines.push(`vec2 _pt_cIdx${i} = floor(${coord2D} * vec2(${scaleExpr}, _pt_scaleY${i}) + _pt_ts${i});`)
+              bodyLines.push(`vec2 _pt_cell${i} = ${coord2D} * vec2(${scaleExpr}, _pt_scaleY${i}) + _pt_ts${i} - _pt_cIdx${i} - 0.5;`)
+              bodyLines.push(`vec2 _pt_dotCtr${i} = (_pt_cIdx${i} + 0.5 - _pt_ts${i}) / vec2(${scaleExpr}, _pt_scaleY${i});`)
+              bodyLines.push(`vec2 _pt_mVec${i} = ${mouseIn} - _pt_dotCtr${i};`)
+              const er = emitMouse(`_pt_mPx${i}`)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${er} - _pt_edge${i}, ${er} + _pt_edge${i}, _pt_d${i});`)
+            } else {
+              bodyLines.push(`vec2 _pt_cell${i} = fract(${coord2D} * vec2(${scaleExpr}, _pt_scaleY${i}) + vec2(${timeExpr}, 0.0)) - 0.5;`)
+              bodyLines.push(`float _pt_d${i} = length(_pt_cell${i});`)
+              bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${radExpr} - _pt_edge${i}, ${radExpr} + _pt_edge${i}, _pt_d${i});`)
+            }
+          }
+        } else {
+          const widthIn  = resolvedInput(id, 'width')
+          const widthExpr = widthIn ?? makeFloatUniform(node, 'width', i)
+          const angleIn  = resolvedInput(id, 'angle')
+          const angleExpr = angleIn ?? makeFloatUniform(node, 'angle', i)
+          bodyLines.push(`float _pt_a${i} = ${angleExpr} * 0.017453;`)
+          bodyLines.push(`vec2 _pt_dir${i} = vec2(cos(_pt_a${i}), sin(_pt_a${i}));`)
+          bodyLines.push(`float _pt_t${i} = fract(dot(${coord2D}, _pt_dir${i}) * ${scaleExpr} + ${timeExpr});`)
+          bodyLines.push(`float _pt_hg${i} = (1.0 - ${widthExpr}) * 0.5;`)
+          bodyLines.push(`float _pt_eg${i} = ${softExpr} * 0.04 + 0.001;`)
+          bodyLines.push(`float ${vVar} = smoothstep(_pt_hg${i} - _pt_eg${i}, _pt_hg${i} + _pt_eg${i}, _pt_t${i}) * (1.0 - smoothstep(1.0 - _pt_hg${i} - _pt_eg${i}, 1.0 - _pt_hg${i} + _pt_eg${i}, _pt_t${i}));`)
+        }
+        bodyLines.push(`vec3 ${cVar} = mix(${bgExpr}, ${fgExpr}, ${vVar});`)
+        portVar.set(`${id}:color`, cVar)
+        portVar.set(`${id}:value`, vVar)
+        nodeVar.set(id, cVar)
+        break
+      }
+
+      case 'shader/dots': {
+        const uvExpr  = resolvedInput(id, 'uv') ?? 'vUv'
+        const scaleU  = makeFloatUniform(node, 'scale', i)
+        const radU    = makeFloatUniform(node, 'radius', i)
+        const softU   = makeFloatUniform(node, 'softness', i)
+        const fgU     = makeVec3Uniform(node, 'colorFG', i)
+        const bgU     = makeVec3Uniform(node, 'colorBG', i)
+        const cVar = `${outVar}_c`
+        const vVar = `${outVar}_v`
+        bodyLines.push(`vec2 _dt_cell${i} = fract(${uvExpr} * ${scaleU}) - 0.5;`)
+        bodyLines.push(`float _dt_d${i} = length(_dt_cell${i});`)
+        bodyLines.push(`float _dt_edge${i} = ${softU} * 0.08 + 0.001;`)
+        bodyLines.push(`float ${vVar} = 1.0 - smoothstep(${radU} - _dt_edge${i}, ${radU} + _dt_edge${i}, _dt_d${i});`)
+        bodyLines.push(`vec3 ${cVar} = mix(${bgU}, ${fgU}, ${vVar});`)
+        portVar.set(`${id}:color`, cVar)
+        portVar.set(`${id}:value`, vVar)
+        nodeVar.set(id, cVar)
+        break
+      }
+
+      case 'shader/lines': {
+        const uvExpr  = resolvedInput(id, 'uv') ?? 'vUv'
+        const scaleU  = makeFloatUniform(node, 'scale', i)
+        const widthU  = makeFloatUniform(node, 'width', i)
+        const angleU  = makeFloatUniform(node, 'angle', i)
+        const softU   = makeFloatUniform(node, 'softness', i)
+        const fgU     = makeVec3Uniform(node, 'colorFG', i)
+        const bgU     = makeVec3Uniform(node, 'colorBG', i)
+        const cVar = `${outVar}_c`
+        const vVar = `${outVar}_v`
+        bodyLines.push(`float _ln_a${i} = ${angleU} * 0.017453;`)
+        bodyLines.push(`vec2 _ln_dir${i} = vec2(cos(_ln_a${i}), sin(_ln_a${i}));`)
+        bodyLines.push(`float _ln_t${i} = fract(dot(${uvExpr}, _ln_dir${i}) * ${scaleU});`)
+        bodyLines.push(`float _ln_hg${i} = (1.0 - ${widthU}) * 0.5;`)
+        bodyLines.push(`float _ln_edge${i} = ${softU} * 0.04 + 0.001;`)
+        bodyLines.push(`float ${vVar} = smoothstep(_ln_hg${i} - _ln_edge${i}, _ln_hg${i} + _ln_edge${i}, _ln_t${i}) * (1.0 - smoothstep(1.0 - _ln_hg${i} - _ln_edge${i}, 1.0 - _ln_hg${i} + _ln_edge${i}, _ln_t${i}));`)
+        bodyLines.push(`vec3 ${cVar} = mix(${bgU}, ${fgU}, ${vVar});`)
+        portVar.set(`${id}:color`, cVar)
+        portVar.set(`${id}:value`, vVar)
+        nodeVar.set(id, cVar)
+        break
+      }
+
       case 'shader/output': {
         // Terminal node — generate gl_FragColor
         const colorIn = resolvedInput(id, 'color')
         const colorExpr = colorIn ?? makeVec3Uniform(node, 'defaultColor', i)
-        const alphaIn = resolvedInput(id, 'alpha')
-        const alphaExpr = alphaIn ?? makeFloatUniform(node, 'defaultAlpha', i)
+
 
         // Capture PBR channel expressions (only when port is connected)
         const roughnessIn = resolvedInput(id, 'roughness')
@@ -619,7 +814,7 @@ export function compileShaderGraph(
         if (emissiveIn)  outputPBR.emissive  = emissiveIn
         if (colorIn)     outputPBR.albedo    = colorIn
 
-        bodyLines.push(`gl_FragColor = vec4(${colorExpr}, ${alphaExpr});`)
+        bodyLines.push(`gl_FragColor = vec4(${colorExpr}, 1.0);`)
         break
       }
 
@@ -795,7 +990,8 @@ export function compileShaderGraph(
         case 'shader/math': {
           const op = Number(props.op ?? 0)
           if (op === 9) {  // Number — constant, no inputs
-            const line = `float ${v} = _u${i}_value;`
+            const valExpr = node.data.colorMode ? `(_u${i}_value / 255.0)` : `_u${i}_value`
+            const line = `float ${v} = ${valExpr};`
             vBody.push(line); vBodyFunc.push(line); vVar.set(id, v); break
           }
           const aExpr = vResolve(id, 'a') ?? `_u${i}_a`
@@ -856,7 +1052,6 @@ export function compileShaderGraph(
           const colorMode = Number(props.colorMode ?? 0)
           const cVar = `_n${i}_c`
           const vVarName = `_n${i}_v`
-          const aVar = `_n${i}_a`
 
           if (colorMode === 1) {
             const aIn = vResolve(id, 'colorA')
@@ -897,9 +1092,10 @@ export function compileShaderGraph(
             const rIn = vResolve(id, 'r')
             const gIn = vResolve(id, 'g')
             const bIn = vResolve(id, 'b')
-            const rExpr = rIn ?? `${colorU}.r`
-            const gExpr = gIn ?? `${colorU}.g`
-            const bExpr = bIn ?? `${colorU}.b`
+            const anyConnectedV = rIn !== null || gIn !== null || bIn !== null
+            const rExpr = rIn ?? (anyConnectedV ? '0.0' : `${colorU}.r`)
+            const gExpr = gIn ?? (anyConnectedV ? '0.0' : `${colorU}.g`)
+            const bExpr = bIn ?? (anyConnectedV ? '0.0' : `${colorU}.b`)
             const l1 = `vec3 ${cVar} = vec3(${rExpr}, ${gExpr}, ${bExpr});`
             const l2 = `float ${vVarName} = dot(${cVar}, vec3(0.2126, 0.7152, 0.0722));`
             vBody.push(l1, l2); vBodyFunc.push(l1, l2); vBodyUvFunc.push(l1, l2)
@@ -907,8 +1103,90 @@ export function compileShaderGraph(
 
           vPortVar.set(`${id}:color`, cVar)
           vPortVar.set(`${id}:value`, vVarName)
-          vPortVar.set(`${id}:alpha`, aVar)
           vVar.set(id, vVarName)
+          break
+        }
+        case 'shader/pattern': {
+          const mode   = Number(props.mode ?? 0)
+          const layout = Number(props.layout ?? 0)
+          const posIn  = vResolve(id, 'position')
+          const scaleExpr  = vResolve(id, 'scale') ?? `_u${i}_scale`
+          const softExpr   = vResolve(id, 'softness') ?? `_u${i}_softness`
+
+          const mkSphCoord = (arr: string[], posExpr: string, suffix: string) => {
+            const nvar = `_pt_npos${i}_${suffix}`
+            const cvar = `_pt_sphUv${i}_${suffix}`
+            arr.push(`vec3 ${nvar} = normalize(${posExpr});`)
+            arr.push(`vec2 ${cvar} = vec2(atan(${nvar}.z, ${nvar}.x) * 0.15915494 + 0.5, acos(clamp(${nvar}.y, -1.0, 1.0)) * 0.31830989);`)
+            return cvar
+          }
+
+          // UV-based dots — no uAspect (displacement is in object space, not screen space)
+          const mkDotUvLines = (coord2D: string): string[] => {
+            const radExpr = vResolve(id, 'radius') ?? `_u${i}_radius`
+            const lines: string[] = [`float _pt_edge${i} = ${softExpr} * 0.08 + 0.001;`]
+            if (layout === 1) {
+              lines.push(`float _pt_row${i} = floor(${coord2D}.y * ${scaleExpr});`)
+              lines.push(`float _pt_hoff${i} = 0.5 * mod(_pt_row${i}, 2.0) / ${scaleExpr};`)
+              lines.push(`vec2 _pt_cell${i} = fract(vec2(${coord2D}.x + _pt_hoff${i}, ${coord2D}.y) * ${scaleExpr}) - 0.5;`)
+            } else if (layout === 2) {
+              lines.push(`vec2 _pt_rot${i} = vec2(0.7071*${coord2D}.x - 0.7071*${coord2D}.y, 0.7071*${coord2D}.x + 0.7071*${coord2D}.y);`)
+              lines.push(`vec2 _pt_cell${i} = fract(_pt_rot${i} * ${scaleExpr}) - 0.5;`)
+            } else {
+              lines.push(`vec2 _pt_cell${i} = fract(${coord2D} * ${scaleExpr}) - 0.5;`)
+            }
+            lines.push(`float ${v} = 1.0 - smoothstep(${radExpr} - _pt_edge${i}, ${radExpr} + _pt_edge${i}, length(_pt_cell${i}));`)
+            return lines
+          }
+
+          const mkLinesLines = (coord2D: string): string[] => {
+            const widthExpr = vResolve(id, 'width') ?? `_u${i}_width`
+            const angleExpr = vResolve(id, 'angle') ?? `_u${i}_angle`
+            return [
+              `float _pt_a${i} = ${angleExpr} * 0.017453;`,
+              `vec2 _pt_dir${i} = vec2(cos(_pt_a${i}), sin(_pt_a${i}));`,
+              `float _pt_t${i} = fract(dot(${coord2D}, _pt_dir${i}) * ${scaleExpr});`,
+              `float _pt_hg${i} = (1.0 - ${widthExpr}) * 0.5;`,
+              `float _pt_eg${i} = ${softExpr} * 0.04 + 0.001;`,
+              `float ${v} = smoothstep(_pt_hg${i} - _pt_eg${i}, _pt_hg${i} + _pt_eg${i}, _pt_t${i}) * (1.0 - smoothstep(1.0 - _pt_hg${i} - _pt_eg${i}, 1.0 - _pt_hg${i} + _pt_eg${i}, _pt_t${i}));`,
+            ]
+          }
+
+          if (mode === 0 && posIn) {
+            const c0 = mkSphCoord(vBody, posIn, 'b')
+            const c1 = mkSphCoord(vBodyFunc, posIn, 'f')
+            const c2 = mkSphCoord(vBodyUvFunc, posIn, 'u')
+            for (const l of mkDotUvLines(c0))  vBody.push(l)
+            for (const l of mkDotUvLines(c1))  vBodyFunc.push(l)
+            for (const l of mkDotUvLines(c2))  vBodyUvFunc.push(l)
+          } else if (mode === 0) {
+            const uvB = vResolve(id, 'uv') ?? '_sg_dispUv'
+            const uvF = vResolve(id, 'uv') ?? 'uv'
+            const uvU = vResolve(id, 'uv') ?? '_sg_uvp'
+            for (const l of mkDotUvLines(uvB))  vBody.push(l)
+            for (const l of mkDotUvLines(uvF))  vBodyFunc.push(l)
+            for (const l of mkDotUvLines(uvU))  vBodyUvFunc.push(l)
+          } else {
+            // Lines mode
+            if (posIn) {
+              const c0 = mkSphCoord(vBody, posIn, 'b')
+              const c1 = mkSphCoord(vBodyFunc, posIn, 'f')
+              const c2 = mkSphCoord(vBodyUvFunc, posIn, 'u')
+              for (const l of mkLinesLines(c0))  vBody.push(l)
+              for (const l of mkLinesLines(c1))  vBodyFunc.push(l)
+              for (const l of mkLinesLines(c2))  vBodyUvFunc.push(l)
+            } else {
+              const uvB = vResolve(id, 'uv') ?? '_sg_dispUv'
+              const uvF = vResolve(id, 'uv') ?? 'uv'
+              const uvU = vResolve(id, 'uv') ?? '_sg_uvp'
+              for (const l of mkLinesLines(uvB))  vBody.push(l)
+              for (const l of mkLinesLines(uvF))  vBodyFunc.push(l)
+              for (const l of mkLinesLines(uvU))  vBodyUvFunc.push(l)
+            }
+          }
+
+          vPortVar.set(`${id}:value`, v)
+          vVar.set(id, v)
           break
         }
       }

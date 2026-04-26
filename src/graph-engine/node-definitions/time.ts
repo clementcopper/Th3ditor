@@ -7,16 +7,20 @@ const time: NodeDefinition = {
   category: 'time',
   inputs: [],
   outputs: [
-    { name: 'elapsed', type: 'float', label: 'Elapsed', visibleWhen: { uniform: 'mode', equal: 0 } },
-    { name: 'delta', type: 'float', label: 'Delta', visibleWhen: { uniform: 'mode', equal: 0 } },
-    { name: 'value', type: 'float', label: 'Value', visibleWhen: { uniform: 'mode', equal: 1 } },
+    { name: 'value', type: 'float', label: 'Value' },
   ],
   properties: [
     {
-      type: 'select', uniform: 'mode', label: 'Type', default: 0,
+      type: 'select', uniform: 'mode', label: 'Type', default: 0, appendToHeader: true,
       options: [
-        { label: 'Time', value: '0' },
-        { label: 'Sin(Time)', value: '1' },
+        { label: 'Linear', value: '0' },
+        { label: 'Sine', value: '1' },
+        { label: 'Sawtooth', value: '2' },
+        { label: 'Square', value: '3' },
+        { label: 'Bounce', value: '4' },
+        { label: 'Ease In', value: '5' },
+        { label: 'Ease Out', value: '6' },
+        { label: 'Ease In-Out', value: '7' },
       ],
     },
     { type: 'float', uniform: 'speed', label: 'Speed', min: 0, max: 20, step: 0.1, hardMax: 1000, default: 1 },

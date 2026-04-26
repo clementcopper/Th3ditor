@@ -63,7 +63,8 @@ export function isVisible(
     const depVal = getData(cond.uniform)
     if (cond.equal !== undefined) {
       const eq = cond.equal
-      const matches = Array.isArray(eq) ? eq.includes(depVal as number) : depVal === eq
+      // eslint-disable-next-line eqeqeq
+      const matches = Array.isArray(eq) ? eq.some((v) => depVal == v) : depVal == eq
       if (!matches) return false
     }
     if (cond.notEqual !== undefined) {

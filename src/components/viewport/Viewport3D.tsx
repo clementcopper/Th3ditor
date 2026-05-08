@@ -109,7 +109,7 @@ export function PlaybackOverlay({ extra, positioned = true, stacked = false }: {
           onPointerUp={handleScrubEnd}
           onChange={handleScrub}
           onWheel={handleWheel}
-          className={`timeline-scrubber ${stacked ? 'flex-1' : 'w-40'}`}
+          className={`timeline-scrubber ${stacked ? 'flex-1' : 'w-[300px]'}`}
           style={{
             background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-border-default) 0%)`,
           }}
@@ -127,7 +127,7 @@ export function PlaybackOverlay({ extra, positioned = true, stacked = false }: {
   if (!positioned) return bar
 
   if (stacked) return (
-    <div className="absolute left-3 right-3 z-10 pointer-events-auto transition-[bottom] duration-150" style={{ bottom: 12 + 26 + 8 }}>
+    <div className="absolute left-3 right-3 z-10 pointer-events-auto" style={{ bottom: 12 }}>
       {bar}
     </div>
   )
@@ -428,22 +428,30 @@ function EditorBackground() {
   return <color attach="background" args={['#1e1b18']} />
 }
 
-// Playbar approx half-width + controls width + right margin — below this they'd overlap
-const STACK_THRESHOLD = 820
+// Playbar half-width ≈ 150px (play+stop+scrubber+time), right margin = 12px (bottom-3), gap = 8px
+// Threshold computed dynamically from actual controls width so extraButton is accounted for.
+const PLAYBAR_HALF = 215
+const CONTROLS_RIGHT_MARGIN = 12
+const CONTROLS_MIN_GAP = 8
 
 export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.ReactNode, hidePlaybar?: boolean } = {}) {
   const projectionMode = useEditorStore((s) => s.projectionMode)
   const showGrid = useEditorStore((s) => s.showGrid)
   const containerRef = useRef<HTMLDivElement>(null)
+  const controlsRef = useRef<HTMLDivElement>(null)
   const [stacked, setStacked] = useState(false)
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const observer = new ResizeObserver(([entry]) => {
-      setStacked(entry.contentRect.width < STACK_THRESHOLD)
-    })
+    const update = () => {
+      const viewportWidth = el.getBoundingClientRect().width
+      const controlsWidth = controlsRef.current?.getBoundingClientRect().width ?? 0
+      setStacked(viewportWidth < 2 * (PLAYBAR_HALF + CONTROLS_MIN_GAP + CONTROLS_RIGHT_MARGIN + controlsWidth))
+    }
+    const observer = new ResizeObserver(update)
     observer.observe(el)
+    if (controlsRef.current) observer.observe(controlsRef.current)
     return () => observer.disconnect()
   }, [])
 
@@ -451,8 +459,8 @@ export function Viewport3D({ extraButton, hidePlaybar }: { extraButton?: React.R
     <div ref={containerRef} className="w-full h-full relative" style={{ background: 'var(--color-surface-viewport)' }}>
       {/* Overlays */}
       <ViewCube />
-      {/* Controls — always bottom-right */}
-      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 pointer-events-auto">
+      {/* Controls — bottom-right; move up when stacked to make room for playbar below */}
+      <div ref={controlsRef} className="absolute right-3 z-10 flex items-center gap-1 pointer-events-auto transition-[bottom] duration-150" style={{ bottom: stacked ? (12 + 26 + 8) : 12 }}>
         <ViewportControlsOverlay extra={extraButton} />
       </div>
       {/* Playbar — centered normally, full-width above controls when stacked */}

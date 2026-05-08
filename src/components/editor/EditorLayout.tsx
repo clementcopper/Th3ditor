@@ -54,17 +54,17 @@ function CamMaxOverlay({ onMinimize }: { onMinimize: () => void }) {
     <div ref={containerRef} className="absolute inset-0 z-10">
       <CameraView />
       <PlaybackOverlay stacked={stacked} />
-      <ViewportMaximizeBtn maximized={true} onClick={onMinimize} />
+      <ViewportMaximizeBtn maximized={true} onClick={onMinimize} stacked={stacked} />
     </div>
   )
 }
 
 /** Maximize / minimize button styled to match ViewportControlsOverlay — use as extraButton or standalone. */
-function ViewportMaximizeBtn({ maximized, onClick }: { maximized: boolean; onClick: () => void }) {
+function ViewportMaximizeBtn({ maximized, onClick, stacked = false }: { maximized: boolean; onClick: () => void; stacked?: boolean }) {
   return (
     <div
-      className="absolute bottom-3 right-3 z-10 pointer-events-auto flex items-center border border-border-default"
-      style={{ ...overlayBg, height: 26 }}
+      className="absolute right-3 z-10 pointer-events-auto flex items-center border border-border-default transition-[bottom] duration-150"
+      style={{ ...overlayBg, height: 26, bottom: stacked ? (12 + 26 + 8) : 12 }}
     >
       <button
         onClick={onClick}
@@ -100,14 +100,16 @@ function PanelHandle({ orientation, disabled = false }: { orientation: 'horizont
  * Collapse/expand button that visually merges with the panel border.
  * horizontal=true → sits on a horizontal border (graph panel); false → vertical border (right panel).
  */
-function BorderCollapseBtn({ open, onClick, horizontal }: {
+function BorderCollapseBtn({ open, onClick, horizontal, flip = false }: {
   open: boolean
   onClick: () => void
   horizontal: boolean
+  flip?: boolean
 }) {
+  const effective = flip ? !open : open
   const icon = horizontal
-    ? (open ? <CaretDown size={7} weight="bold" /> : <CaretUp size={7} weight="bold" />)
-    : (open ? <CaretRight size={7} weight="bold" /> : <CaretLeft size={7} weight="bold" />)
+    ? (effective ? <CaretDown size={7} weight="bold" /> : <CaretUp size={7} weight="bold" />)
+    : (effective ? <CaretRight size={7} weight="bold" /> : <CaretLeft size={7} weight="bold" />)
 
   return (
     <button
@@ -129,10 +131,12 @@ export function EditorLayout() {
 
   const graphRef = useRef<PanelImperativeHandle>(null)
   const rightRef = useRef<PanelImperativeHandle>(null)
+  const sceneRef = useRef<PanelImperativeHandle>(null)
 
   const [maximizedViewport, setMaximizedViewport] = useState<'vp3d' | 'cam' | null>('vp3d')
   const [graphOpen, setGraphOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+  const [sceneOpen, setSceneOpen] = useState(true)
 
   function toggle(ref: React.RefObject<PanelImperativeHandle | null>, open: boolean, setOpen: (v: boolean) => void) {
     if (open) { ref.current?.collapse(); setOpen(false) }
@@ -281,19 +285,32 @@ export function EditorLayout() {
           onResize={(s) => setRightOpen(s.inPixels > 12)}
         >
           <div className="relative w-full h-full overflow-hidden">
-            {rightOpen && (
-              <PanelGroup orientation="vertical" className="h-full">
-                <Panel defaultSize={25} minSize={5}>
-                  <div className="h-full overflow-y-auto">
-                    <SceneExplorer />
-                  </div>
-                </Panel>
-                <PanelResizeHandle className="h-[3px] bg-border-default hover:bg-accent transition-colors cursor-row-resize shrink-0" />
-                <Panel defaultSize={75} minSize={20}>
-                  <PropertiesPanel />
-                </Panel>
-              </PanelGroup>
-            )}
+            <PanelGroup orientation="vertical" className="h-full">
+              <Panel
+                panelRef={sceneRef}
+                defaultSize={25} minSize={5}
+                collapsible collapsedSize={12}
+                onResize={(s) => setSceneOpen(s.inPixels > 12)}
+              >
+                <div className="relative w-full h-full">
+                  {sceneOpen && rightOpen && <div className="h-full overflow-y-auto"><SceneExplorer /></div>}
+                  {rightOpen && (
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+                      <BorderCollapseBtn
+                        open={sceneOpen}
+                        onClick={() => toggle(sceneRef, sceneOpen, setSceneOpen)}
+                        horizontal={true}
+                        flip={true}
+                      />
+                    </div>
+                  )}
+                </div>
+              </Panel>
+              <PanelHandle orientation="vertical" disabled={!sceneOpen} />
+              <Panel defaultSize={75} minSize={20}>
+                {rightOpen && <PropertiesPanel />}
+              </Panel>
+            </PanelGroup>
             <div className="absolute left-0 top-1/2 -translate-y-1/2 z-20 pointer-events-auto">
               <BorderCollapseBtn
                 open={rightOpen}

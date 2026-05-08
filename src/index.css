@@ -96,7 +96,6 @@ body {
 .timeline-scrubber {
   -webkit-appearance: none;
   appearance: none;
-  width: 100%;
   height: 3px;
   outline: none;
   cursor: pointer;

@@ -1,4 +1,4 @@
-# Web Visual Studio
+# Th3ditor
 
 **A node-based 3D scene editor that runs in the browser.** Build animated Three.js scenes visually — connect geometry, materials, lights, transforms, and shaders in a graph, and see the result render in real time.
 

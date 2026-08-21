@@ -1,196 +1,121 @@
-## Kontext-Dokumente
-- `Project Details/WVS-PLAN.md` — Architektur, Layout, UI Style, Node-Roadmap, Phasen-Plan. Immer aktuell halten.
-- `Project Details/PATTERNS.md` — UI/UX Interaktionsmuster (Gizmo, Live-Anzeige, Port-Verbindung). Vor neuen Features lesen.
-- `Project Details/` — weitere Planungs- und Referenz-Dokumente zum Projekt
-- `Sessions/` — Session-Summaries (YYYY-MM-DD.md), erstellt durch `/pre-compact`. Nur die **neueste** Datei lesen — ältere sind bereits in WVS-PLAN.md/CLAUDE.md eingeflossen.
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Context Documents
+- `Project Details/THR3DITOR-PLAN.md` — architecture, layout, UI style, node roadmap, phase plan. Keep current.
+- `Project Details/PATTERNS.md` — UI/UX interaction patterns (gizmo, live display, port connections). Read before new features.
+- `Project Details/WVS-LAYOUT_2Layout.png`, `Project Details/rechtes panel zugeklappt.png` — layout reference screenshots.
+- `LEARNINGS.md` — project-specific learnings, grouped by topic. Append a bullet when a fix was non-obvious.
+- `Sessions/` — session summaries (YYYY-MM-DD.md) written by `/pre-compact`. Read only the **newest** file; older ones are already folded into THR3DITOR-PLAN.md/CLAUDE.md.
+
+## Commands
+```bash
+pnpm dev      # Vite dev server
+pnpm build    # tsc -b && vite build
+pnpm lint     # ESLint 9 flat config (eslint.config.js)
+pnpm preview  # serve dist/
+```
+No test framework is installed — there are no unit tests. Verification happens by running the app.
 
 ## Workflow Notes
 - Use `pnpm`, not `npm`
 - Keep responses concise — fix first, explain briefly
-- Dev server: `pnpm dev` / Build: `pnpm build`
-- Daniel communicates in German, tests live in browser, reports visual bugs
+- Daniel communicates in German, tests live in the browser, reports visual bugs
 - **All UI text in the app must be English** — labels, options, button text, placeholders, everything
-- Daniel works on two computers — keep `CLAUDE.md` and `WVS-PLAN.md` updated as the cross-machine context sync
-- Keep CLAUDE.md <200 lines
+- Daniel works on two computers — `CLAUDE.md` and `THR3DITOR-PLAN.md` are the cross-machine context sync
+- Keep CLAUDE.md <200 lines; learnings go to `LEARNINGS.md`, not here
 - Don't make changes until 95% confident. Ask follow-up questions until that confidence is reached.
 
-## Applied Learning
-When something fails repeatedly, when Daniel has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
-
-- `react-resizable-panels` exports: `Group`, `Panel`, `Separator` — not PanelGroup/PanelResizeHandle/direction.
-- Phase 4: Daniel reviews each step individually before starting the next.
-- ResizeHandle orientation arg must match PanelGroup orientation — swapping causes invisible handles.
-- LiveEvaluator `setScene` must include `camera` field or CameraView loses its camera on play.
-- Two separate R3F Canvas instances (not drei `<View>`) work cleanly with react-resizable-panels.
-- `SceneRenderer` takes `editorShading` prop — only EditorView passes it, CameraView does not.
-- Gizmo write-back: use `getState()` inside event handlers, not hook subscriptions (stale closure).
-- TransformControls + OrbitControls: `makeDefault` on OrbitControls → disable via `useThree().controls.enabled`.
-- After `updateNodeData`, wait 2 RAF frames before clearing `isDragging` (compiler runs in useEffect).
-- Mesh gizmo without Transform-Node: auto-create and wire into graph chain on first drag.
-- Light nodes: unified `positionX/Y/Z` for both Directional and Point — `ptPositionX/Y/Z` removed.
-- Camera/Light gizmo snap-back: also write to scene store directly on drag end, not just graph store.
-- `noderef` PropertyType: filter by `getNodeDef(n.type)?.category`, NOT `n.data.category`.
-- Node custom names: stored in `node.data.label`; `getNodeDisplayName()` in SceneExplorer.tsx.
-- `renderOrder={999}` + `depthTest={false}` required for viewport icons to appear in front of meshes.
-- Three.js `<color>` doesn't parse `oklch()` — use hex values for R3F Canvas backgrounds.
-- `useNodesInitialized` (xyflow) fires after node measurement — use for reliable fitView on init.
-- `useReactFlow()` must be inside `<ReactFlow>` tree — crashes with "zustand provider" error otherwise.
-- ReactFlow `panOnDrag={[0]}` + `onPaneMouseDown` unreliable for right-click; use container `onMouseDown` instead.
-- CSS 3D ViewCube: sync rotation via `useFrame` + OrbitControls `getPolarAngle`/`getAzimuthalAngle`; mutate DOM directly.
-- Persp↔Ortho camera preservation: watch `useThree(s => s.camera)` object reference change in `useEffect`.
-- Alt+drag duplicate: use `useGraphStore.getState().setNodes(...)` in `onNodeDragStop` for atomic snap-back + new node.
-- CSS 3D cube face label bug: check labels first before changing transforms or rotation-sync sign.
-- Font sizes: always use Tailwind utility classes (`text-xs`, `text-[10px]`) — avoid inline `fontSize` px values.
-- Path constraints: connect via port cables (not noderef dropdown) — compiler detects via `edges.find(e => e.targetHandle === 'path')`.
-- Circle path: DO NOT clamp pathProgress — `evaluatePathPosition` handles wrap via `((t % 1) + 1) % 1`.
-- EditorView viewport lights: fixed ambient + directional (no scene lights) — CameraView uses scene lights.
-- Wireframe mode: use `meshBasicMaterial` (no lighting) not `meshStandardMaterial + wireframe=true`.
-- Camera Look-Ahead bounce on rotated circles: 10+ attempts failed — see WVS-PLAN.md Phase 5a. Deferred.
-- R3F PerspectiveCamera `rotation` prop overrides quaternion set by useFrame — new array ref triggers re-apply every render.
-- LiveEvaluator must NOT compute euler for pathLookAhead — only CameraPathLookAhead handles orientation.
-- CameraView uses raw THREE.PerspectiveCamera (no drei) — all state set imperatively in useFrame.
-- Look-ahead only in Free mode (mode=0) — Target mode always uses lookAt to target mesh.
-- Three.js cam.quaternion._onChangeCallback corrupts multi-step quaternion ops — use scratch quaternion + copy.
-- Path position/rotation via Transform chain — Path node has NO ports/props for position. See PATTERNS.md.
-- `linkedPath: true` on PropertyDef → shows live evaluator value when `path` input port connected.
-- Path gizmo drag without downstream edge: fallback silently (no Transform auto-create). Connect path first.
-- `linkedPath: true` shows real world position (evaluatePathPosition result), NOT the Transform offset.
-- `portConnected`/`uniformFalsy` added to VisibleWhenCondition — use for conditional port/property display.
-- Compiler recompile on graph node drag: use `useGraphStore.subscribe` with custom equality, not hook deps.
-- Scale on Transform hidden when path port connected (`visibleWhenPortDisconnected: 'path'` on option).
-- glTF bbox centering: compute raw bbox BEFORE `groupRef.current.add(scene)` — world matrices include parent transform otherwise.
-- All UI text in the app must be in English (labels, options, buttons, placeholders).
-- `computeVertexNormals()` destroys UV seams on glTF — only toggle `flatShading = false/true` + `needsUpdate`.
-- OrbitControls top/bottom: custom `camera.up` swaps orbit axes — use `up:[0,1,0]` + `[eps,±dist,0]` epsilon.
-- HDR IBL: `RGBELoader` + `PMREMGenerator.fromEquirectangular()` → `scene.environment`; `scene.environmentIntensity` (r163+).
-- Color node defaults must be RGBA arrays `[r,g,b,a]` (0–1), never hex strings — compiler converts via `rgbaToHex6`.
-- `FileControl`: `param.accept?.includes('gltf')` controls folder button visibility.
-- `RectAreaLight` needs `RectAreaLightUniformsLib.init()` once at module level; no shadow support.
-- Area Light editor visual: custom LineSegments + Line (no RectAreaLightHelper — has unwanted BackSide mesh).
-- `EnvironmentLoader` background: use `showEnvBgRef` (ref, not closure) to avoid stale value in cleanup.
-- Circle path `t=0` starts at +Z axis (π/2 offset in `evaluatePathPosition`).
-- Node port value display: `w-10 tabular-nums` fixed width prevents node width jumping during animation.
-- Noise CanvasTexture: set `wrapS = wrapT = RepeatWrapping` + tile at integer scale to eliminate UV seams.
-- ReactFlow `visibleWhen` ports: handle only registers when rendered — set mode first, then connect cable.
-- Texture Normal mode: input port named `source` (not `texture`) to avoid same-name collision with output port.
-- glTF texture UV fix: store `flipY: false` in node data, propagate through compiler, apply in SceneRenderer — don't pre-flip canvas.
-- `geometry/gltf-mesh` index: `gltf-expand.ts` and `loadGltfGeometries` both use `scene.traverse()` depth-first — indices match.
-- gltfGeometryCache: module-level Map (not component state) with in-flight Promise dedup via `gltfGeometryLoading` Map.
-- MeshObject clones BufferGeometry from cache (so multiple nodes sharing same file are independent); disposes clone on cleanup.
-- Quad Sphere: BoxGeometry → toNonIndexed() → inflate → lat/lon UV + seam fix. No mergeVertices (breaks UVs). Normals = normalize(pos).
-- IcosahedronGeometry `detail` = linear grid subdivision: triangles = 20×(detail+1)². NOT exponential. detail=80 ≈ 256-seg sphere. Max 256 (500 laggy).
-- Sphere pole UV fix attempt (set pole vertex u = avg neighbors) creates holes — non-indexed geometry displaces pole differently per triangle.
-- Texture Normal `source` port: always visible + auto-switch to mode=2 in onConnect — user doesn't need to set mode first.
-- `NodeDefinition.hidden = true` hides node from palette (filter in NodePalette.tsx `getAllNodeDefs().filter(d => !d.hidden)`).
-- glTF Expand: store `matrixWorld` (16-element array) in gltf-mesh node data → apply `geo.applyMatrix4()` on clone in SceneRenderer.
-- glTF Expand transparency: `MeshPhysicalMaterial.transmission > 0` → `transparent: true, opacity: 1 - transmission`.
-- Multi-file glTF Expand: pass `extraFiles` through node data → compiler → geometrySource → loadGltfGeometries LoadingManager.
-- SelectControl stores values as strings ('0','1','2') — always use `Number(props.X ?? 0)` not `(props.X as number) ?? 0` for select properties.
-- Three.js `customProgramCacheKey` must include `vertexPreamble` + `vertexBodyForPBR` — key on body alone causes stale shader reuse when only preamble changes (e.g. noise type switch).
-- PBR displacement normals (position-based): 3-axis gradient sampling (X/Y/Z offsets) + project to tangential plane → `normalize(N - gradTan * scale)`. No tangent frame, no pole artifacts. DO NOT use tangent-frame cross product — creates ring at `abs(N.y)=0.999` + pinch at exact poles.
-- Silhouette fade (`smoothstep(0,0.8,|N·V|)`) on displacement/normals creates circles at poles (pole normal ⊥ view → fade≈0). Removed entirely — accept minor silhouette jaggies instead.
-- Shader graph `shader/position` node → `vPosition` varying (object-space) — use for seamless 3D displacement without UV seams.
-- Vertex displacement needs geo density ≥ noise feature size ×5 — sphere max 512 segs; icosphere detail 200 equivalent. Silhouette jaggies are a hard WebGL limit (no tessellation).
-- `shader/colorramp` stops: all positions + colors as uniforms → live update without recompile; recompile only on stop-count change.
-- NodeRenderer fallback label: if no `mode` select prop, first select prop appends to label ("Shader Math: Fract").
-- Domain warp IQ offsets: `(0,0,0)`, `(5.2,1.3,2.8)`, `(3.7,9.2,8.1)` for x/y/z fbm samples.
-- Scan-line center: `radius − fract(t) × (radius×2)` top→bottom. Use Multiply(−radius×2) + Add(radius) — Add is commutative, avoids A/B confusion.
-- `shader/math` Lerp (op=7) needs T input port; Fract (op=8) is unary — goes in the `else` branch of the binary/unary split.
-- Undo/Redo toolbar buttons: use `useGraphStore.subscribe` + `useState` for reactivity — selector hooks don't reliably trigger re-renders here.
-- Toolbar buttons: use `getState().undo()` / `getState().redo()` in onClick — same pattern as keyboard shortcut.
-- Conditional Tailwind classes on buttons break hover if color class missing in false-branch — use inline `style` for opacity, static className for hover.
-- Brave browser: pointer-event hitbox issues with toolbar buttons. Works in Safari. Browser-specific bug, not code issue.
-- `snapshot()` in properties: use `() => useGraphStore.getState().snapshot()` not hook selector — avoids stale reference.
-- SliderControl `onBeforeChange`: fires on pointerdown (drag), commitEdit (typed), first wheel tick (500ms idle reset).
-- ColorControl `onBeforeChange`: fires on swatch open (dropdown) or first picker interaction (inline, 500ms idle reset).
-- Viewport toggles (Shaded/Wireframe, Persp/Ortho): use conditional className for active/inactive — never inline `style` for color, or `hover:` classes won't fire.
-- `PlaybackOverlay` `stacked` prop: full-width (`left-3 right-3`, scrubber `flex-1`) above controls when viewport < 820px; detected via `ResizeObserver` in `Viewport3D`/`CamMaxOverlay`.
-- Panel collapse buttons (`BorderCollapseBtn`): inside panel at edge nearest border, NOT inside `PanelResizeHandle` — avoids drag/click conflict.
-- `border-radius: 0 !important` on `*` overrides inline styles — use named CSS class with `!important` for radius exceptions (e.g. `.panel-collapse-btn-h/v`).
-- CSS radius exceptions defined via `--radius-panel-btn` in `@theme` block (`index.css`).
-- Displacement fold-bevel: deviation-based (abs(center−avg6)) correctly targets ridge tips; gradient-based FAILS (gradient=0 at local max).
-- Bevel neighbour sampling: eps=0.15 in noise-space (post-scale), 6 samples (±x±y±z), 1-octave FBM sufficient for detection.
-- GLSL `if (uniform > threshold)` in vertex shader: valid zero-cost branch when uniform=0 — all warps take same path.
-- Quad-Cylinder: triangle-fan caps need correct CCW winding: top `(center, ring[i+1], ring[i])`, bottom `(center, ring[i], ring[i+1])`.
-- Quad-Capsule: `L = length/radius`, `totalYSegs = 2*capSegs + round(capSegs*L)` — both hemisphere/body transforms equal at y=±L/2.
-- Geometry node: one `Segments` slider per type; secondary segs auto-computed proportionally in `normalizeGeoProps`.
-- `createQuadTorus`: ring in XY-plane (Z-axis), `toNonIndexed()` + longitude seam fix + latitude seam fix.
-- Origin indicator: `THREE.LineSegments` + `transparent:true` required to render above drei `Grid` (opaque/transparent queue order).
-- OrbitControls: disable damping in ortho (`enableDamping={projectionMode==='perspective'}`) — prevents camera drift after pan.
-- Camera icon cone tip at group origin: `rotation=[PI/2,0,0]`, `position=[0,0,-height/2]`, `thetaStart=PI/4` for edge-facing base.
-- `SliderControl`: separate drag-bar (`flex-1`) + text input (`w-12`) in one row — drag-only slider, no click-to-edit toggle.
-- `react-colorful` pointer CSS overrides: must use `index.css` direct rules — Tailwind arbitrary variants don't apply.
-- `ColorControl`: R/G/B/A = `ChannelSlider` sub-components (inline, not exported); HEX narrow `w-[66px]`; dropdown `left-0 right-0`.
-- Shader Pattern aspect fix: `scaleY = scale / uAspect` → square pixel cells; `scale` = columns, rows auto-adjust.
-- Triplanar for seamless sphere dots: sample 3 planes (XY/XZ/YZ), blend by `abs(normalize(pos))`; use `vPosition` as fallback — no extra port needed.
-- `timeSpeed` default 0 → no animation on existing nodes; pattern `uTime * timeSpeed` as fallback when time port disconnected.
-
 ## Overview
-Node-based 3D/2D visual editor (Web Visual Studio). Built by Daniel Martin (DMA) for Designdone.
-Formerly "Shadertool" — rebuilt from fullscreen shader previewer to full node-based scene editor.
+Node-based 3D/2D visual editor. Package name `thr3ditor`, repo folder `Thr3ditor`, project files use the `.3dtr` extension. Built by Daniel Martin (DMA) for Designdone. Formerly "Shadertool" — rebuilt from a fullscreen shader previewer into a full node-based scene editor.
 
 ## Tech Stack
-- React 19 + TypeScript + Vite + Zustand (state) + Tailwind CSS 4
-- Three.js + React Three Fiber (R3F) + @react-three/drei — 3D rendering
-- @xyflow/react (ReactFlow) — node-based visual programming graph
-- react-resizable-panels — resizable panel layout (Phase 4)
+- React 19 + TypeScript + Vite 8 + Zustand + Tailwind CSS 4
+- Three.js 0.175 + React Three Fiber 9 + @react-three/drei — 3D rendering
+- @xyflow/react (ReactFlow 12) — node graph
+- react-resizable-panels 4 — panel layout
 - GLSL for custom shader materials
 
 ## Architecture
 
-### Node-Based Editor
-- Users build scenes by connecting nodes in a visual graph
-- Node categories: Geometry, Material, Transform, Light, Camera, Shader, Math, Color, Texture, Time, Input, Effect, Scene
-- Scene Output is the terminal node — the graph compiles into a Three.js scene
-
 ### Rendering Pipeline
 ```
-[Graph Store] --mutation--> [Compiler (topo-sort)] --CompiledScene--> [SceneRenderer (R3F)]
-                                                                            |
-                                                                      [useFrame loop]
-                                                                            |
-                                                                      [Live Evaluator] (time, mouse)
+[graph-store] --structural change--> [compileGraph] --CompiledScene--> [scene-store] --> [SceneRenderer (R3F)]
+                                                                                              |
+                                                                                     [useFrame loop]
+                                                                                              |
+                                                                          [evaluator.ts] (time, mouse, paths)
 ```
-- Structural changes (add/remove node/edge) → full recompile
-- Per-frame updates (time, mouse) → only dynamic subgraph evaluation
+- The compile trigger lives in `EditorLayout.tsx` (~line 165): a `useGraphStore.subscribe` with a manual structural diff (`edges` identity, node count, node `id`/`type`/`data` identity). **Node position changes deliberately do not recompile.**
+- Per-frame updates run inside `SceneRenderer.tsx`'s `useFrame`, calling `evaluateFloatPort` / `evaluateColorPort` from `graph-engine/evaluator.ts`. There is no separate LiveEvaluator component.
+- Live values are pushed to `evaluator-store` (throttled ~10fps) so the node graph and properties panel can display them.
 
-### State Management (State Multi-Store)
-- `graph-store.ts` — nodes, edges, CRUD operations
-- `editor-store.ts` — UI state: selected node, view mode, shadingMode, projectionMode
-- `scene-store.ts` — compiled scene (output of graph compiler)
+### State (multi-store Zustand)
+- `graph-store.ts` — nodes, edges, CRUD, undo/redo. History lives in module-level arrays outside the store (max 50) so snapshots don't re-render. Call `snapshot()` **before** a mutation.
+- `editor-store.ts` — UI state: selected node, view mode, shadingMode, projectionMode, gizmoMode, snapView
+- `scene-store.ts` — the `CompiledScene`
 - `animation-store.ts` — playing, elapsed, play/pause/reset
-- `evaluator-store.ts` — live float values keyed by `"nodeId:portName"` (~10fps throttle)
+- `evaluator-store.ts` — live float/color values keyed by `"nodeId:portName"`
+
+### Node System
+Every node type is a `NodeDefinition` (`types/node-graph.ts`): `inputs`/`outputs` (`PortDef`), `properties` (`PropertyDef` from `types/properties.ts`), and `defaults`. Nodes carry no logic — the compiler and renderer switch on `node.type`.
+
+**Adding a node type:**
+1. Define it in `graph-engine/node-definitions/<category>.ts` and register it in that file's `registerXNodes()`.
+2. If the file is new, call its register function from `graph-engine/register-all.ts`. `registerAllNodes()` runs once in `App.tsx` before render.
+3. Add the compile branch in `graph-engine/compiler.ts` (or `shader-graph-compiler.ts` for `shader/*` nodes).
+4. Add the render branch in `components/viewport/SceneRenderer.tsx`.
+5. Live-animatable float/color ports also need a branch in `graph-engine/evaluator.ts`.
+
+Properties render generically in `PropertiesPanel.tsx` via `PropertyType` → control component. `visibleWhen` conditions (`uniform` equal/notEqual, `portConnected`, `portDisconnected`, `uniformFalsy`) drive conditional ports and properties.
+
+### Two Shader Paths
+- **Unlit**: `shader/output` → mesh directly. `shader-graph-compiler.ts` emits a complete vertex + fragment shader for a `ShaderMaterial`.
+- **PBR**: `shader/output` → material → mesh. The same compiler emits injection fragments (`vertexPreamble`, `vertexBodyForPBR`, `fragmentPreamble`, `fragmentPBRBody`, `fragmentPBR`) that `SceneRenderer` splices into `MeshStandardMaterial` via `onBeforeCompile`.
+The GLSL noise library is a template string at the top of `shader-graph-compiler.ts` (`NOISE_PREAMBLE`). There is no `src/shaders/` directory.
 
 ### Project Structure
 ```
 src/
-  types/properties.ts              # PropertyDef (evolved from ParameterDef)
-  types/node-graph.ts              # Node, Edge, Port, NodeDefinition
-  store/                           # Zustand stores
-  graph-engine/                    # Compiler, node registry, type system, live-evaluator
-    node-definitions/              # Per-category node definitions
+  App.tsx                          # registerAllNodes() + <EditorLayout/>
+  types/node-graph.ts              # NodeDefinition, GraphNode/Edge, Compiled* scene types
+  types/properties.ts              # PropertyDef, PropertyType, VisibleWhenCondition
+  store/                           # 5 Zustand stores (see above)
+  graph-engine/
+    compiler.ts                    # graph -> CompiledScene (620 lines)
+    shader-graph-compiler.ts       # shader/* subgraph -> GLSL (1300 lines)
+    evaluator.ts                   # per-frame float/color port evaluation
+    node-registry.ts               # register/getNodeDef/getAllNodeDefs
+    register-all.ts                # calls every registerXNodes()
+    path-utils.ts                  # evaluatePathPosition (line/circle/arc)
+    gltf-expand.ts                 # glTF scene -> generated graph nodes
+    node-definitions/              # 15 files, one per category
   components/
-    editor/                        # EditorLayout, EditorHeader, EditorFooter
-    viewport/                      # ViewportPanel, EditorView, CameraView, SceneRenderer,
-                                   # SceneExplorer (overlay), Gizmos
-    graph/                         # ReactFlow wrapper, NodeRenderer, NodePalette
-    properties/                    # PropertiesPanel
-      controls/                    # SliderControl, ColorControl, ToggleControl, SelectControl
-  utils/color.ts                   # Color space conversions (RGB, HSL, OKLCH)
-  utils/download.ts                # File download helpers
-  shaders/chunks/                  # Archived GLSL snippets (noise, color, math)
+    editor/                        # EditorLayout (panels + compile trigger), EditorToolbar, StatusBar
+    viewport/                      # SceneRenderer (2700 lines, the render switchboard),
+                                   # Viewport3D (editor view), CameraView, SceneExplorer
+    graph/                         # NodeEditor (ReactFlow), NodeRenderer, NodePalette, DataEdge
+    properties/PropertiesPanel.tsx # + controls/ (Slider, Color, ColorRamp, Select, Toggle, File, TextArea)
+    tool/controls/                 # SEPARATE, simplified control set — do not confuse with properties/controls
+  utils/color.ts                   # RGB/HSL/OKLCH conversions
+  utils/project.ts                 # save/load .3dtr JSON
+  utils/download.ts, node-icons.tsx
 ```
+`src/export/templates/` and `src/components/landing/` exist but are empty stubs for Phase 6.
+Repo root also holds `3D Assets/` (test models) and `public/`.
 
 ### UI Style
 - Dark warm theme: `oklch(45% 0.008 48)` base, orange accent `oklch(70% 0.18 48)`
-- `border-radius: 0` everywhere — exceptions via `.panel-collapse-btn-h/v` classes + `--radius-panel-btn` CSS variable
-- OKLCH for design tokens; ColorControl = RGB-only (R/G/B 0-255 + HEX text field + A%)
+- `border-radius: 0` everywhere — exceptions via `.panel-collapse-btn-h/v` + `--radius-panel-btn` in `index.css`
+- OKLCH for design tokens; ColorControl is RGB-only (R/G/B 0–255 + HEX field + A%)
+- Three.js cannot parse `oklch()` — use hex for anything passed into R3F
 
-## Current Status (2026-04-18)
+## Current Status (2026-08-21)
 - Phase 1–5e complete ✅
-- **⚠️ Deferred Bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see WVS-PLAN.md Phase 5a.
-- **Visual Shader Graph complete ✅**: shader/color (Color/Mix/Ramp modes, value+alpha outputs), noise, math, domain warp, etc.; unlit + PBR displacement modes
-- **Phase 6 partial ✅**: Save/Load (.wvs JSON), Undo/Redo (snapshot-based, Cmd+Z/Cmd+Shift+Z + toolbar buttons)
-- **UI Polish ✅**: Viewport: origin indicator (RGB cross), Quad Torus, single Segments slider per geometry type, OrbitControls damping fix in ortho, camera icon tip at origin. Properties: SliderControl split layout (drag-bar + text input), ColorControl channel sliders (R/G/B/A drag), HEX narrow, dropdown width matches header.
-- Next: Phase 6 remaining (React/R3F export, standalone HTML export, post-processing)
-- Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — später lokal einbinden
+- **⚠️ Deferred bug:** Camera Look-Ahead bounces on rotated circle paths. 10+ fix attempts — see `Project Details/THR3DITOR-PLAN.md` Phase 5a.
+- **Visual Shader Graph complete ✅**: shader/color (Color/Mix/Ramp), noise, math, domain warp, pattern/dots/lines; unlit + PBR displacement modes
+- **Phase 6 partial ✅**: Save/Load (`.3dtr` JSON, `utils/project.ts`), Undo/Redo (snapshot-based, Cmd+Z / Cmd+Shift+Z + toolbar)
+- **UI polish ✅**: origin indicator, Quad Torus, one Segments slider per geometry type, ortho damping fix, split SliderControl, ColorControl channel sliders
+- Next: Phase 6 remaining — React/R3F export, standalone HTML export, post-processing
+- Fonts: Bunny Fonts (privacy-friendly Google Fonts mirror) — to be bundled locally later

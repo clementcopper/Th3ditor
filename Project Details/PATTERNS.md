@@ -1,4 +1,4 @@
-# WVS UI/UX Patterns
+# Thr3ditor UI/UX Patterns
 
 Dieses Dokument beschreibt die zentralen Interaktions- und Anzeigemuster des Editors.
 Neue Features müssen konsistent mit diesen Patterns implementiert werden.

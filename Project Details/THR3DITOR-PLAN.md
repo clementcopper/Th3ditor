@@ -1,4 +1,4 @@
-# Web Visual Studio — Projektplan
+# Thr3ditor — Projektplan
 
 ## Vision
 
@@ -135,19 +135,23 @@ src/
   graph-engine/
     compiler.ts
     node-registry.ts
+    register-all.ts                   # ruft alle registerXNodes() — läuft in App.tsx
     type-system.ts
-    evaluator.ts
+    evaluator.ts                      # Per-Frame Float-/Color-Port-Evaluation
+    path-utils.ts                     # evaluatePathPosition (line/circle/arc)
+    gltf-expand.ts                    # glTF-Szene → generierte Graph-Nodes
     shader-graph-compiler.ts          # Shader Graph → GLSL Compiler
     node-definitions/
       geometry.ts
       material.ts
+      object.ts                       # object/mesh
       transform.ts
       light.ts
       camera.ts
       shader.ts
       shader-graph.ts                 # Alle Shader-Graph-Nodes
       math.ts
-      color-ops.ts
+      color.ts
       texture.ts
       time.ts
       input.ts
@@ -162,10 +166,16 @@ src/
     properties/
       controls/
         TextAreaControl.tsx
+    tool/controls/                    # separates, vereinfachtes Control-Set — nicht mit properties/controls verwechseln
+    landing/                          # leer, Phase 6
+
+  export/templates/                   # leer, Phase 6
 
   utils/
     color.ts
     download.ts
+    project.ts                        # Save/Load .3dtr JSON
+    node-icons.tsx
 ```
 
 ---
@@ -173,16 +183,17 @@ src/
 ## Rendering-Pipeline
 
 ```
-[Graph Store] --mutation--> [Compiler (topo-sort)] --CompiledScene--> [SceneRenderer (R3F)]
-                                                                            |
-                                                                      [useFrame loop]
-                                                                            |
-                                                                      [Live Evaluator]
-                                                                      (Time, Mouse)
+[graph-store] --strukturelle Änderung--> [compileGraph] --CompiledScene--> [scene-store] --> [SceneRenderer (R3F)]
+                                                                                                    |
+                                                                                             [useFrame loop]
+                                                                                                    |
+                                                                                  [evaluator.ts] (Time, Mouse, Paths)
 ```
 
 - **Strukturelle Änderungen** → full recompile
 - **Per-Frame Updates** → nur dynamic subgraph evaluieren
+- Compile-Trigger sitzt in `EditorLayout.tsx` (~Zeile 165): `useGraphStore.subscribe` mit manuellem Struktur-Diff (`edges`-Identität, Node-Anzahl, `id`/`type`/`data`-Identität). **Node-Positionen lösen bewusst keinen Recompile aus.**
+- Es gibt keine eigene `LiveEvaluator`-Komponente — `evaluateFloatPort`/`evaluateColorPort` aus `graph-engine/evaluator.ts` laufen direkt im `useFrame` von `SceneRenderer.tsx`. Live-Werte gehen gedrosselt (~10fps) in den `evaluator-store`.
 
 ### Shader Graph Pipeline
 ```
@@ -242,7 +253,7 @@ Ursache: tangent/bitangent-basierte finite differences hatten eine harte Diskont
 - [x] **Time Node Modes** — Linear, Sine, Sawtooth, Square, Bounce, Ease In, Ease Out, Ease In-Out; Speed + Offset Properties; einheitlicher `value`-Output
 
 ### Phase 6: Export + Polish 🔜 NEXT
-- [x] **Projekt Save/Load (JSON)** — `.wvs` File-Download + File-Open, `src/utils/project.ts`
+- [x] **Projekt Save/Load (JSON)** — `.3dtr` File-Download + File-Open, `src/utils/project.ts`
 - [x] **Undo/Redo** — Snapshot-basiert in `graph-store.ts` (`_history`/`_future`, max 50), Cmd+Z/Cmd+Shift+Z, Toolbar-Buttons. Snapshot-Trigger: node drag start, node/edge delete, addNode/addEdge/removeEdge, property interaction start (slider pointerdown/wheel/commit, color picker open/first touch, select/toggle/colorramp change).
 - [x] **UI Polish** — Viewport Maximize/Minimize (CSS Overlay), Playbar-Stacking (ResizeObserver), Panel-Collapse-Buttons (BorderCollapseBtn, merged mit Border), hover states auf allen Viewport-Controls, konsistente 26px Control-Bars.
 - [x] **Geometry Polish** — Quad-Box, Quad-Sphere, Quad-Torus, Quad-Cylinder, Quad-Capsule; einzelner `Segments`-Slider pro Typ mit proportionaler Sekundär-Berechnung in `normalizeGeoProps`.
